@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,8 +55,8 @@ export default function Login() {
     
     try {
       await signUp(signupForm.email, signupForm.password);
-      toast({
-        title: "Account created!",
+      // Updated toast syntax for sonner
+      toast("Account created!", {
         description: "Please check your email for confirmation.",
       });
       setIsLoading(false);
@@ -69,8 +68,8 @@ export default function Login() {
 
   const handleGoogleAuth = () => {
     // Google auth will be implemented later
-    toast({
-      title: "Coming soon",
+    // Updated toast syntax for sonner
+    toast("Coming soon", {
       description: "Google authentication will be available soon.",
     });
   };
