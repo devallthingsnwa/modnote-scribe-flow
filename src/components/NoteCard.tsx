@@ -4,17 +4,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { formatDistanceToNow } from "date-fns";
 
 export interface NoteCardProps {
-  id: number;
+  id: string; // Changed from number to string to match our database IDs
   title: string;
   content: string;
   date: Date;
   tags: {
-    id: number;
+    id: string; // Changed from number to string
     name: string;
     color: string;
   }[];
   notebook?: {
-    id: number;
+    id: string; // Changed from number to string
     name: string;
   };
   thumbnail?: string;

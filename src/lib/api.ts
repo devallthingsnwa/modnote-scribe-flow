@@ -47,9 +47,19 @@ export const fetchNotebooks = async (): Promise<Notebook[]> => {
 };
 
 export const createNotebook = async (notebook: { name: string; description?: string }): Promise<Notebook> => {
+  // Get the current user
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error("User must be authenticated to create a notebook");
+  }
+  
   const { data, error } = await supabase
     .from("notebooks")
-    .insert(notebook)
+    .insert({
+      ...notebook,
+      user_id: user.id
+    })
     .select()
     .single();
   
@@ -105,9 +115,19 @@ export const fetchTags = async (): Promise<Tag[]> => {
 };
 
 export const createTag = async (tag: { name: string; color: string }): Promise<Tag> => {
+  // Get the current user
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error("User must be authenticated to create a tag");
+  }
+  
   const { data, error } = await supabase
     .from("tags")
-    .insert(tag)
+    .insert({
+      ...tag,
+      user_id: user.id
+    })
     .select()
     .single();
   
@@ -237,7 +257,7 @@ export const fetchNoteById = async (id: string): Promise<NoteWithTags> => {
 export const createNote = async (
   note: {
     title: string;
-    content?: string;
+    content?: string | null;
     notebook_id?: string;
     source_url?: string;
     thumbnail?: string;
@@ -245,10 +265,20 @@ export const createNote = async (
   },
   tagIds: string[] = []
 ): Promise<NoteWithTags> => {
+  // Get the current user
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error("User must be authenticated to create a note");
+  }
+  
   // Start a transaction
   const { data: newNote, error: noteError } = await supabase
     .from("notes")
-    .insert(note)
+    .insert({
+      ...note,
+      user_id: user.id
+    })
     .select()
     .single();
   
@@ -483,7 +513,7 @@ export const useCreateNote = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ note, tagIds }: { note: Partial<Note>, tagIds?: string[] }) => 
+    mutationFn: ({ note, tagIds }: { note: Partial<Note> & { title: string }, tagIds?: string[] }) => 
       createNote(note, tagIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
