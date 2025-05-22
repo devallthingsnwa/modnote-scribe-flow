@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
-import YoutubeTranscript from "youtube-transcript";
+// Import the correct named export instead of default
+import { YoutubeTranscript } from "youtube-transcript";
 
 interface ImportModalProps {
   open: boolean;
