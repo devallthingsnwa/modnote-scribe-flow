@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,37 +17,44 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
-
-// Sample tags data - in a real app, this would come from an API
-const tagsData = [
-  { id: 1, name: "Important", color: "bg-red-500" },
-  { id: 2, name: "Idea", color: "bg-modnote-blue" },
-  { id: 3, name: "Todo", color: "bg-modnote-green" },
-  { id: 4, name: "Resource", color: "bg-modnote-yellow" },
-  { id: 5, name: "Project", color: "bg-modnote-purple" },
-  { id: 6, name: "Personal", color: "bg-modnote-pink" },
-  { id: 7, name: "Work", color: "bg-gray-500" },
-];
+import { useTags } from "@/lib/api";
 
 interface TagSelectorProps {
-  selectedTags: number[];
-  onChange: (selectedTags: number[]) => void;
+  selectedTags: string[];
+  onChange: (selectedTags: string[]) => void;
 }
 
 export function TagSelector({ selectedTags, onChange }: TagSelectorProps) {
   const [open, setOpen] = useState(false);
+  const { data: tags, isLoading } = useTags();
+  
+  // Check if any selected tags no longer exist in the database
+  useEffect(() => {
+    if (tags && tags.length > 0 && selectedTags.length > 0) {
+      const validTagIds = tags.map(tag => tag.id);
+      const validSelectedTags = selectedTags.filter(tagId => validTagIds.includes(tagId));
+      
+      if (validSelectedTags.length !== selectedTags.length) {
+        onChange(validSelectedTags);
+      }
+    }
+  }, [tags, selectedTags, onChange]);
 
-  const handleSelect = (tagId: number) => {
+  const handleSelect = (tagId: string) => {
     if (selectedTags.includes(tagId)) {
-      onChange(selectedTags.filter((id) => id !== tagId));
+      onChange(selectedTags.filter(id => id !== tagId));
     } else {
       onChange([...selectedTags, tagId]);
     }
   };
 
-  const handleRemove = (tagId: number) => {
-    onChange(selectedTags.filter((id) => id !== tagId));
+  const handleRemove = (tagId: string) => {
+    onChange(selectedTags.filter(id => id !== tagId));
   };
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading tags...</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -56,7 +63,7 @@ export function TagSelector({ selectedTags, onChange }: TagSelectorProps) {
           <span className="text-sm text-muted-foreground">No tags selected</span>
         ) : (
           selectedTags.map((tagId) => {
-            const tag = tagsData.find((t) => t.id === tagId);
+            const tag = tags?.find(t => t.id === tagId);
             if (!tag) return null;
             return (
               <Badge
@@ -104,7 +111,7 @@ export function TagSelector({ selectedTags, onChange }: TagSelectorProps) {
                 </div>
               </CommandEmpty>
               <CommandGroup heading="Tags">
-                {tagsData.map((tag) => (
+                {(tags || []).map((tag) => (
                   <CommandItem
                     key={tag.id}
                     onSelect={() => handleSelect(tag.id)}

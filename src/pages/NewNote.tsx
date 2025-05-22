@@ -7,30 +7,57 @@ import { Sidebar } from "@/components/Sidebar";
 import { NoteEditor } from "@/components/NoteEditor";
 import { useToast } from "@/hooks/use-toast";
 import { ImportModal } from "@/components/ImportModal";
+import { useCreateNote } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function NewNote() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [importModalOpen, setImportModalOpen] = useState(false);
+  
+  const createNoteMutation = useCreateNote();
 
   const handleSave = (note: {
     title: string;
-    content: string;
-    tags: number[];
+    content: string | null;
+    tags: string[];
   }) => {
-    // Simulate API call
-    setTimeout(() => {
+    if (!user) {
       toast({
-        title: "Note created",
-        description: "Your new note has been created successfully.",
+        title: "Authentication Required",
+        description: "Please sign in to create notes.",
+        variant: "destructive",
       });
-      
-      // In a real app, we would add the note to the database
-      console.log("Created note:", note);
-      
-      // Navigate to dashboard after creating note
-      navigate("/dashboard");
-    }, 500);
+      return;
+    }
+
+    createNoteMutation.mutate(
+      {
+        note: {
+          title: note.title,
+          content: note.content,
+        },
+        tagIds: note.tags,
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Note created",
+            description: "Your new note has been created successfully.",
+          });
+          navigate("/dashboard");
+        },
+        onError: (error) => {
+          toast({
+            title: "Error creating note",
+            description: "There was an error creating your note. Please try again.",
+            variant: "destructive",
+          });
+          console.error("Create note error:", error);
+        },
+      }
+    );
   };
 
   const handleBack = () => {
@@ -43,18 +70,26 @@ export default function NewNote() {
       description: "Your content has been transcribed, summarized, and added to your notes.",
     });
     
-    // In a real implementation, we would receive the transcription and summary from the API
-    const importedNote = {
-      title: `Imported ${type} from ${url.substring(0, 30)}...`,
-      content: "This is the transcribed and summarized content from your imported media.",
-      tags: [4], // Resource tag ID
-    };
-    
-    // Update editor with imported content
-    // This would be handled differently in a real app with properly saved data
-    setTimeout(() => {
-      navigate("/dashboard");
-    }, 500);
+    createNoteMutation.mutate(
+      {
+        note: {
+          title: `Imported ${type} from ${url.substring(0, 30)}...`,
+          content: "This is the transcribed and summarized content from your imported media.",
+          source_url: url,
+          is_transcription: true,
+        },
+        tagIds: [], // Default tag if needed
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Content imported successfully",
+            description: "Your imported content has been saved.",
+          });
+          navigate("/dashboard");
+        },
+      }
+    );
   };
 
   return (
@@ -79,6 +114,7 @@ export default function NewNote() {
         <main className="flex-1 overflow-hidden">
           <NoteEditor
             initialNote={{
+              id: undefined,
               title: "",
               content: "",
               tags: [],

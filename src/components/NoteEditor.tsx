@@ -1,23 +1,24 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Bold, Italic, List, ListChecks, Save } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
+import { Note } from "@/lib/api";
 
 interface NoteEditorProps {
   initialNote?: {
-    id?: number;
+    id?: string;
     title: string;
-    content: string;
-    tags: number[];
+    content: string | null;
+    tags: string[];
   };
   onSave?: (note: {
     title: string;
-    content: string;
-    tags: number[];
+    content: string | null;
+    tags: string[];
   }) => void;
 }
 
@@ -30,18 +31,28 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    if (initialNote) {
+      setNote({
+        title: initialNote.title,
+        content: initialNote.content || "",
+        tags: initialNote.tags,
+      });
+    }
+  }, [initialNote]);
+
   const handleSave = () => {
     if (onSave) {
       setIsSaving(true);
-      // Simulate API call
-      setTimeout(() => {
+      try {
         onSave(note);
+      } finally {
         setIsSaving(false);
-      }, 500);
+      }
     }
   };
 
-  const handleTagChange = (selectedTags: number[]) => {
+  const handleTagChange = (selectedTags: string[]) => {
     setNote({ ...note, tags: selectedTags });
   };
 
@@ -82,7 +93,7 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
         />
 
         <Textarea
-          value={note.content}
+          value={note.content || ""}
           onChange={(e) => setNote({ ...note, content: e.target.value })}
           placeholder="Start writing..."
           className="min-h-[500px] resize-none border-none focus-visible:ring-0 px-0"
