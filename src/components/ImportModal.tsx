@@ -13,6 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Video, Mic, FileText, Youtube, ArrowRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ImportModalProps {
   open: boolean;
@@ -27,6 +31,15 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Extract YouTube video ID from various YouTube URL formats
+  const extractYouTubeId = (url: string): string | null => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUrl(e.target.value);
@@ -41,57 +54,110 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setIsLoading(true);
     setCurrentStep("preview");
     
-    // Simulate fetching thumbnail - in a real app, this would be an API call
-    setTimeout(() => {
-      // YouTube URL - show placeholder thumbnail
-      if (url.includes("youtube.com") || url.includes("youtu.be")) {
-        const videoId = url.includes("youtube.com/watch?v=")
-          ? url.split("v=")[1]?.split("&")[0]
-          : url.includes("youtu.be/")
-          ? url.split("youtu.be/")[1]?.split("?")[0]
-          : null;
+    // For YouTube URLs, attempt to fetch thumbnail using the video ID
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      const videoId = extractYouTubeId(url);
           
-        if (videoId) {
-          setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-        }
+      if (videoId) {
+        setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
       } else {
-        // For demo purposes, show a placeholder image
-        setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
+        setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
       }
-      
-      setIsLoading(false);
-    }, 1000);
+    } else {
+      // For non-YouTube URLs, show a placeholder image
+      setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
+    }
+    
+    setIsLoading(false);
   };
 
-  const handleImport = () => {
-    if (!url) return;
+  const handleImport = async () => {
+    if (!url || !user) return;
     
     setCurrentStep("processing");
     
-    // Simulate processing progress
-    let progressValue = 0;
-    const interval = setInterval(() => {
-      progressValue += 5;
-      setProgress(progressValue);
-      
-      if (progressValue >= 100) {
-        clearInterval(interval);
-        setCurrentStep("complete");
-        
-        // Call the import handler
-        onImport(url, type);
-        
-        // Close modal after completion
-        setTimeout(() => {
-          onOpenChange(false);
-          // Reset state
-          setUrl("");
-          setThumbnail(null);
-          setCurrentStep("url");
-          setProgress(0);
-        }, 1500);
+    try {
+      // Create a simple title from the URL
+      let noteTitle = "Imported Content";
+      if (url.includes("youtube.com") || url.includes("youtu.be")) {
+        noteTitle = `YouTube ${type === "video" ? "Video" : type === "audio" ? "Audio" : "Content"}`;
       }
-    }, 150);
+      
+      // Use incremental progress to simulate processing
+      let progressValue = 0;
+      const progressInterval = setInterval(() => {
+        progressValue += 5;
+        setProgress(progressValue);
+        
+        if (progressValue >= 100) {
+          clearInterval(progressInterval);
+          completeImport();
+        }
+      }, 150);
+      
+      // Create the note in the database
+      const { data: noteData, error: noteError } = await supabase
+        .from('notes')
+        .insert({
+          title: noteTitle,
+          content: `Imported from: ${url}\n\nTranscription in progress...`,
+          user_id: user.id,
+          source_url: url,
+          thumbnail: thumbnail,
+          is_transcription: true,
+        })
+        .select()
+        .single();
+      
+      if (noteError) {
+        clearInterval(progressInterval);
+        throw noteError;
+      }
+      
+      // Simulate API call to process the content
+      const completeImport = async () => {
+        try {
+          setCurrentStep("complete");
+          
+          // Update the note with "processed" content
+          const demoContent = `# Imported Content\n\n` +
+            `Source: ${url}\n\n` +
+            `## Summary\n\n` +
+            `This is a placeholder for the actual transcription and summary that would be generated from the ${type} content.\n\n`;
+            
+          await supabase
+            .from('notes')
+            .update({ 
+              content: demoContent,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', noteData.id);
+          
+          // Invalidate queries to refresh notes list
+          queryClient.invalidateQueries({ queryKey: ['notes'] });
+          
+          // Call the onImport handler
+          onImport(url, type);
+          
+          toast.success("Content successfully imported!");
+          
+          // Close modal after completion
+          setTimeout(() => {
+            onOpenChange(false);
+            // Reset state
+            setUrl("");
+            setThumbnail(null);
+            setCurrentStep("url");
+            setProgress(0);
+          }, 1500);
+        } catch (error: any) {
+          toast.error(`Error completing import: ${error.message}`);
+        }
+      };
+    } catch (error: any) {
+      toast.error(`Error importing content: ${error.message}`);
+      setCurrentStep("url");
+    }
   };
 
   const getStepIcon = (step: string, currentStep: string) => {
@@ -164,7 +230,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
                 type="button" 
                 variant="secondary"
                 onClick={handleFetchPreview}
-                disabled={!url || isLoading}
+                disabled={!url || isLoading || !user}
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -251,7 +317,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           <Button 
             type="button" 
             onClick={handleImport}
-            disabled={!url || currentStep === "processing" || currentStep === "complete"}
+            disabled={!url || currentStep === "processing" || currentStep === "complete" || !user}
           >
             {currentStep === "processing" ? "Processing..." : "Import Content"}
           </Button>
