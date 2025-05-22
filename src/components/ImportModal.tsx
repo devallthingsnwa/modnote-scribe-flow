@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
-import { getTranscript } from "youtube-transcript";
+import YoutubeTranscript from "youtube-transcript";
 
 interface ImportModalProps {
   open: boolean;
@@ -66,7 +66,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         
         // Fetch transcript for YouTube videos
         try {
-          const transcriptData = await getTranscript({ videoID: videoId });
+          const transcriptData = await YoutubeTranscript.fetchTranscript(videoId);
           if (transcriptData && transcriptData.length > 0) {
             // Join all transcript pieces and format them
             const fullTranscript = transcriptData
