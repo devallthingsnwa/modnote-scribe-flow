@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { GoogleIcon } from "@/components/GoogleIcon";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
@@ -67,14 +66,6 @@ export default function Login() {
     }
   };
 
-  const handleGoogleAuth = () => {
-    // Google auth will be implemented later
-    // Updated toast syntax for sonner
-    toast("Coming soon", {
-      description: "Google authentication will be available soon.",
-    });
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
       <div className="absolute top-4 right-4">
@@ -105,27 +96,6 @@ export default function Login() {
             </CardHeader>
             
             <CardContent>
-              <Button
-                variant="outline"
-                onClick={handleGoogleAuth}
-                disabled={isLoading || authLoading}
-                className="w-full mb-4"
-              >
-                <GoogleIcon className="mr-2 h-4 w-4" />
-                Continue with Google
-              </Button>
-              
-              <div className="relative mb-4">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Or continue with
-                  </span>
-                </div>
-              </div>
-              
               <TabsContent value="login">
                 <form onSubmit={handleLoginSubmit}>
                   <div className="grid gap-4">
