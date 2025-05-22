@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ImportModal } from "@/components/ImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes, useCreateNote } from "@/lib/api";
-import { format } from "date-fns";
+import { extractYouTubeId } from "@/components/import/ImportUtils";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ export default function Dashboard() {
       description: `Your ${type} content is being processed and will be available soon.`,
     });
     
-    // Create a new note with the imported content
+    // Create a new note with the imported content - removed has_transcript field
     createNoteMutation.mutate(
       {
         note: {

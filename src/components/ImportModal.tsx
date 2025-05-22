@@ -122,7 +122,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         ? `Imported from: ${url}\n\n# Transcript\n\n${transcript}`
         : `Imported from: ${url}\n\nTranscription in progress...`;
         
-      // Create the note in the database
+      // Create the note in the database - IMPORTANT: removed has_transcript field
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
         .insert({
@@ -132,7 +132,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           source_url: url,
           thumbnail: thumbnail,
           is_transcription: true,
-          has_transcript: !!transcript,
         })
         .select()
         .single();
