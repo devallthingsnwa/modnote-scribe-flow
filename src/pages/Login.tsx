@@ -1,6 +1,5 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,12 +14,13 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useToast } from "@/hooks/use-toast";
 import { GoogleIcon } from "@/components/GoogleIcon";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { Navigate } from "react-router-dom";
 
 export default function Login() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
+  const { signIn, signUp, user, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({
     email: "",
@@ -32,48 +32,47 @@ export default function Login() {
     password: "",
   });
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Redirect if already logged in
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate login
-    setTimeout(() => {
+    try {
+      await signIn(loginForm.email, loginForm.password);
+      // Auth provider will handle redirect to dashboard
+    } catch (error) {
       setIsLoading(false);
-      toast({
-        title: "Successfully logged in!",
-        description: "Welcome back to ModNote",
-      });
-      navigate("/dashboard");
-    }, 1000);
+      // Error handling is done in the Auth provider
+    }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate signup
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await signUp(signupForm.email, signupForm.password);
       toast({
         title: "Account created!",
-        description: "Welcome to ModNote",
+        description: "Please check your email for confirmation.",
       });
-      navigate("/dashboard");
-    }, 1000);
+      setIsLoading(false);
+    } catch (error) {
+      setIsLoading(false);
+      // Error handling is done in the Auth provider
+    }
   };
 
   const handleGoogleAuth = () => {
-    setIsLoading(true);
-    
-    // Simulate Google auth
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "Successfully logged in with Google!",
-        description: "Welcome to ModNote",
-      });
-      navigate("/dashboard");
-    }, 1000);
+    // Google auth will be implemented later
+    toast({
+      title: "Coming soon",
+      description: "Google authentication will be available soon.",
+    });
   };
 
   return (
@@ -109,7 +108,7 @@ export default function Login() {
               <Button
                 variant="outline"
                 onClick={handleGoogleAuth}
-                disabled={isLoading}
+                disabled={isLoading || authLoading}
                 className="w-full mb-4"
               >
                 <GoogleIcon className="mr-2 h-4 w-4" />
@@ -164,8 +163,8 @@ export default function Login() {
                         required
                       />
                     </div>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Logging in..." : "Login"}
+                    <Button type="submit" disabled={isLoading || authLoading}>
+                      {isLoading || authLoading ? "Logging in..." : "Login"}
                     </Button>
                   </div>
                 </form>
@@ -216,8 +215,8 @@ export default function Login() {
                         required
                       />
                     </div>
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? "Creating account..." : "Create account"}
+                    <Button type="submit" disabled={isLoading || authLoading}>
+                      {isLoading || authLoading ? "Creating account..." : "Create account"}
                     </Button>
                   </div>
                 </form>
