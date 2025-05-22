@@ -28,47 +28,12 @@ export default function Dashboard() {
 
   const handleImport = (url: string, type: string) => {
     toast({
-      title: "Content import started",
-      description: `Your ${type} content is being processed and will be available soon.`,
+      title: "Content import complete",
+      description: `Your ${type} content has been processed and is available in your notes.`,
     });
     
-    // Create a new note with the imported content - removed has_transcript field
-    createNoteMutation.mutate(
-      {
-        note: {
-          title: `Imported ${type}: ${url.substring(0, 30)}...`,
-          content: "This is the transcribed content from your imported media.",
-          source_url: url,
-          is_transcription: true,
-          thumbnail: type === "video" ? `https://img.youtube.com/vi/${extractVideoId(url)}/maxresdefault.jpg` : undefined,
-        },
-        tagIds: [], // Add default tags if needed
-      },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Content imported successfully",
-            description: "Your content has been transcribed and is ready for editing.",
-          });
-          // No need to manually update the state as React Query will handle it
-        },
-        onError: (error) => {
-          toast({
-            title: "Import failed",
-            description: "There was an error importing your content. Please try again.",
-            variant: "destructive",
-          });
-          console.error("Import error:", error);
-        },
-      }
-    );
-  };
-
-  // Helper function to extract YouTube video ID
-  const extractVideoId = (url: string): string | null => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
+    // The actual note creation is now handled in the ImportModal component
+    // This function is mainly for notification purposes and to refresh the notes list if needed
   };
 
   // Transform notes from API to NoteCard format

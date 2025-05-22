@@ -1,1 +1,8 @@
+
 project_id = "rqxhgeujepdhhzoaeomu"
+
+[functions.fetch-youtube-transcript]
+verify_jwt = true
+
+[functions.process-content-with-deepseek]
+verify_jwt = true

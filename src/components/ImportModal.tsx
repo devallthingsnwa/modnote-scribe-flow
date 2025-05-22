@@ -24,7 +24,8 @@ import { TranscriptPreview } from "./import/TranscriptPreview";
 import { ProcessingStatus } from "./import/ProcessingStatus";
 import { 
   extractYouTubeId, 
-  simulateTranscriptFetch 
+  fetchYouTubeTranscript,
+  processContentWithDeepSeek
 } from "./import/ImportUtils";
 
 interface ImportModalProps {
@@ -41,14 +42,16 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [processedContent, setProcessedContent] = useState<string | null>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUrl(e.target.value);
-    // Reset thumbnail when URL changes
+    // Reset states when URL changes
     setThumbnail(null);
     setTranscript(null);
+    setProcessedContent(null);
     setCurrentStep("url");
   };
 
@@ -59,18 +62,23 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setCurrentStep("preview");
     
     try {
-      // For YouTube URLs, attempt to fetch thumbnail using the video ID
+      // For YouTube URLs, attempt to fetch transcript using the video ID
       if (url.includes("youtube.com") || url.includes("youtu.be")) {
         const videoId = extractYouTubeId(url);
             
         if (videoId) {
           setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
           
-          // Use simulated transcript for demo purposes
+          // Use real transcript API
           try {
-            const simulatedTranscript = await simulateTranscriptFetch(videoId);
-            setTranscript(simulatedTranscript);
-            toast.success("Transcript fetched successfully!");
+            const fetchedTranscript = await fetchYouTubeTranscript(videoId);
+            setTranscript(fetchedTranscript);
+            
+            if (fetchedTranscript && !fetchedTranscript.startsWith("Error")) {
+              toast.success("Transcript fetched successfully!");
+            } else {
+              toast.warning("Transcript might be incomplete or unavailable.");
+            }
           } catch (error) {
             console.error("Error fetching transcript:", error);
             toast.error("Failed to fetch transcript. The video might not have captions available.");
@@ -105,29 +113,19 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         noteTitle = `YouTube ${type === "video" ? "Video" : type === "audio" ? "Audio" : "Content"}`;
       }
       
-      // Use incremental progress to simulate processing
-      let progressValue = 0;
-      const progressInterval = setInterval(() => {
-        progressValue += 5;
-        setProgress(progressValue);
-        
-        if (progressValue >= 100) {
-          clearInterval(progressInterval);
-          completeImport();
-        }
-      }, 150);
+      // Start progress at 10%
+      setProgress(10);
       
-      // Prepare content for the note based on availability of transcript
-      const initialContent = transcript 
+      let finalContent = transcript 
         ? `Imported from: ${url}\n\n# Transcript\n\n${transcript}`
         : `Imported from: ${url}\n\nTranscription in progress...`;
         
-      // Create the note in the database - IMPORTANT: removed has_transcript field
+      // Create the note in the database
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
         .insert({
           title: noteTitle,
-          content: initialContent,
+          content: finalContent,
           user_id: user.id,
           source_url: url,
           thumbnail: thumbnail,
@@ -137,30 +135,35 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         .single();
       
       if (noteError) {
-        clearInterval(progressInterval);
         throw noteError;
       }
       
-      // Simulate API call to process the content
-      const completeImport = async () => {
+      setProgress(30);
+      
+      // Process content with DeepSeek if transcript is available
+      if (transcript) {
         try {
-          setCurrentStep("complete");
+          setProgress(40);
+          const summarizedContent = await processContentWithDeepSeek(transcript, type);
+          setProcessedContent(summarizedContent);
+          setProgress(80);
           
-          // Update the note with "processed" content if no transcript was found
-          if (!transcript) {
-            const demoContent = `# Imported Content\n\n` +
-              `Source: ${url}\n\n` +
-              `## Summary\n\n` +
-              `This is a placeholder for the actual transcription and summary that would be generated from the ${type} content.\n\n`;
-              
-            await supabase
-              .from('notes')
-              .update({ 
-                content: demoContent,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', noteData.id);
-          }
+          // Update note with processed content
+          const combinedContent = `# ${noteTitle}\n\n` +
+            `Source: ${url}\n\n` +
+            `## Summary\n\n${summarizedContent}\n\n` +
+            `## Full Transcript\n\n${transcript}`;
+          
+          await supabase
+            .from('notes')
+            .update({ 
+              content: combinedContent,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', noteData.id);
+          
+          setProgress(100);
+          setCurrentStep("complete");
           
           // Invalidate queries to refresh notes list
           queryClient.invalidateQueries({ queryKey: ['notes'] });
@@ -168,25 +171,43 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           // Call the onImport handler
           onImport(url, type);
           
-          toast.success("Content successfully imported!");
-          
-          // Close modal after completion
-          setTimeout(() => {
-            onOpenChange(false);
-            // Reset state
-            setUrl("");
-            setThumbnail(null);
-            setTranscript(null);
-            setCurrentStep("url");
-            setProgress(0);
-          }, 1500);
+          toast.success("Content successfully imported and processed!");
         } catch (error: any) {
-          toast.error(`Error completing import: ${error.message}`);
+          console.error("Error processing content:", error);
+          setProgress(100);
+          setCurrentStep("complete");
+          
+          // Still call onImport to refresh the list
+          onImport(url, type);
+          
+          toast.warning("Content imported but could not be processed fully.");
         }
-      };
+      } else {
+        // No transcript available, just mark as complete
+        setProgress(100);
+        setCurrentStep("complete");
+        
+        // Call the onImport handler
+        onImport(url, type);
+        
+        toast.success("Content imported!");
+      }
+      
+      // Close modal after completion
+      setTimeout(() => {
+        onOpenChange(false);
+        // Reset state
+        setUrl("");
+        setThumbnail(null);
+        setTranscript(null);
+        setProcessedContent(null);
+        setCurrentStep("url");
+        setProgress(0);
+      }, 1500);
     } catch (error: any) {
       toast.error(`Error importing content: ${error.message}`);
       setCurrentStep("url");
+      setProgress(0);
     }
   };
 
