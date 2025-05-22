@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+import { getTranscript } from "youtube-transcript";
 
 interface ImportModalProps {
   open: boolean;
@@ -31,6 +32,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
+  const [transcript, setTranscript] = useState<string | null>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -45,10 +47,11 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setUrl(e.target.value);
     // Reset thumbnail when URL changes
     setThumbnail(null);
+    setTranscript(null);
     setCurrentStep("url");
   };
 
-  const handleFetchPreview = () => {
+  const handleFetchPreview = async () => {
     if (!url) return;
     
     setIsLoading(true);
@@ -60,6 +63,27 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           
       if (videoId) {
         setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
+        
+        // Fetch transcript for YouTube videos
+        try {
+          const transcriptData = await getTranscript({ videoID: videoId });
+          if (transcriptData && transcriptData.length > 0) {
+            // Join all transcript pieces and format them
+            const fullTranscript = transcriptData
+              .map(item => `[${formatTimestamp(item.offset)}] ${item.text}`)
+              .join('\n');
+            
+            setTranscript(fullTranscript);
+            toast.success("Transcript fetched successfully!");
+          } else {
+            toast.error("No transcript found for this video.");
+            setTranscript(null);
+          }
+        } catch (error) {
+          console.error("Error fetching transcript:", error);
+          toast.error("Failed to fetch transcript. The video might not have captions available.");
+          setTranscript(null);
+        }
       } else {
         setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
       }
@@ -69,6 +93,14 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     }
     
     setIsLoading(false);
+  };
+
+  // Helper function to format timestamp from milliseconds to MM:SS
+  const formatTimestamp = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const handleImport = async () => {
@@ -95,16 +127,22 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         }
       }, 150);
       
+      // Prepare content for the note based on availability of transcript
+      const initialContent = transcript 
+        ? `Imported from: ${url}\n\n# Transcript\n\n${transcript}`
+        : `Imported from: ${url}\n\nTranscription in progress...`;
+        
       // Create the note in the database
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
         .insert({
           title: noteTitle,
-          content: `Imported from: ${url}\n\nTranscription in progress...`,
+          content: initialContent,
           user_id: user.id,
           source_url: url,
           thumbnail: thumbnail,
           is_transcription: true,
+          has_transcript: !!transcript,
         })
         .select()
         .single();
@@ -119,19 +157,21 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         try {
           setCurrentStep("complete");
           
-          // Update the note with "processed" content
-          const demoContent = `# Imported Content\n\n` +
-            `Source: ${url}\n\n` +
-            `## Summary\n\n` +
-            `This is a placeholder for the actual transcription and summary that would be generated from the ${type} content.\n\n`;
-            
-          await supabase
-            .from('notes')
-            .update({ 
-              content: demoContent,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', noteData.id);
+          // Update the note with "processed" content if no transcript was found
+          if (!transcript) {
+            const demoContent = `# Imported Content\n\n` +
+              `Source: ${url}\n\n` +
+              `## Summary\n\n` +
+              `This is a placeholder for the actual transcription and summary that would be generated from the ${type} content.\n\n`;
+              
+            await supabase
+              .from('notes')
+              .update({ 
+                content: demoContent,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', noteData.id);
+          }
           
           // Invalidate queries to refresh notes list
           queryClient.invalidateQueries({ queryKey: ['notes'] });
@@ -147,6 +187,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             // Reset state
             setUrl("");
             setThumbnail(null);
+            setTranscript(null);
             setCurrentStep("url");
             setProgress(0);
           }, 1500);
@@ -283,6 +324,22 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
                   alt="Content preview" 
                   className="w-full h-auto object-cover" 
                 />
+              </div>
+            </div>
+          )}
+          
+          {transcript && (
+            <div className="flex flex-col gap-2">
+              <Label>Transcript Preview</Label>
+              <div className="p-3 bg-muted rounded-md border border-border overflow-y-auto max-h-48 text-xs font-mono">
+                {transcript.split('\n').slice(0, 20).map((line, index) => (
+                  <div key={index} className="mb-1">{line}</div>
+                ))}
+                {transcript.split('\n').length > 20 && (
+                  <div className="text-muted-foreground italic">
+                    (Showing first 20 lines of {transcript.split('\n').length} total lines)
+                  </div>
+                )}
               </div>
             </div>
           )}
