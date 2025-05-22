@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,14 +9,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Mic, FileText, Youtube, ArrowRight } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+
+// Import refactored components
+import { ImportSteps } from "./import/ImportSteps";
+import { ContentTypeSelector } from "./import/ContentTypeSelector";
+import { UrlInput } from "./import/UrlInput";
+import { PreviewSection } from "./import/PreviewSection";
+import { TranscriptPreview } from "./import/TranscriptPreview";
+import { ProcessingStatus } from "./import/ProcessingStatus";
+import { 
+  extractYouTubeId, 
+  simulateTranscriptFetch 
+} from "./import/ImportUtils";
 
 interface ImportModalProps {
   open: boolean;
@@ -35,48 +44,12 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Extract YouTube video ID from various YouTube URL formats
-  const extractYouTubeId = (url: string): string | null => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
-
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUrl(e.target.value);
     // Reset thumbnail when URL changes
     setThumbnail(null);
     setTranscript(null);
     setCurrentStep("url");
-  };
-
-  // This function simulates fetching a transcript
-  const simulateTranscriptFetch = async (videoId: string) => {
-    // Return a simulated transcript after a short delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Create a realistic-looking simulated transcript with timestamps
-    const lines = [
-      { offset: 0, text: "Welcome to this video where we'll be discussing key concepts." },
-      { offset: 5000, text: "Today's topic is about improving productivity and time management." },
-      { offset: 10000, text: "Let's start by looking at the most important principles." },
-      { offset: 15000, text: "First, identify your most productive hours during the day." },
-      { offset: 20000, text: "Second, break down large tasks into smaller, manageable pieces." },
-      { offset: 25000, text: "Third, eliminate distractions during your focused work time." },
-      { offset: 30000, text: "Fourth, take regular breaks to maintain high productivity." },
-      { offset: 35000, text: "Fifth, use tools and apps that help you stay organized." },
-      { offset: 40000, text: "Sixth, prioritize tasks based on importance and urgency." },
-      { offset: 45000, text: "Seventh, learn to delegate when appropriate." },
-      { offset: 50000, text: "Eighth, reflect on your productivity at the end of each day." },
-      { offset: 55000, text: "Ninth, adjust your approach based on what works best for you." },
-      { offset: 60000, text: "And finally, be patient with yourself as you develop new habits." },
-      { offset: 65000, text: "Let's now dive deeper into each of these principles." },
-      { offset: 70000, text: "Remember, consistency is key when implementing these strategies." },
-      { offset: 75000, text: "Thanks for watching this video. Don't forget to subscribe!" }
-    ];
-    
-    // Join all transcript pieces and format them
-    return lines.map(item => `[${formatTimestamp(item.offset)}] ${item.text}`).join('\n');
   };
 
   const handleFetchPreview = async () => {
@@ -118,14 +91,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Helper function to format timestamp from milliseconds to MM:SS
-  const formatTimestamp = (milliseconds: number) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const handleImport = async () => {
@@ -226,21 +191,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     }
   };
 
-  const getStepIcon = (step: string, currentStep: string) => {
-    const active = step === currentStep;
-    const completed = 
-      (step === "url" && (currentStep === "preview" || currentStep === "processing" || currentStep === "complete")) || 
-      (step === "preview" && (currentStep === "processing" || currentStep === "complete")) || 
-      (step === "processing" && currentStep === "complete");
-      
-    const baseClasses = "h-8 w-8 p-1 rounded-full";
-    const activeClasses = "bg-primary text-primary-foreground";
-    const completedClasses = "bg-green-500 text-white";
-    const inactiveClasses = "bg-muted text-muted-foreground";
-    
-    return completed ? completedClasses : active ? activeClasses : inactiveClasses;
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -251,145 +201,30 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex justify-between items-center py-4 px-2">
-          <div className="flex flex-col items-center">
-            <div className={`${getStepIcon("url", currentStep)} flex items-center justify-center`}>
-              <Youtube className="h-4 w-4" />
-            </div>
-            <span className="text-xs mt-1">URL</span>
-          </div>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <div className="flex flex-col items-center">
-            <div className={`${getStepIcon("preview", currentStep)} flex items-center justify-center`}>
-              <Video className="h-4 w-4" />
-            </div>
-            <span className="text-xs mt-1">Transcript</span>
-          </div>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <div className="flex flex-col items-center">
-            <div className={`${getStepIcon("processing", currentStep)} flex items-center justify-center`}>
-              <FileText className="h-4 w-4" />
-            </div>
-            <span className="text-xs mt-1">Summarize</span>
-          </div>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <div className="flex flex-col items-center">
-            <div className={`${getStepIcon("complete", currentStep)} flex items-center justify-center`}>
-              <FileText className="h-4 w-4" />
-            </div>
-            <span className="text-xs mt-1">Save</span>
-          </div>
-        </div>
+        <ImportSteps currentStep={currentStep} />
         
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="url">Content URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="url"
-                placeholder="https://youtube.com/watch?v=..."
-                value={url}
-                onChange={handleUrlChange}
-                className="flex-1"
-              />
-              <Button
-                type="button" 
-                variant="secondary"
-                onClick={handleFetchPreview}
-                disabled={!url || isLoading || !user}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Preview"
-                )}
-              </Button>
-            </div>
+            <UrlInput 
+              url={url}
+              onChange={handleUrlChange}
+              onFetchPreview={handleFetchPreview}
+              isLoading={isLoading}
+              disabled={!user}
+            />
           </div>
           
           <div className="flex flex-col gap-2">
             <Label>Content Type</Label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant={type === "video" ? "default" : "outline"}
-                onClick={() => setType("video")}
-                className="flex gap-2"
-              >
-                <Video className="h-4 w-4" />
-                <span>Video</span>
-              </Button>
-              <Button
-                type="button"
-                variant={type === "audio" ? "default" : "outline"}
-                onClick={() => setType("audio")}
-                className="flex gap-2"
-              >
-                <Mic className="h-4 w-4" />
-                <span>Audio</span>
-              </Button>
-              <Button
-                type="button"
-                variant={type === "text" ? "default" : "outline"}
-                onClick={() => setType("text")}
-                className="flex gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Text</span>
-              </Button>
-            </div>
+            <ContentTypeSelector type={type} setType={setType} />
           </div>
           
-          {thumbnail && (
-            <div className="flex flex-col gap-2">
-              <Label>Preview</Label>
-              <div className="overflow-hidden rounded-md border border-border">
-                <img 
-                  src={thumbnail} 
-                  alt="Content preview" 
-                  className="w-full h-auto object-cover" 
-                />
-              </div>
-            </div>
-          )}
+          <PreviewSection thumbnail={thumbnail} />
           
-          {transcript && (
-            <div className="flex flex-col gap-2">
-              <Label>Transcript Preview</Label>
-              <div className="p-3 bg-muted rounded-md border border-border overflow-y-auto max-h-48 text-xs font-mono">
-                {transcript.split('\n').slice(0, 20).map((line, index) => (
-                  <div key={index} className="mb-1">{line}</div>
-                ))}
-                {transcript.split('\n').length > 20 && (
-                  <div className="text-muted-foreground italic">
-                    (Showing first 20 lines of {transcript.split('\n').length} total lines)
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          <TranscriptPreview transcript={transcript} />
           
-          {currentStep === "processing" && (
-            <div className="flex flex-col gap-2">
-              <Label>Processing Content</Label>
-              <div className="space-y-2">
-                <Progress value={progress} className="h-2" />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Transcribing content...</span>
-                  <span>{progress}%</span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {currentStep === "complete" && (
-            <div className="flex flex-col gap-2">
-              <Label>Processing Complete</Label>
-              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md text-green-600 dark:text-green-400 text-sm">
-                Content has been transcribed, summarized, and saved to your notes!
-              </div>
-            </div>
-          )}
+          <ProcessingStatus currentStep={currentStep} progress={progress} />
         </div>
         
         <DialogFooter>
