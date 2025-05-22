@@ -11,6 +11,9 @@ import NotePage from "./pages/NotePage";
 import NewNote from "./pages/NewNote";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Notebooks from "./pages/Notebooks";
+import Tags from "./pages/Tags";
 import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
@@ -29,6 +32,9 @@ const App = () => (
               <Route path="/note/:id" element={<NotePage />} />
               <Route path="/new" element={<NewNote />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/notebooks" element={<Notebooks />} />
+              <Route path="/tags" element={<Tags />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

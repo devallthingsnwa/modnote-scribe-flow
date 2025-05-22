@@ -116,9 +116,16 @@ export function Sidebar() {
             <Separator className="my-4" />
             
             <div className="px-4 mb-2">
-              <h3 className="text-sm font-medium text-sidebar-foreground/70">
-                Notebooks
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-sidebar-foreground/70">
+                  Notebooks
+                </h3>
+                <Link to="/notebooks">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
             <nav className="px-2">
               {notebooksLoading ? (
@@ -135,16 +142,25 @@ export function Sidebar() {
                   ))}
                 </ul>
               ) : (
-                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">No notebooks</div>
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">
+                  <Link to="/notebooks" className="hover:underline">Create your first notebook</Link>
+                </div>
               )}
             </nav>
 
             <Separator className="my-4" />
             
             <div className="px-4 mb-2">
-              <h3 className="text-sm font-medium text-sidebar-foreground/70">
-                Tags
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-sidebar-foreground/70">
+                  Tags
+                </h3>
+                <Link to="/tags">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
             <nav className="px-2">
               {tagsLoading ? (
@@ -161,7 +177,9 @@ export function Sidebar() {
                   ))}
                 </ul>
               ) : (
-                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">No tags</div>
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">
+                  <Link to="/tags" className="hover:underline">Create your first tag</Link>
+                </div>
               )}
             </nav>
           </>
