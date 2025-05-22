@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import NotePage from "./pages/NotePage";
 import NewNote from "./pages/NewNote";
 import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile";
 import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/note/:id" element={<NotePage />} />
               <Route path="/new" element={<NewNote />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

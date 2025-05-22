@@ -12,6 +12,7 @@ import {
   Home,
   Plus,
   Settings,
+  UserRound,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
@@ -51,6 +52,11 @@ export function Sidebar() {
       name: "Tags",
       icon: <Hash className="h-5 w-5" />,
       path: "/tags",
+    },
+    {
+      name: "Profile",
+      icon: <UserRound className="h-5 w-5" />,
+      path: "/profile",
     },
     {
       name: "Settings",
