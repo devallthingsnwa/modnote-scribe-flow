@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -85,32 +85,39 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setIsLoading(true);
     setCurrentStep("preview");
     
-    // For YouTube URLs, attempt to fetch thumbnail using the video ID
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      const videoId = extractYouTubeId(url);
+    try {
+      // For YouTube URLs, attempt to fetch thumbnail using the video ID
+      if (url.includes("youtube.com") || url.includes("youtu.be")) {
+        const videoId = extractYouTubeId(url);
+            
+        if (videoId) {
+          setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
           
-      if (videoId) {
-        setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-        
-        // Use simulated transcript for demo purposes
-        try {
-          const simulatedTranscript = await simulateTranscriptFetch(videoId);
-          setTranscript(simulatedTranscript);
-          toast.success("Transcript fetched successfully!");
-        } catch (error) {
-          console.error("Error fetching transcript:", error);
-          toast.error("Failed to fetch transcript. The video might not have captions available.");
-          setTranscript(null);
+          // Use simulated transcript for demo purposes
+          try {
+            const simulatedTranscript = await simulateTranscriptFetch(videoId);
+            setTranscript(simulatedTranscript);
+            toast.success("Transcript fetched successfully!");
+          } catch (error) {
+            console.error("Error fetching transcript:", error);
+            toast.error("Failed to fetch transcript. The video might not have captions available.");
+            setTranscript(null);
+          }
+        } else {
+          setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
+          toast.error("Invalid YouTube URL. Could not extract video ID.");
         }
       } else {
-        setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
+        // For non-YouTube URLs, show a placeholder image
+        setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
+        toast.info("Non-YouTube URLs may have limited preview capabilities.");
       }
-    } else {
-      // For non-YouTube URLs, show a placeholder image
-      setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
+    } catch (error) {
+      console.error("Error fetching preview:", error);
+      toast.error("Failed to fetch preview. Please check your URL and try again.");
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   // Helper function to format timestamp from milliseconds to MM:SS
