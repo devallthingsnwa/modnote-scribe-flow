@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Mic, FileText } from "lucide-react";
+import { Loader2, Video, Mic, FileText, Youtube, ArrowRight } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface ImportModalProps {
   open: boolean;
@@ -24,26 +25,30 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [type, setType] = useState<"video" | "audio" | "text">("video");
   const [isLoading, setIsLoading] = useState(false);
   const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
+  const [progress, setProgress] = useState(0);
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUrl(e.target.value);
     // Reset thumbnail when URL changes
     setThumbnail(null);
+    setCurrentStep("url");
   };
 
   const handleFetchPreview = () => {
     if (!url) return;
     
     setIsLoading(true);
+    setCurrentStep("preview");
     
     // Simulate fetching thumbnail - in a real app, this would be an API call
     setTimeout(() => {
       // YouTube URL - show placeholder thumbnail
       if (url.includes("youtube.com") || url.includes("youtu.be")) {
         const videoId = url.includes("youtube.com/watch?v=")
-          ? url.split("v=")[1].split("&")[0]
+          ? url.split("v=")[1]?.split("&")[0]
           : url.includes("youtu.be/")
-          ? url.split("youtu.be/")[1].split("?")[0]
+          ? url.split("youtu.be/")[1]?.split("?")[0]
           : null;
           
         if (videoId) {
@@ -61,12 +66,47 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const handleImport = () => {
     if (!url) return;
     
-    onImport(url, type);
-    onOpenChange(false);
+    setCurrentStep("processing");
     
-    // Reset state after import
-    setUrl("");
-    setThumbnail(null);
+    // Simulate processing progress
+    let progressValue = 0;
+    const interval = setInterval(() => {
+      progressValue += 5;
+      setProgress(progressValue);
+      
+      if (progressValue >= 100) {
+        clearInterval(interval);
+        setCurrentStep("complete");
+        
+        // Call the import handler
+        onImport(url, type);
+        
+        // Close modal after completion
+        setTimeout(() => {
+          onOpenChange(false);
+          // Reset state
+          setUrl("");
+          setThumbnail(null);
+          setCurrentStep("url");
+          setProgress(0);
+        }, 1500);
+      }
+    }, 150);
+  };
+
+  const getStepIcon = (step: string, currentStep: string) => {
+    const active = step === currentStep;
+    const completed = 
+      (step === "url" && (currentStep === "preview" || currentStep === "processing" || currentStep === "complete")) || 
+      (step === "preview" && (currentStep === "processing" || currentStep === "complete")) || 
+      (step === "processing" && currentStep === "complete");
+      
+    const baseClasses = "h-8 w-8 p-1 rounded-full";
+    const activeClasses = "bg-primary text-primary-foreground";
+    const completedClasses = "bg-green-500 text-white";
+    const inactiveClasses = "bg-muted text-muted-foreground";
+    
+    return completed ? completedClasses : active ? activeClasses : inactiveClasses;
   };
 
   return (
@@ -78,6 +118,36 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             Import from YouTube, podcast, or text source for automatic transcription and summarization.
           </DialogDescription>
         </DialogHeader>
+        
+        <div className="flex justify-between items-center py-4 px-2">
+          <div className="flex flex-col items-center">
+            <div className={`${getStepIcon("url", currentStep)} flex items-center justify-center`}>
+              <Youtube className="h-4 w-4" />
+            </div>
+            <span className="text-xs mt-1">URL</span>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col items-center">
+            <div className={`${getStepIcon("preview", currentStep)} flex items-center justify-center`}>
+              <Video className="h-4 w-4" />
+            </div>
+            <span className="text-xs mt-1">Transcript</span>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col items-center">
+            <div className={`${getStepIcon("processing", currentStep)} flex items-center justify-center`}>
+              <FileText className="h-4 w-4" />
+            </div>
+            <span className="text-xs mt-1">Summarize</span>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col items-center">
+            <div className={`${getStepIcon("complete", currentStep)} flex items-center justify-center`}>
+              <FileText className="h-4 w-4" />
+            </div>
+            <span className="text-xs mt-1">Save</span>
+          </div>
+        </div>
         
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
@@ -150,6 +220,28 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
               </div>
             </div>
           )}
+          
+          {currentStep === "processing" && (
+            <div className="flex flex-col gap-2">
+              <Label>Processing Content</Label>
+              <div className="space-y-2">
+                <Progress value={progress} className="h-2" />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Transcribing content...</span>
+                  <span>{progress}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {currentStep === "complete" && (
+            <div className="flex flex-col gap-2">
+              <Label>Processing Complete</Label>
+              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md text-green-600 dark:text-green-400 text-sm">
+                Content has been transcribed, summarized, and saved to your notes!
+              </div>
+            </div>
+          )}
         </div>
         
         <DialogFooter>
@@ -159,9 +251,9 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           <Button 
             type="button" 
             onClick={handleImport}
-            disabled={!url}
+            disabled={!url || currentStep === "processing" || currentStep === "complete"}
           >
-            Import Content
+            {currentStep === "processing" ? "Processing..." : "Import Content"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,14 +1,17 @@
 
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/Sidebar";
 import { NoteEditor } from "@/components/NoteEditor";
 import { useToast } from "@/hooks/use-toast";
+import { ImportModal } from "@/components/ImportModal";
 
 export default function NewNote() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const handleSave = (note: {
     title: string;
@@ -34,17 +37,42 @@ export default function NewNote() {
     navigate("/dashboard");
   };
 
+  const handleImport = (url: string, type: string) => {
+    toast({
+      title: "Content import complete",
+      description: "Your content has been transcribed, summarized, and added to your notes.",
+    });
+    
+    // In a real implementation, we would receive the transcription and summary from the API
+    const importedNote = {
+      title: `Imported ${type} from ${url.substring(0, 30)}...`,
+      content: "This is the transcribed and summarized content from your imported media.",
+      tags: [4], // Resource tag ID
+    };
+    
+    // Update editor with imported content
+    // This would be handled differently in a real app with properly saved data
+    setTimeout(() => {
+      navigate("/dashboard");
+    }, 500);
+  };
+
   return (
     <div className="flex h-screen">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="border-b border-border p-4">
-          <div className="flex items-center">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ChevronLeft className="h-5 w-5" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Button variant="ghost" size="icon" onClick={handleBack}>
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl font-semibold ml-2">New Note</h1>
+            </div>
+            <Button onClick={() => setImportModalOpen(true)} variant="outline">
+              Import from URL
             </Button>
-            <h1 className="text-xl font-semibold ml-2">New Note</h1>
           </div>
         </header>
         
@@ -59,6 +87,12 @@ export default function NewNote() {
           />
         </main>
       </div>
+      
+      <ImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleImport}
+      />
     </div>
   );
 }
