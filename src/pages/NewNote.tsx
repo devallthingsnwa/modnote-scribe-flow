@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,27 @@ import { useToast } from "@/hooks/use-toast";
 import { ImportModal } from "@/components/ImportModal";
 import { useCreateNote } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 export default function NewNote() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [importModalOpen, setImportModalOpen] = useState(false);
   
   const createNoteMutation = useCreateNote();
+
+  // Redirect to login page if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/', { replace: true });
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to create notes.",
+        variant: "destructive",
+      });
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSave = (note: {
     title: string;
@@ -91,6 +104,21 @@ export default function NewNote() {
       }
     );
   };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-lg">Loading...</p>
+      </div>
+    );
+  }
+
+  // If user is not authenticated, don't render the page content
+  // The useEffect above will handle the redirect
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen">
