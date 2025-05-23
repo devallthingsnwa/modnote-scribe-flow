@@ -76,15 +76,16 @@ export default function Dashboard() {
       </div>
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-border p-4">
+        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
           <div className="flex justify-between items-center gap-2">
             {isMobile && <MobileNavigation />}
-            <h1 className="text-2xl font-semibold">Notes</h1>
+            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Notes</h1>
             <div className="flex space-x-2">
               <Button 
                 variant={isMobile ? "ghost" : "default"} 
                 size={isMobile ? "icon" : "default"} 
                 onClick={() => setImportModalOpen(true)}
+                className={isMobile ? 'mobile-ghost-button' : ''}
               >
                 {isMobile ? null : "Import"}
               </Button>
@@ -99,23 +100,23 @@ export default function Dashboard() {
           
           {/* Search Bar */}
           <div className="mt-4 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`} />
             <Input
               placeholder="Search notes..."
-              className="pl-10 w-full"
+              className={`pl-10 w-full ${isMobile ? 'mobile-search' : ''}`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4">
+        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-pulse">Loading notes...</div>
+              <div className={`animate-pulse ${isMobile ? 'text-gray-400' : ''}`}>Loading notes...</div>
             </div>
           ) : error ? (
-            <div className="text-center text-red-500 p-4">
+            <div className={`text-center p-4 ${isMobile ? 'text-red-400' : 'text-red-500'}`}>
               Error loading notes. Please try again.
             </div>
           ) : filteredNotes && filteredNotes.length > 0 ? (
@@ -129,15 +130,18 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <div className="text-center p-8 flex flex-col items-center">
-              <div className="bg-muted/30 rounded-full p-6 mb-4">
-                <PlusCircle className="h-12 w-12 text-muted-foreground/60" />
+            <div className={`text-center p-8 flex flex-col items-center ${isMobile ? 'mobile-empty-state' : ''}`}>
+              <div className={`rounded-full p-6 mb-4 ${isMobile ? 'mobile-empty-icon' : 'bg-muted/30'}`}>
+                <PlusCircle className={`h-12 w-12 ${isMobile ? 'text-gray-400' : 'text-muted-foreground/60'}`} />
               </div>
-              <p className="text-muted-foreground mb-4">
+              <p className={`mb-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                 {searchQuery ? "No notes matching your search" : "No notes found. Create your first note!"}
               </p>
               {!searchQuery && (
-                <Button onClick={handleNewNote}>
+                <Button 
+                  onClick={handleNewNote}
+                  className={isMobile ? 'mobile-primary-button' : ''}
+                >
                   <PlusCircle className="h-4 w-4 mr-2" />
                   New Note
                 </Button>

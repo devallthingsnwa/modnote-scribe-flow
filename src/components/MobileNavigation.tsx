@@ -51,21 +51,28 @@ export function MobileNavigation() {
   return (
     <>
       {/* Bottom navigation for quick access */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background dark:bg-sidebar border-t md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0f0f0f] border-t border-gray-800">
         <div className="grid grid-cols-5 gap-1 p-1">
           {navigationItems.map((item) => (
-            <Link key={item.name} to={item.path} className="flex flex-col items-center justify-center p-2">
+            <Link key={item.name} to={item.path} className="mobile-nav-item">
               <Button 
-                variant={isActive(item.path) ? "secondary" : "ghost"} 
+                variant="ghost"
                 size="icon" 
                 className={cn(
-                  "size-10 rounded-full",
-                  isActive(item.path) ? "bg-secondary text-primary" : "text-muted-foreground"
+                  "size-10 rounded-xl transition-all duration-200",
+                  isActive(item.path) 
+                    ? "bg-gray-800 text-primary shadow-lg" 
+                    : "text-gray-400 hover:text-white hover:bg-gray-800"
                 )}
               >
                 {item.icon}
               </Button>
-              <span className="text-[10px] mt-1 text-muted-foreground">{item.name}</span>
+              <span className={cn(
+                "text-[10px] mt-1 font-medium",
+                isActive(item.path) ? "text-primary" : "text-gray-400"
+              )}>
+                {item.name}
+              </span>
             </Link>
           ))}
         </div>
@@ -74,11 +81,11 @@ export function MobileNavigation() {
       {/* Slide-out menu sheet */}
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="md:hidden">
+          <Button variant="ghost" size="icon" className="md:hidden text-white hover:bg-gray-800 rounded-xl">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-[80%] sm:w-[350px] bg-sidebar text-sidebar-foreground">
+        <SheetContent side="left" className="w-[80%] sm:w-[350px] bg-[#0f0f0f] border-gray-800 text-white">
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between p-4">
               <Logo />
@@ -93,8 +100,10 @@ export function MobileNavigation() {
                         <Button
                           variant={isActive(item.path) ? "secondary" : "ghost"}
                           className={cn(
-                            "w-full justify-start",
-                            isActive(item.path) && "bg-sidebar-accent"
+                            "w-full justify-start rounded-xl transition-all duration-200",
+                            isActive(item.path) 
+                              ? "bg-gray-800 text-primary hover:bg-gray-700" 
+                              : "text-gray-300 hover:bg-gray-800 hover:text-white"
                           )}
                         >
                           {item.icon}
@@ -107,13 +116,13 @@ export function MobileNavigation() {
               </nav>
             </div>
             
-            <div className="p-4 border-t border-sidebar-border">
+            <div className="p-4 border-t border-gray-800">
               <div className="flex items-center justify-between">
                 <ThemeToggle />
                 {user && (
                   <div className="text-right">
-                    <p className="text-sm font-medium">{user.email?.split("@")[0] || "User"}</p>
-                    <p className="text-xs text-sidebar-foreground/70">{user.email}</p>
+                    <p className="text-sm font-medium text-white">{user.email?.split("@")[0] || "User"}</p>
+                    <p className="text-xs text-gray-400">{user.email}</p>
                   </div>
                 )}
               </div>

@@ -48,13 +48,13 @@
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 15 23% 4%;
     --foreground: 0 0% 98%;
 
-    --card: 240 10% 3.9%;
+    --card: 15 23% 6%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 240 10% 3.9%;
+    --popover: 15 23% 6%;
     --popover-foreground: 0 0% 98%;
 
     --primary: 252 96% 71%;
@@ -76,7 +76,7 @@
     --input: 240 3.7% 15.9%;
     --ring: 252 96% 71%;
 
-    --sidebar-background: 240 10% 3.9%;
+    --sidebar-background: 15 23% 4%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 252 96% 71%;
     --sidebar-primary-foreground: 0 0% 98%;
@@ -96,15 +96,22 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
   
-  /* Improve tap targets on mobile */
+  /* Force dark mode on mobile for consistency */
   @media (max-width: 768px) {
+    html {
+      @apply dark;
+    }
+    
+    body {
+      @apply bg-[#0f0f0f] text-white;
+    }
+    
+    /* Improve tap targets on mobile */
     button, a {
       @apply min-h-10 min-w-10;
     }
-  }
-  
-  /* Hide scrollbar for a cleaner mobile look */
-  @media (max-width: 768px) {
+    
+    /* Hide scrollbar for a cleaner mobile look */
     ::-webkit-scrollbar {
       width: 0px;
       background: transparent;
@@ -127,20 +134,43 @@
   
   /* Mobile-specific styles */
   .mobile-bottom-nav {
-    @apply fixed bottom-0 left-0 right-0 bg-background border-t border-border py-2 px-4 flex justify-between items-center z-50;
+    @apply fixed bottom-0 left-0 right-0 bg-[#0f0f0f] border-t border-gray-800 py-2 px-4 flex justify-between items-center z-50;
+  }
+
+  /* Mobile navigation improvements */
+  .mobile-nav-item {
+    @apply flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 hover:bg-gray-800;
+  }
+  
+  .mobile-nav-item.active {
+    @apply bg-gray-800 text-primary;
   }
 
   /* Mobile editor improvements */
   .mobile-editor {
-    @apply bg-background dark:bg-sidebar p-0;
+    @apply bg-[#0f0f0f] p-0;
   }
   
   .mobile-editor-input {
-    @apply text-lg font-medium border-none focus-visible:ring-0 px-3 py-2 w-full bg-transparent;
+    @apply text-lg font-medium border-none focus-visible:ring-0 px-4 py-3 w-full bg-transparent text-white placeholder:text-gray-400;
   }
   
   .mobile-editor-textarea {
-    @apply min-h-[300px] resize-none border-none focus-visible:ring-0 px-3 py-2 w-full bg-transparent;
+    @apply min-h-[300px] resize-none border-none focus-visible:ring-0 px-4 py-3 w-full bg-transparent text-white placeholder:text-gray-400;
+  }
+  
+  /* Mobile search styling */
+  .mobile-search {
+    @apply bg-gray-900 border-gray-700 text-white placeholder:text-gray-400 rounded-xl;
+  }
+  
+  /* Mobile button styling */
+  .mobile-primary-button {
+    @apply bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6 py-3 font-medium transition-all duration-200 shadow-lg;
+  }
+  
+  .mobile-ghost-button {
+    @apply bg-transparent hover:bg-gray-800 text-gray-300 hover:text-white rounded-xl transition-all duration-200;
   }
   
   /* Add a nice fade animation for mobile transitions */
@@ -155,5 +185,14 @@
   
   .animate-fade-in {
     animation: fade-in 0.3s ease-out;
+  }
+  
+  /* Mobile empty state styling */
+  .mobile-empty-state {
+    @apply flex flex-col items-center justify-center p-8 text-center min-h-[60vh];
+  }
+  
+  .mobile-empty-icon {
+    @apply bg-gray-800 rounded-full p-6 mb-4;
   }
 }
