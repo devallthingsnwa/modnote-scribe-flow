@@ -6,14 +6,14 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Redirect to the login page
+    // Redirect to the landing page
     navigate("/");
   }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
-        <p className="text-xl text-muted-foreground">Redirecting to login...</p>
+        <p className="text-xl text-muted-foreground">Redirecting to ModNote...</p>
       </div>
     </div>
   );
