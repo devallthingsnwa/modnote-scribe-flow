@@ -121,7 +121,6 @@ export default function Settings() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
           <div className="flex justify-between items-center gap-2">
-            {isMobile && <MobileNavigation />}
             <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Settings</h1>
           </div>
         </header>
