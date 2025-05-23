@@ -52,30 +52,6 @@ export const fetchYouTubeTranscript = async (videoId: string): Promise<string> =
   }
 };
 
-// Function to process content with DeepSeek
-export const processContentWithDeepSeek = async (content: string, type: string): Promise<string> => {
-  try {
-    const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
-      body: { content, type }
-    });
-
-    if (error) {
-      console.error("Error processing content:", error);
-      throw new Error(`Failed to process content: ${error.message}`);
-    }
-
-    if (!data || !data.processedContent) {
-      return "No processed content available.";
-    }
-
-    return data.processedContent;
-  } catch (error: any) {
-    console.error("Error in processContentWithDeepSeek:", error);
-    // Return a user-friendly error message
-    return `Error processing content: ${error.message}`;
-  }
-};
-
 // This function is kept for backward compatibility but now uses the real API
 export const simulateTranscriptFetch = async (videoId: string): Promise<string> => {
   return fetchYouTubeTranscript(videoId);

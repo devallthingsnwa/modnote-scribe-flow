@@ -24,8 +24,7 @@ import { TranscriptPreview } from "./import/TranscriptPreview";
 import { ProcessingStatus } from "./import/ProcessingStatus";
 import { 
   extractYouTubeId, 
-  fetchYouTubeTranscript,
-  processContentWithDeepSeek
+  fetchYouTubeTranscript
 } from "./import/ImportUtils";
 
 interface ImportModalProps {
@@ -42,7 +41,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
-  const [processedContent, setProcessedContent] = useState<string | null>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -51,7 +49,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     // Reset states when URL changes
     setThumbnail(null);
     setTranscript(null);
-    setProcessedContent(null);
     setCurrentStep("url");
   };
 
@@ -116,7 +113,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     if (!url || !user) return;
     
     setCurrentStep("processing");
-    setProgress(10);
+    setProgress(20);
     
     try {
       // Create a simple title from the URL
@@ -131,7 +128,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         const videoId = extractYouTubeId(url);
         if (videoId) {
           try {
-            setProgress(20);
+            setProgress(40);
             finalTranscript = await fetchYouTubeTranscript(videoId);
             setTranscript(finalTranscript);
           } catch (error) {
@@ -141,39 +138,17 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         }
       }
       
-      setProgress(40);
+      setProgress(60);
       
-      // Process content with DeepSeek if transcript is available and valid
-      let summarizedContent = "";
+      // Create the final content structure - just the raw transcript without AI summarization
+      let finalContent = "";
+      
       if (finalTranscript && 
           !finalTranscript.startsWith("Error") && 
           !finalTranscript.includes("No transcript available") &&
           !finalTranscript.includes("Transcript could not be fetched") &&
           finalTranscript.trim().length > 50) {
         
-        try {
-          setProgress(50);
-          summarizedContent = await processContentWithDeepSeek(finalTranscript, type);
-          setProcessedContent(summarizedContent);
-          setProgress(70);
-        } catch (error) {
-          console.error("Error processing content with DeepSeek:", error);
-          summarizedContent = "Content could not be processed with AI summarization.";
-        }
-      } else {
-        summarizedContent = "No valid transcript available for AI processing.";
-        setProgress(70);
-      }
-      
-      // Create the final content structure
-      let finalContent = "";
-      
-      if (summarizedContent && !summarizedContent.includes("could not be processed")) {
-        finalContent = `# ${noteTitle}\n\n` +
-          `**Source:** ${url}\n\n` +
-          `## AI Summary\n\n${summarizedContent}\n\n` +
-          `## Full Transcript\n\n${finalTranscript || "No transcript available"}`;
-      } else if (finalTranscript && finalTranscript.trim().length > 0) {
         finalContent = `# ${noteTitle}\n\n` +
           `**Source:** ${url}\n\n` +
           `## Transcript\n\n${finalTranscript}`;
@@ -212,9 +187,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       // Call the onImport handler
       onImport(url, type);
       
-      if (summarizedContent && !summarizedContent.includes("could not be processed")) {
-        toast.success("Content successfully imported with AI summary!");
-      } else if (finalTranscript && finalTranscript.trim().length > 0) {
+      if (finalTranscript && !finalTranscript.includes("could not be fetched")) {
         toast.success("Content imported with transcript!");
       } else {
         toast.success("Content imported (transcript not available)!");
@@ -227,7 +200,6 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         setUrl("");
         setThumbnail(null);
         setTranscript(null);
-        setProcessedContent(null);
         setCurrentStep("url");
         setProgress(0);
       }, 1500);
@@ -246,7 +218,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         <DialogHeader>
           <DialogTitle>Import Content</DialogTitle>
           <DialogDescription>
-            Import from YouTube, podcast, or text source for automatic transcription and summarization.
+            Import from YouTube, podcast, or text source for automatic transcription.
           </DialogDescription>
         </DialogHeader>
         
