@@ -100,6 +100,49 @@ export default function NotePage() {
     }
   };
 
+  const handleTranscriptRefresh = async () => {
+    if (!videoId || !id) return;
+    
+    try {
+      // Call the fetch-youtube-transcript function
+      const { data, error } = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ videoId }),
+      }).then(res => res.json());
+
+      if (error) {
+        throw new Error(error);
+      }
+
+      if (data?.transcript) {
+        // Update the note with the new transcript
+        updateNoteMutation.mutate({
+          id,
+          updates: {
+            content: data.transcript,
+            updated_at: new Date().toISOString(),
+          },
+        });
+        
+        toast({
+          title: "Transcript updated",
+          description: "The video transcript has been successfully fetched and updated.",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching transcript:", error);
+      toast({
+        title: "Transcript fetch failed",
+        description: "Could not fetch the transcript for this video.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (error) {
     toast({
       title: "Error loading note",
@@ -141,7 +184,11 @@ export default function NotePage() {
             <div className="flex items-center gap-2">
               {!isLoading && note && (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => handleSave(note)}>
+                  <Button variant="outline" size="sm" onClick={() => handleSave({
+                    title: note.title,
+                    content: note.content,
+                    tags: note.tags.map(tag => tag.id)
+                  })}>
                     <Save className="h-4 w-4 mr-1" />
                     Save
                   </Button>
@@ -199,7 +246,16 @@ export default function NotePage() {
                         </Card>
                         
                         <Card className="p-4 h-full flex flex-col overflow-hidden">
-                          <h3 className="text-lg font-medium mb-4">Transcript</h3>
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-medium">Transcript</h3>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleTranscriptRefresh}
+                            >
+                              Refresh Transcript
+                            </Button>
+                          </div>
                           <div className="flex-1 overflow-auto">
                             <TranscriptPanel
                               transcript={note.content || ''}

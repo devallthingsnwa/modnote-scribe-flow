@@ -6,3 +6,6 @@ verify_jwt = true
 
 [functions.process-content-with-deepseek]
 verify_jwt = true
+
+[functions.enhanced-youtube-processor]
+verify_jwt = true
