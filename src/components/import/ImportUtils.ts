@@ -19,6 +19,9 @@ export const formatTimestamp = (milliseconds: number) => {
 // Function to fetch YouTube transcript using our edge function
 export const fetchYouTubeTranscript = async (videoId: string): Promise<string> => {
   try {
+    // Add a short delay to ensure the function is ready (helpful for cold starts)
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
       body: { videoId }
     });

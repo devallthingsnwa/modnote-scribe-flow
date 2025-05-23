@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { load } from "https://deno.land/x/youtube_transcript@v0.0.2/mod.ts";
 
-const YOUTUBE_TRANSCRIPT_API_KEY = Deno.env.get("YOUTUBE_TRANSCRIPT_API_KEY");
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -29,49 +29,29 @@ serve(async (req) => {
 
     console.log(`Fetching transcript for video: ${videoId}`);
     
-    // Using youtube-transcript API
-    const response = await fetch(
-      `https://youtube-transcript.p.rapidapi.com/v1/transcript?videoId=${videoId}`,
-      {
-        method: "GET",
-        headers: {
-          "X-RapidAPI-Key": YOUTUBE_TRANSCRIPT_API_KEY,
-          "X-RapidAPI-Host": "youtube-transcript.p.rapidapi.com",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Transcript API error response:", errorText);
-      
+    // Use the youtube_transcript Deno module instead of the RapidAPI
+    const transcript = await load(videoId);
+    
+    // If no transcript is available
+    if (!transcript || transcript.length === 0) {
       return new Response(
         JSON.stringify({ 
-          error: "Failed to fetch transcript", 
-          details: errorText,
-          status: response.status 
+          transcript: "No transcript available for this video."
         }),
         {
-          status: response.status,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
-
-    const data = await response.json();
     
     // Format transcript for readability
-    let formattedTranscript = "";
-    if (data.transcript?.lines) {
-      formattedTranscript = data.transcript.lines
-        .map((line: any) => {
-          const time = formatTime(line.start);
-          return `[${time}] ${line.text}`;
-        })
-        .join("\n");
-    } else {
-      formattedTranscript = "No transcript available for this video.";
-    }
+    const formattedTranscript = transcript
+      .map((entry) => {
+        const time = formatTime(entry.offset / 1000);
+        return `[${time}] ${entry.text}`;
+      })
+      .join("\n");
 
     console.log("Transcript fetched successfully");
     
