@@ -129,6 +129,19 @@
   .mobile-bottom-nav {
     @apply fixed bottom-0 left-0 right-0 bg-background border-t border-border py-2 px-4 flex justify-between items-center z-50;
   }
+
+  /* Mobile editor improvements */
+  .mobile-editor {
+    @apply bg-background dark:bg-sidebar p-0;
+  }
+  
+  .mobile-editor-input {
+    @apply text-lg font-medium border-none focus-visible:ring-0 px-3 py-2 w-full bg-transparent;
+  }
+  
+  .mobile-editor-textarea {
+    @apply min-h-[300px] resize-none border-none focus-visible:ring-0 px-3 py-2 w-full bg-transparent;
+  }
   
   /* Add a nice fade animation for mobile transitions */
   .mobile-fade-in {

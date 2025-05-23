@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bold, Italic, List, ListChecks, Save } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
-import { Note } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface NoteEditorProps {
   initialNote?: {
@@ -23,6 +23,7 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
+  const isMobile = useIsMobile();
   const [note, setNote] = useState({
     title: initialNote?.title || "",
     content: initialNote?.content || "",
@@ -55,6 +56,50 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
   const handleTagChange = (selectedTags: string[]) => {
     setNote({ ...note, tags: selectedTags });
   };
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 overflow-y-auto p-3">
+          <Input
+            value={note.title}
+            onChange={(e) => setNote({ ...note, title: e.target.value })}
+            placeholder="Untitled Note"
+            className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4 bg-transparent"
+          />
+
+          <Textarea
+            value={note.content || ""}
+            onChange={(e) => setNote({ ...note, content: e.target.value })}
+            placeholder="Start writing..."
+            className="min-h-[300px] resize-none border-none focus-visible:ring-0 px-0 bg-transparent"
+          />
+        </div>
+
+        <div className="p-3 border-t border-border">
+          <div className="flex space-x-2 mb-3">
+            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+              <List className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+              <ListChecks className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <TagSelector
+            selectedTags={note.tags}
+            onChange={handleTagChange}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">

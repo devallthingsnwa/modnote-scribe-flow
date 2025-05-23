@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from "react-router-dom";
-import { Home, BookOpen, Plus, Hash, Settings, Menu } from "lucide-react";
+import { Home, BookOpen, Plus, Hash, Settings, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -51,18 +51,21 @@ export function MobileNavigation() {
   return (
     <>
       {/* Bottom navigation for quick access */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background dark:bg-sidebar border-t md:hidden">
         <div className="grid grid-cols-5 gap-1 p-1">
           {navigationItems.map((item) => (
             <Link key={item.name} to={item.path} className="flex flex-col items-center justify-center p-2">
               <Button 
                 variant={isActive(item.path) ? "secondary" : "ghost"} 
                 size="icon" 
-                className="size-10"
+                className={cn(
+                  "size-10 rounded-full",
+                  isActive(item.path) ? "bg-secondary text-primary" : "text-muted-foreground"
+                )}
               >
                 {item.icon}
               </Button>
-              <span className="text-[10px] mt-1">{item.name}</span>
+              <span className="text-[10px] mt-1 text-muted-foreground">{item.name}</span>
             </Link>
           ))}
         </div>
