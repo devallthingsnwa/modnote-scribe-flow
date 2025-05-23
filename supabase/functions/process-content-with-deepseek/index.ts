@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -27,7 +26,22 @@ serve(async (req) => {
       );
     }
 
+    // Get the API key and check if it exists
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+    
+    if (!DEEPSEEK_API_KEY) {
+      console.error("DEEPSEEK_API_KEY is not set");
+      return new Response(
+        JSON.stringify({ error: "DeepSeek API key is not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     console.log(`Processing ${type} content with DeepSeek. Options:`, options);
+    console.log("API Key exists:", DEEPSEEK_API_KEY ? "Yes" : "No");
     
     // Build the analysis prompt based on selected options
     let analysisInstructions = "Please analyze the following content and provide:\n";
@@ -63,6 +77,7 @@ serve(async (req) => {
     }
 
     // Call DeepSeek API
+    console.log("Making request to DeepSeek API...");
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -86,13 +101,27 @@ serve(async (req) => {
       }),
     });
 
+    console.log("DeepSeek API response status:", response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error("DeepSeek API error response:", errorText);
       
+      // Parse the error to provide better user feedback
+      let errorMessage = "Failed to process content with DeepSeek";
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        }
+      } catch (e) {
+        // If we can't parse the error, use the raw text
+        errorMessage = errorText;
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: "Failed to process content with DeepSeek", 
+          error: errorMessage,
           details: errorText,
           status: response.status 
         }),
