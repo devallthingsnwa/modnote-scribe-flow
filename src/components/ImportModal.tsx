@@ -74,7 +74,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             const fetchedTranscript = await fetchYouTubeTranscript(videoId);
             setTranscript(fetchedTranscript);
             
-            if (fetchedTranscript && !fetchedTranscript.startsWith("Error")) {
+            if (fetchedTranscript && !fetchedTranscript.startsWith("Error") && !fetchedTranscript.includes("No transcript available")) {
               toast.success("Transcript fetched successfully!");
             } else {
               toast.warning("Transcript might be incomplete or unavailable.");
@@ -82,7 +82,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           } catch (error) {
             console.error("Error fetching transcript:", error);
             toast.error("Failed to fetch transcript. The video might not have captions available.");
-            setTranscript(null);
+            setTranscript("No transcript available for this video.");
           }
         } else {
           setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
@@ -105,6 +105,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     if (!url || !user) return;
     
     setCurrentStep("processing");
+    setProgress(10);
     
     try {
       // Create a simple title from the URL
@@ -113,13 +114,66 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         noteTitle = `YouTube ${type === "video" ? "Video" : type === "audio" ? "Audio" : "Content"}`;
       }
       
-      // Start progress at 10%
-      setProgress(10);
+      // If we don't have a transcript yet, try to fetch it
+      let finalTranscript = transcript;
+      if (!finalTranscript && (url.includes("youtube.com") || url.includes("youtu.be"))) {
+        const videoId = extractYouTubeId(url);
+        if (videoId) {
+          try {
+            setProgress(20);
+            finalTranscript = await fetchYouTubeTranscript(videoId);
+            setTranscript(finalTranscript);
+          } catch (error) {
+            console.error("Error fetching transcript during import:", error);
+            finalTranscript = "Transcript could not be fetched for this video.";
+          }
+        }
+      }
       
-      let finalContent = transcript 
-        ? `Imported from: ${url}\n\n# Transcript\n\n${transcript}`
-        : `Imported from: ${url}\n\nTranscription in progress...`;
+      setProgress(40);
+      
+      // Process content with DeepSeek if transcript is available and valid
+      let summarizedContent = "";
+      if (finalTranscript && 
+          !finalTranscript.startsWith("Error") && 
+          !finalTranscript.includes("No transcript available") &&
+          !finalTranscript.includes("Transcript could not be fetched") &&
+          finalTranscript.trim().length > 50) {
         
+        try {
+          setProgress(50);
+          summarizedContent = await processContentWithDeepSeek(finalTranscript, type);
+          setProcessedContent(summarizedContent);
+          setProgress(70);
+        } catch (error) {
+          console.error("Error processing content with DeepSeek:", error);
+          summarizedContent = "Content could not be processed with AI summarization.";
+        }
+      } else {
+        summarizedContent = "No valid transcript available for AI processing.";
+        setProgress(70);
+      }
+      
+      // Create the final content structure
+      let finalContent = "";
+      
+      if (summarizedContent && !summarizedContent.includes("could not be processed")) {
+        finalContent = `# ${noteTitle}\n\n` +
+          `**Source:** ${url}\n\n` +
+          `## AI Summary\n\n${summarizedContent}\n\n` +
+          `## Full Transcript\n\n${finalTranscript || "No transcript available"}`;
+      } else if (finalTranscript && finalTranscript.trim().length > 0) {
+        finalContent = `# ${noteTitle}\n\n` +
+          `**Source:** ${url}\n\n` +
+          `## Transcript\n\n${finalTranscript}`;
+      } else {
+        finalContent = `# ${noteTitle}\n\n` +
+          `**Source:** ${url}\n\n` +
+          `Content imported but transcript was not available.`;
+      }
+      
+      setProgress(80);
+      
       // Create the note in the database
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
@@ -138,59 +192,21 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         throw noteError;
       }
       
-      setProgress(30);
+      setProgress(100);
+      setCurrentStep("complete");
       
-      // Process content with DeepSeek if transcript is available
-      if (transcript) {
-        try {
-          setProgress(40);
-          const summarizedContent = await processContentWithDeepSeek(transcript, type);
-          setProcessedContent(summarizedContent);
-          setProgress(80);
-          
-          // Update note with processed content
-          const combinedContent = `# ${noteTitle}\n\n` +
-            `Source: ${url}\n\n` +
-            `## Summary\n\n${summarizedContent}\n\n` +
-            `## Full Transcript\n\n${transcript}`;
-          
-          await supabase
-            .from('notes')
-            .update({ 
-              content: combinedContent,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', noteData.id);
-          
-          setProgress(100);
-          setCurrentStep("complete");
-          
-          // Invalidate queries to refresh notes list
-          queryClient.invalidateQueries({ queryKey: ['notes'] });
-          
-          // Call the onImport handler
-          onImport(url, type);
-          
-          toast.success("Content successfully imported and processed!");
-        } catch (error: any) {
-          console.error("Error processing content:", error);
-          setProgress(100);
-          setCurrentStep("complete");
-          
-          // Still call onImport to refresh the list
-          onImport(url, type);
-          
-          toast.warning("Content imported but could not be processed fully.");
-        }
+      // Invalidate queries to refresh notes list
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      
+      // Call the onImport handler
+      onImport(url, type);
+      
+      if (summarizedContent && !summarizedContent.includes("could not be processed")) {
+        toast.success("Content successfully imported with AI summary!");
+      } else if (finalTranscript && finalTranscript.trim().length > 0) {
+        toast.success("Content imported with transcript!");
       } else {
-        // No transcript available, just mark as complete
-        setProgress(100);
-        setCurrentStep("complete");
-        
-        // Call the onImport handler
-        onImport(url, type);
-        
-        toast.success("Content imported!");
+        toast.success("Content imported (transcript not available)!");
       }
       
       // Close modal after completion
@@ -204,7 +220,9 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         setCurrentStep("url");
         setProgress(0);
       }, 1500);
+      
     } catch (error: any) {
+      console.error("Error importing content:", error);
       toast.error(`Error importing content: ${error.message}`);
       setCurrentStep("url");
       setProgress(0);
