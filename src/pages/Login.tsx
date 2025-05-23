@@ -17,9 +17,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Login() {
   const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({
     email: "",
@@ -67,7 +69,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${
+      isMobile ? 'bg-[#0f0f0f]' : 'bg-background'
+    }`}>
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -75,22 +79,32 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-fade-in">
           <Logo size="lg" className="mb-2" />
-          <p className="text-muted-foreground">
+          <p className={isMobile ? 'text-gray-400' : 'text-muted-foreground'}>
             Modern note-taking for the digital age
           </p>
         </div>
         
-        <Card className="animate-fade-in">
+        <Card className={`animate-fade-in ${isMobile ? 'bg-gray-900 border-gray-800' : ''}`}>
           <Tabs defaultValue="login">
             <CardHeader>
               <div className="flex justify-between items-center">
-                <CardTitle>Welcome</CardTitle>
-                <TabsList>
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="signup">Sign up</TabsTrigger>
+                <CardTitle className={isMobile ? 'text-white' : ''}>Welcome</CardTitle>
+                <TabsList className={isMobile ? 'bg-gray-800 border-gray-700' : ''}>
+                  <TabsTrigger 
+                    value="login"
+                    className={isMobile ? 'data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-400' : ''}
+                  >
+                    Login
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="signup"
+                    className={isMobile ? 'data-[state=active]:bg-gray-700 data-[state=active]:text-white text-gray-400' : ''}
+                  >
+                    Sign up
+                  </TabsTrigger>
                 </TabsList>
               </div>
-              <CardDescription>
+              <CardDescription className={isMobile ? 'text-gray-400' : ''}>
                 Get started with your ModNote journey
               </CardDescription>
             </CardHeader>
@@ -100,7 +114,7 @@ export default function Login() {
                 <form onSubmit={handleLoginSubmit}>
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="login-email">Email</Label>
+                      <Label htmlFor="login-email" className={isMobile ? 'text-white' : ''}>Email</Label>
                       <Input
                         id="login-email"
                         type="email"
@@ -110,14 +124,17 @@ export default function Login() {
                           setLoginForm({ ...loginForm, email: e.target.value })
                         }
                         required
+                        className={isMobile ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-400' : ''}
                       />
                     </div>
                     <div className="grid gap-2">
                       <div className="flex justify-between">
-                        <Label htmlFor="login-password">Password</Label>
+                        <Label htmlFor="login-password" className={isMobile ? 'text-white' : ''}>Password</Label>
                         <a
                           href="#"
-                          className="text-xs text-muted-foreground hover:text-primary"
+                          className={`text-xs hover:text-primary ${
+                            isMobile ? 'text-gray-400' : 'text-muted-foreground'
+                          }`}
                         >
                           Forgot password?
                         </a>
@@ -131,9 +148,14 @@ export default function Login() {
                           setLoginForm({ ...loginForm, password: e.target.value })
                         }
                         required
+                        className={isMobile ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-400' : ''}
                       />
                     </div>
-                    <Button type="submit" disabled={isLoading || authLoading}>
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || authLoading}
+                      className={isMobile ? 'mobile-primary-button' : ''}
+                    >
                       {isLoading || authLoading ? "Logging in..." : "Login"}
                     </Button>
                   </div>
@@ -144,7 +166,7 @@ export default function Login() {
                 <form onSubmit={handleSignupSubmit}>
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="signup-name">Name</Label>
+                      <Label htmlFor="signup-name" className={isMobile ? 'text-white' : ''}>Name</Label>
                       <Input
                         id="signup-name"
                         type="text"
@@ -154,10 +176,11 @@ export default function Login() {
                           setSignupForm({ ...signupForm, name: e.target.value })
                         }
                         required
+                        className={isMobile ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-400' : ''}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="signup-email">Email</Label>
+                      <Label htmlFor="signup-email" className={isMobile ? 'text-white' : ''}>Email</Label>
                       <Input
                         id="signup-email"
                         type="email"
@@ -167,10 +190,11 @@ export default function Login() {
                           setSignupForm({ ...signupForm, email: e.target.value })
                         }
                         required
+                        className={isMobile ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-400' : ''}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="signup-password">Password</Label>
+                      <Label htmlFor="signup-password" className={isMobile ? 'text-white' : ''}>Password</Label>
                       <Input
                         id="signup-password"
                         type="password"
@@ -183,9 +207,14 @@ export default function Login() {
                           })
                         }
                         required
+                        className={isMobile ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-400' : ''}
                       />
                     </div>
-                    <Button type="submit" disabled={isLoading || authLoading}>
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || authLoading}
+                      className={isMobile ? 'mobile-primary-button' : ''}
+                    >
                       {isLoading || authLoading ? "Creating account..." : "Create account"}
                     </Button>
                   </div>
@@ -193,7 +222,9 @@ export default function Login() {
               </TabsContent>
             </CardContent>
             
-            <CardFooter className="text-sm text-center text-muted-foreground">
+            <CardFooter className={`text-sm text-center ${
+              isMobile ? 'text-gray-400' : 'text-muted-foreground'
+            }`}>
               By continuing, you agree to our Terms of Service and Privacy Policy.
             </CardFooter>
           </Tabs>
