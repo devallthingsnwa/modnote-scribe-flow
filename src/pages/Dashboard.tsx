@@ -1,18 +1,23 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Search } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNavigation } from "@/components/MobileNavigation";
 import { NoteCard, NoteCardProps } from "@/components/NoteCard";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ImportModal } from "@/components/ImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes, useCreateNote } from "@/lib/api";
 import { extractYouTubeId } from "@/components/import/ImportUtils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [searchQuery, setSearchQuery] = useState("");
   const [importModalOpen, setImportModalOpen] = useState(false);
   
   const { data: notes, isLoading, error } = useNotes();
@@ -31,16 +36,21 @@ export default function Dashboard() {
       title: "Content import complete",
       description: `Your ${type} content has been processed and is available in your notes.`,
     });
-    
-    // The actual note creation is now handled in the ImportModal component
-    // This function is mainly for notification purposes and to refresh the notes list if needed
   };
+  
+  const filteredNotes = notes?.filter(note => {
+    if (!searchQuery) return true;
+    return (
+      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.content?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   // Transform notes from API to NoteCard format
   const transformNotesToCardProps = (): NoteCardProps[] => {
-    if (!notes) return [];
+    if (!filteredNotes) return [];
     
-    return notes.map(note => ({
+    return filteredNotes.map(note => ({
       id: note.id,
       title: note.title,
       content: note.content || "",
@@ -52,7 +62,7 @@ export default function Dashboard() {
       })),
       notebook: note.notebook_id ? {
         id: note.notebook_id,
-        name: "Unknown" // We'll fetch notebook names in a more efficient way in a future update
+        name: "Unknown"
       } : undefined,
       thumbnail: note.thumbnail || undefined
     }));
@@ -60,25 +70,46 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="border-b border-border p-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold">All Notes</h1>
+          <div className="flex justify-between items-center gap-2">
+            {isMobile && <MobileNavigation />}
+            <h1 className="text-2xl font-semibold">Notes</h1>
             <div className="flex space-x-2">
-              <Button onClick={() => setImportModalOpen(true)}>
-                Import Content
+              <Button 
+                variant={isMobile ? "ghost" : "default"} 
+                size={isMobile ? "icon" : "default"} 
+                onClick={() => setImportModalOpen(true)}
+              >
+                {isMobile ? null : "Import"}
               </Button>
-              <Button onClick={handleNewNote}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                New Note
-              </Button>
+              {!isMobile && (
+                <Button onClick={handleNewNote}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  New Note
+                </Button>
+              )}
             </div>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="mt-4 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search notes..."
+              className="pl-10 w-full"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4">
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-pulse">Loading notes...</div>
@@ -87,7 +118,7 @@ export default function Dashboard() {
             <div className="text-center text-red-500 p-4">
               Error loading notes. Please try again.
             </div>
-          ) : notes && notes.length > 0 ? (
+          ) : filteredNotes && filteredNotes.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {transformNotesToCardProps().map((note) => (
                 <NoteCard
@@ -98,16 +129,29 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <div className="text-center p-8">
-              <p className="text-muted-foreground mb-4">No notes found. Create your first note!</p>
-              <Button onClick={handleNewNote}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                New Note
-              </Button>
+            <div className="text-center p-8 flex flex-col items-center">
+              <div className="bg-muted/30 rounded-full p-6 mb-4">
+                <PlusCircle className="h-12 w-12 text-muted-foreground/60" />
+              </div>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery ? "No notes matching your search" : "No notes found. Create your first note!"}
+              </p>
+              {!searchQuery && (
+                <Button onClick={handleNewNote}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  New Note
+                </Button>
+              )}
             </div>
           )}
         </main>
+        
+        {/* Mobile Bottom Navigation Space */}
+        <div className="h-20 md:hidden" />
       </div>
+      
+      {/* Mobile Navigation */}
+      {isMobile && <MobileNavigation />}
       
       <ImportModal
         open={importModalOpen}

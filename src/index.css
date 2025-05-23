@@ -95,6 +95,21 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  
+  /* Improve tap targets on mobile */
+  @media (max-width: 768px) {
+    button, a {
+      @apply min-h-10 min-w-10;
+    }
+  }
+  
+  /* Hide scrollbar for a cleaner mobile look */
+  @media (max-width: 768px) {
+    ::-webkit-scrollbar {
+      width: 0px;
+      background: transparent;
+    }
+  }
 }
 
 @layer components {
@@ -108,5 +123,24 @@
 
   .modnote-tag {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+  
+  /* Mobile-specific styles */
+  .mobile-bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-background border-t border-border py-2 px-4 flex justify-between items-center z-50;
+  }
+  
+  /* Add a nice fade animation for mobile transitions */
+  .mobile-fade-in {
+    @apply animate-fade-in;
+  }
+  
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
   }
 }
