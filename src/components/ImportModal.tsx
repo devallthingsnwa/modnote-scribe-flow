@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,8 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ImportSteps } from "./import/ImportSteps";
 import { ContentTypeSelector } from "./import/ContentTypeSelector";
 import { UrlInput } from "./import/UrlInput";
-import { PreviewSection } from "./import/PreviewSection";
-import { TranscriptPreview } from "./import/TranscriptPreview";
+import { EnhancedVideoPreview } from "./import/EnhancedVideoPreview";
 import { ProcessingStatus } from "./import/ProcessingStatus";
 import { 
   extractYouTubeId, 
@@ -272,9 +270,11 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Content</DialogTitle>
+          <DialogTitle className="flex items-center space-x-2">
+            <span>Import Content</span>
+          </DialogTitle>
           <DialogDescription>
             Import from YouTube, podcast, or text source for automatic transcription and AI analysis.
           </DialogDescription>
@@ -282,63 +282,38 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         
         <ImportSteps currentStep={currentStep} />
         
-        <div className="grid gap-4 py-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="url">Content URL</Label>
-            <UrlInput 
-              url={url}
-              onChange={handleUrlChange}
-              onFetchPreview={handleFetchPreview}
-              isLoading={isLoading}
-              disabled={!user}
-            />
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            <Label>Content Type</Label>
-            <ContentTypeSelector type={type} setType={setType} />
-          </div>
-          
-          <PreviewSection thumbnail={thumbnail} />
-          
-          <TranscriptPreview transcript={transcript} />
-          
-          {transcript && !transcript.includes("Error") && !transcript.includes("No transcript available") && currentStep !== "processing" && currentStep !== "complete" && (
-            <div className="flex flex-col gap-3">
-              <Label>AI Analysis Options</Label>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="summary" 
-                    checked={enableSummary}
-                    onCheckedChange={(checked) => setEnableSummary(checked as boolean)}
-                  />
-                  <Label htmlFor="summary" className="text-sm font-normal">
-                    Generate Summary
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="highlights" 
-                    checked={enableHighlights}
-                    onCheckedChange={(checked) => setEnableHighlights(checked as boolean)}
-                  />
-                  <Label htmlFor="highlights" className="text-sm font-normal">
-                    Extract Key Highlights
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="keypoints" 
-                    checked={enableKeyPoints}
-                    onCheckedChange={(checked) => setEnableKeyPoints(checked as boolean)}
-                  />
-                  <Label htmlFor="keypoints" className="text-sm font-normal">
-                    Generate Key Points
-                  </Label>
-                </div>
-              </div>
+        <div className="grid gap-6 py-4">
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="url">Content URL</Label>
+              <UrlInput 
+                url={url}
+                onChange={handleUrlChange}
+                onFetchPreview={handleFetchPreview}
+                isLoading={isLoading}
+                disabled={!user}
+              />
             </div>
+            
+            <div className="flex flex-col gap-2">
+              <Label>Content Type</Label>
+              <ContentTypeSelector type={type} setType={setType} />
+            </div>
+          </div>
+          
+          {/* Enhanced Video Preview */}
+          {(thumbnail || transcript) && (
+            <EnhancedVideoPreview
+              thumbnail={thumbnail}
+              transcript={transcript}
+              url={url}
+              enableSummary={enableSummary}
+              enableHighlights={enableHighlights}
+              enableKeyPoints={enableKeyPoints}
+              onSummaryChange={setEnableSummary}
+              onHighlightsChange={setEnableHighlights}
+              onKeyPointsChange={setEnableKeyPoints}
+            />
           )}
           
           <ProcessingStatus currentStep={currentStep} progress={progress} />
@@ -352,6 +327,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             type="button" 
             onClick={handleImport}
             disabled={!url || currentStep === "processing" || currentStep === "complete" || !user}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
           >
             {currentStep === "processing" ? "Processing..." : "Import Content"}
           </Button>
