@@ -19,23 +19,32 @@ export const formatTimestamp = (milliseconds: number) => {
 // Function to fetch YouTube transcript using our edge function
 export const fetchYouTubeTranscript = async (videoId: string): Promise<string> => {
   try {
-    // Add a short delay to ensure the function is ready (helpful for cold starts)
-    await new Promise(resolve => setTimeout(resolve, 500));
-
+    console.log("Calling fetch-youtube-transcript edge function with videoId:", videoId);
+    
     const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
       body: { videoId }
     });
 
     if (error) {
-      console.error("Error fetching transcript:", error);
+      console.error("Error from edge function:", error);
       throw new Error(`Failed to fetch transcript: ${error.message}`);
     }
 
-    if (!data || !data.transcript) {
-      return "No transcript available for this video.";
+    console.log("Response from edge function:", data);
+
+    if (!data) {
+      return "No response received from transcript service.";
     }
 
-    return data.transcript;
+    // Check if the response contains an error
+    if (data.error) {
+      console.error("Error in transcript response:", data.error);
+      return `Error fetching transcript: ${data.error}`;
+    }
+
+    // Return the transcript or a fallback message
+    return data.transcript || "No transcript content available for this video.";
+    
   } catch (error: any) {
     console.error("Error in fetchYouTubeTranscript:", error);
     // Return a user-friendly error message

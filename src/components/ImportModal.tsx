@@ -69,28 +69,39 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         if (videoId) {
           setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
           
-          // Use real transcript API
+          // Use real transcript API with better error handling
           try {
+            console.log("Fetching transcript for video ID:", videoId);
             const fetchedTranscript = await fetchYouTubeTranscript(videoId);
+            console.log("Received transcript:", fetchedTranscript?.substring(0, 100) + "...");
+            
             setTranscript(fetchedTranscript);
             
-            if (fetchedTranscript && !fetchedTranscript.startsWith("Error") && !fetchedTranscript.includes("No transcript available")) {
+            // Check if transcript is valid
+            if (fetchedTranscript && 
+                !fetchedTranscript.startsWith("Error") && 
+                !fetchedTranscript.includes("No transcript available") &&
+                !fetchedTranscript.includes("Unable to fetch transcript") &&
+                fetchedTranscript.trim().length > 20) {
               toast.success("Transcript fetched successfully!");
             } else {
-              toast.warning("Transcript might be incomplete or unavailable.");
+              toast.warning("Transcript might be incomplete or unavailable for this video.");
             }
           } catch (error) {
             console.error("Error fetching transcript:", error);
+            const errorMessage = "No transcript available for this video. The video may not have captions enabled.";
+            setTranscript(errorMessage);
             toast.error("Failed to fetch transcript. The video might not have captions available.");
-            setTranscript("No transcript available for this video.");
           }
         } else {
           setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
+          setTranscript("Invalid YouTube URL. Could not extract video ID.");
           toast.error("Invalid YouTube URL. Could not extract video ID.");
         }
       } else {
         // For non-YouTube URLs, show a placeholder image
         setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
+        setTranscript("Non-YouTube content preview not available.");
         toast.info("Non-YouTube URLs may have limited preview capabilities.");
       }
     } catch (error) {
