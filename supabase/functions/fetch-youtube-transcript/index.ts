@@ -49,10 +49,9 @@ serve(async (req) => {
     const html = await response.text();
     console.log(`Fetched HTML page, length: ${html.length}`);
     
-    // Multiple approaches to find caption tracks
+    // Extract caption tracks from ytInitialPlayerResponse
     let captionTracks = null;
     
-    // Approach 1: Look for captionTracks in ytInitialPlayerResponse
     const playerResponseRegex = /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/;
     const playerResponseMatch = html.match(playerResponseRegex);
     
@@ -63,41 +62,6 @@ serve(async (req) => {
         console.log(`Found ${captionTracks?.length || 0} caption tracks in playerResponse`);
       } catch (e) {
         console.log("Error parsing playerResponse:", e);
-      }
-    }
-    
-    // Approach 2: Direct search for captionTracks
-    if (!captionTracks || captionTracks.length === 0) {
-      const captionRegex = /"captionTracks"\s*:\s*(\[.*?\])/;
-      const captionMatch = html.match(captionRegex);
-      
-      if (captionMatch) {
-        try {
-          captionTracks = JSON.parse(captionMatch[1]);
-          console.log(`Found ${captionTracks?.length || 0} caption tracks via direct search`);
-        } catch (e) {
-          console.log("Error parsing caption tracks:", e);
-        }
-      }
-    }
-    
-    // Approach 3: Look for automatic captions
-    if (!captionTracks || captionTracks.length === 0) {
-      const autoCaptionRegex = /"automaticCaptions"\s*:\s*({.*?})/;
-      const autoCaptionMatch = html.match(autoCaptionRegex);
-      
-      if (autoCaptionMatch) {
-        try {
-          const autoCaptions = JSON.parse(autoCaptionMatch[1]);
-          // Extract tracks from automatic captions
-          const languages = Object.keys(autoCaptions);
-          if (languages.length > 0) {
-            captionTracks = autoCaptions[languages[0]]; // Use first available language
-            console.log(`Found ${captionTracks?.length || 0} automatic caption tracks`);
-          }
-        } catch (e) {
-          console.log("Error parsing automatic captions:", e);
-        }
       }
     }
     
@@ -134,14 +98,17 @@ serve(async (req) => {
       captionUrl = `https://www.youtube.com${captionUrl}`;
     }
     
-    // Add format parameter to get plain text
+    // Request WebVTT format specifically for better metadata
     if (!captionUrl.includes('fmt=')) {
-      captionUrl += captionUrl.includes('?') ? '&fmt=srv3' : '?fmt=srv3';
+      captionUrl += captionUrl.includes('?') ? '&fmt=vtt' : '?fmt=vtt';
+    } else {
+      // Replace any existing format with vtt
+      captionUrl = captionUrl.replace(/fmt=[^&]+/, 'fmt=vtt');
     }
     
-    console.log(`Fetching captions from: ${captionUrl}`);
+    console.log(`Fetching WebVTT captions from: ${captionUrl}`);
     
-    // Fetch the caption content
+    // Fetch the caption content in WebVTT format
     const captionResponse = await fetch(captionUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -154,12 +121,60 @@ serve(async (req) => {
     
     const captionContent = await captionResponse.text();
     console.log(`Caption content length: ${captionContent.length}`);
+    console.log(`Caption content preview: ${captionContent.substring(0, 200)}`);
     
-    // Parse the caption content (could be XML or JSON depending on format)
+    // Parse WebVTT format
     let transcript = [];
     
-    if (captionContent.includes('<transcript>') || captionContent.includes('<text')) {
-      // XML format
+    if (captionContent.includes('WEBVTT')) {
+      // Parse WebVTT format
+      const lines = captionContent.split('\n');
+      let currentCue = null;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Skip empty lines and WebVTT header
+        if (!line || line === 'WEBVTT' || line.startsWith('Kind:') || line.startsWith('Language:')) {
+          continue;
+        }
+        
+        // Check if line contains timestamp (WebVTT format: 00:00:00.000 --> 00:00:05.000)
+        const timestampRegex = /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/;
+        const timestampMatch = line.match(timestampRegex);
+        
+        if (timestampMatch) {
+          // Save previous cue if exists
+          if (currentCue && currentCue.text) {
+            transcript.push(currentCue);
+          }
+          
+          // Start new cue
+          currentCue = {
+            start: parseWebVTTTime(timestampMatch[1]),
+            end: parseWebVTTTime(timestampMatch[2]),
+            text: ''
+          };
+        } else if (currentCue && line) {
+          // Add text to current cue
+          currentCue.text += (currentCue.text ? ' ' : '') + line
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, ' ')
+            .replace(/<[^>]*>/g, '') // Remove any HTML tags
+            .trim();
+        }
+      }
+      
+      // Add the last cue
+      if (currentCue && currentCue.text) {
+        transcript.push(currentCue);
+      }
+    } else {
+      // Fallback to XML parsing if not WebVTT
       const textRegex = /<text start="([^"]*)"[^>]*>([^<]*)<\/text>/g;
       let match;
       
@@ -177,35 +192,8 @@ serve(async (req) => {
         if (text) {
           transcript.push({
             start: startTime,
+            end: startTime + 5, // Estimate end time
             text: text
-          });
-        }
-      }
-    } else {
-      // Try JSON format
-      try {
-        const jsonData = JSON.parse(captionContent);
-        if (jsonData.events) {
-          for (const event of jsonData.events) {
-            if (event.segs) {
-              for (const seg of event.segs) {
-                if (seg.utf8) {
-                  transcript.push({
-                    start: event.tStartMs / 1000,
-                    text: seg.utf8.trim()
-                  });
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.log("Not JSON format, trying plain text");
-        // If all else fails, treat as plain text
-        if (captionContent.trim()) {
-          transcript.push({
-            start: 0,
-            text: captionContent.trim()
           });
         }
       }
@@ -226,12 +214,13 @@ serve(async (req) => {
     // Format transcript for readability with timestamps
     const formattedTranscript = transcript
       .map((entry) => {
-        const time = formatTime(entry.start);
-        return `[${time}] ${entry.text}`;
+        const startTime = formatTime(entry.start);
+        const endTime = formatTime(entry.end);
+        return `[${startTime} - ${endTime}] ${entry.text}`;
       })
       .join("\n");
 
-    console.log(`Transcript extracted successfully: ${transcript.length} segments`);
+    console.log(`WebVTT transcript extracted successfully: ${transcript.length} segments`);
     
     return new Response(
       JSON.stringify({ transcript: formattedTranscript }),
@@ -255,6 +244,18 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to parse WebVTT time format (HH:MM:SS.mmm) to seconds
+function parseWebVTTTime(timeString: string): number {
+  const parts = timeString.split(':');
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  const secondsParts = parts[2].split('.');
+  const seconds = parseInt(secondsParts[0], 10);
+  const milliseconds = parseInt(secondsParts[1], 10);
+  
+  return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+}
 
 // Helper function to format time in MM:SS
 function formatTime(seconds: number): string {
