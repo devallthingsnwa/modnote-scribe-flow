@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNotebooks, useCreateNotebook, useUpdateNotebook, useDeleteNotebook, Notebook } from "@/lib/api";
 import { Edit, Trash, Plus, BookOpen, Search } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+
 export default function Notebooks() {
   const {
     toast

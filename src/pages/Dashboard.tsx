@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle, Search } from "lucide-react";
@@ -78,7 +77,6 @@ export default function Dashboard() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
           <div className="flex justify-between items-center gap-2">
-            {isMobile && <MobileNavigation />}
             <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Notes</h1>
             <div className="flex space-x-2">
               <Button 

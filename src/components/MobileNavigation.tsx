@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from "react-router-dom";
-import { Home, BookOpen, Plus, Hash, Settings, Menu, User } from "lucide-react";
+import { Home, BookOpen, Plus, Hash, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -77,59 +77,6 @@ export function MobileNavigation() {
           ))}
         </div>
       </div>
-      
-      {/* Slide-out menu sheet */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="md:hidden text-white hover:bg-gray-800 rounded-xl">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-[80%] sm:w-[350px] bg-[#0f0f0f] border-gray-800 text-white">
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between p-4">
-              <Logo />
-            </div>
-            
-            <div className="flex-1 overflow-auto py-2">
-              <nav className="px-2">
-                <ul className="space-y-2">
-                  {navigationItems.map((item) => (
-                    <li key={item.name}>
-                      <Link to={item.path}>
-                        <Button
-                          variant={isActive(item.path) ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start rounded-xl transition-all duration-200",
-                            isActive(item.path) 
-                              ? "bg-gray-800 text-primary hover:bg-gray-700" 
-                              : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                          )}
-                        >
-                          {item.icon}
-                          <span className="ml-3">{item.name}</span>
-                        </Button>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            </div>
-            
-            <div className="p-4 border-t border-gray-800">
-              <div className="flex items-center justify-between">
-                <ThemeToggle />
-                {user && (
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-white">{user.email?.split("@")[0] || "User"}</p>
-                    <p className="text-xs text-gray-400">{user.email}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
     </>
   );
 }
