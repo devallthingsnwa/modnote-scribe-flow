@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bold, Italic, List, ListChecks, Save } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
+import { AIProcessingButton } from "@/components/AIProcessingButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface NoteEditorProps {
@@ -57,6 +58,14 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
     setNote({ ...note, tags: selectedTags });
   };
 
+  const handleContentUpdate = (newContent: string) => {
+    setNote({ ...note, content: newContent });
+    // Auto-save after AI processing
+    if (onSave) {
+      onSave({ ...note, content: newContent });
+    }
+  };
+
   if (isMobile) {
     return (
       <div className="flex flex-col h-full">
@@ -92,6 +101,16 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
             </Button>
           </div>
 
+          {initialNote?.id && (
+            <div className="mb-3">
+              <AIProcessingButton
+                noteId={initialNote.id}
+                content={note.content}
+                onContentUpdated={handleContentUpdate}
+              />
+            </div>
+          )}
+
           <TagSelector
             selectedTags={note.tags}
             onChange={handleTagChange}
@@ -119,14 +138,24 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
           </Button>
         </div>
 
-        <Button 
-          onClick={handleSave} 
-          disabled={isSaving} 
-          className="space-x-2"
-        >
-          <Save className="h-4 w-4" />
-          <span>{isSaving ? "Saving..." : "Save"}</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          {initialNote?.id && (
+            <AIProcessingButton
+              noteId={initialNote.id}
+              content={note.content}
+              onContentUpdated={handleContentUpdate}
+            />
+          )}
+          
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving} 
+            className="space-x-2"
+          >
+            <Save className="h-4 w-4" />
+            <span>{isSaving ? "Saving..." : "Save"}</span>
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
