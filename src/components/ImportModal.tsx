@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,6 +42,9 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [enableSummary, setEnableSummary] = useState(false);
+  const [enableHighlights, setEnableHighlights] = useState(false);
+  const [enableKeyPoints, setEnableKeyPoints] = useState(false);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -140,7 +144,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       
       setProgress(60);
       
-      // Create the final content structure - just the raw transcript without AI summarization
+      // Create the final content structure
       let finalContent = "";
       
       if (finalTranscript && 
@@ -149,9 +153,55 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           !finalTranscript.includes("Transcript could not be fetched") &&
           finalTranscript.trim().length > 50) {
         
-        finalContent = `# ${noteTitle}\n\n` +
-          `**Source:** ${url}\n\n` +
-          `## Transcript\n\n${finalTranscript}`;
+        // Check if any AI processing is requested
+        const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
+        
+        if (needsAIProcessing) {
+          setProgress(70);
+          
+          // Process with AI if any options are enabled
+          try {
+            const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
+              body: { 
+                content: finalTranscript, 
+                type: type,
+                options: {
+                  summary: enableSummary,
+                  highlights: enableHighlights,
+                  keyPoints: enableKeyPoints
+                }
+              }
+            });
+
+            if (aiError) {
+              console.error("AI processing error:", aiError);
+              toast.warning("AI processing failed, importing raw transcript instead.");
+              finalContent = `# ${noteTitle}\n\n` +
+                `**Source:** ${url}\n\n` +
+                `## Transcript\n\n${finalTranscript}`;
+            } else if (aiData?.processedContent) {
+              finalContent = `# ${noteTitle}\n\n` +
+                `**Source:** ${url}\n\n` +
+                `${aiData.processedContent}\n\n` +
+                `## Original Transcript\n\n${finalTranscript}`;
+            } else {
+              finalContent = `# ${noteTitle}\n\n` +
+                `**Source:** ${url}\n\n` +
+                `## Transcript\n\n${finalTranscript}`;
+            }
+          } catch (error) {
+            console.error("Error processing with AI:", error);
+            toast.warning("AI processing failed, importing raw transcript instead.");
+            finalContent = `# ${noteTitle}\n\n` +
+              `**Source:** ${url}\n\n` +
+              `## Transcript\n\n${finalTranscript}`;
+          }
+        } else {
+          // Just import raw transcript
+          finalContent = `# ${noteTitle}\n\n` +
+            `**Source:** ${url}\n\n` +
+            `## Transcript\n\n${finalTranscript}`;
+        }
       } else {
         finalContent = `# ${noteTitle}\n\n` +
           `**Source:** ${url}\n\n` +
@@ -187,8 +237,13 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       // Call the onImport handler
       onImport(url, type);
       
+      const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
       if (finalTranscript && !finalTranscript.includes("could not be fetched")) {
-        toast.success("Content imported with transcript!");
+        if (hasAIProcessing) {
+          toast.success("Content imported with AI analysis!");
+        } else {
+          toast.success("Content imported with transcript!");
+        }
       } else {
         toast.success("Content imported (transcript not available)!");
       }
@@ -202,6 +257,9 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         setTranscript(null);
         setCurrentStep("url");
         setProgress(0);
+        setEnableSummary(false);
+        setEnableHighlights(false);
+        setEnableKeyPoints(false);
       }, 1500);
       
     } catch (error: any) {
@@ -218,7 +276,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         <DialogHeader>
           <DialogTitle>Import Content</DialogTitle>
           <DialogDescription>
-            Import from YouTube, podcast, or text source for automatic transcription.
+            Import from YouTube, podcast, or text source for automatic transcription and AI analysis.
           </DialogDescription>
         </DialogHeader>
         
@@ -244,6 +302,44 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           <PreviewSection thumbnail={thumbnail} />
           
           <TranscriptPreview transcript={transcript} />
+          
+          {transcript && !transcript.includes("Error") && !transcript.includes("No transcript available") && currentStep !== "processing" && currentStep !== "complete" && (
+            <div className="flex flex-col gap-3">
+              <Label>AI Analysis Options</Label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="summary" 
+                    checked={enableSummary}
+                    onCheckedChange={(checked) => setEnableSummary(checked as boolean)}
+                  />
+                  <Label htmlFor="summary" className="text-sm font-normal">
+                    Generate Summary
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="highlights" 
+                    checked={enableHighlights}
+                    onCheckedChange={(checked) => setEnableHighlights(checked as boolean)}
+                  />
+                  <Label htmlFor="highlights" className="text-sm font-normal">
+                    Extract Key Highlights
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="keypoints" 
+                    checked={enableKeyPoints}
+                    onCheckedChange={(checked) => setEnableKeyPoints(checked as boolean)}
+                  />
+                  <Label htmlFor="keypoints" className="text-sm font-normal">
+                    Generate Key Points
+                  </Label>
+                </div>
+              </div>
+            </div>
+          )}
           
           <ProcessingStatus currentStep={currentStep} progress={progress} />
         </div>

@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   try {
-    const { content, type } = await req.json();
+    const { content, type, options } = await req.json();
     
     if (!content) {
       return new Response(
@@ -27,14 +27,39 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${type} content with DeepSeek`);
+    console.log(`Processing ${type} content with DeepSeek. Options:`, options);
+    
+    // Build the analysis prompt based on selected options
+    let analysisInstructions = "Please analyze the following content and provide:\n";
+    const requestedAnalysis = [];
+    
+    if (options?.summary) {
+      requestedAnalysis.push("1. **Summary**: A comprehensive summary of the main topics and key information");
+    }
+    
+    if (options?.highlights) {
+      requestedAnalysis.push("2. **Key Highlights**: The most important points, insights, or memorable moments");
+    }
+    
+    if (options?.keyPoints) {
+      requestedAnalysis.push("3. **Key Points**: A structured list of the main takeaways and actionable insights");
+    }
+    
+    // If no specific options selected, provide a general analysis
+    if (requestedAnalysis.length === 0) {
+      analysisInstructions += "A comprehensive analysis including summary, key highlights, and main takeaways.";
+    } else {
+      analysisInstructions += requestedAnalysis.join("\n");
+    }
+    
+    analysisInstructions += "\n\nPlease format your response with clear headings and structure it for easy reading.";
     
     // Prepare system prompt based on content type
-    let systemPrompt = "You are a helpful assistant that summarizes content.";
+    let systemPrompt = "You are an expert content analyst that helps users understand and extract value from various types of content.";
     if (type === "video" || type === "audio") {
-      systemPrompt = "You are a helpful assistant that summarizes transcripts from video or audio content. Extract key points, insights, and organize them clearly.";
+      systemPrompt = "You are an expert content analyst specializing in video and audio transcript analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from spoken content.";
     } else if (type === "text") {
-      systemPrompt = "You are a helpful assistant that summarizes text content. Extract key points, insights, and organize them clearly.";
+      systemPrompt = "You are an expert content analyst specializing in text analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from written content.";
     }
 
     // Call DeepSeek API
@@ -53,11 +78,11 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: `Please provide a summary and analysis of the following ${type} content:\n\n${content}`
+            content: `${analysisInstructions}\n\nContent to analyze:\n\n${content}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 3000
       }),
     });
 
