@@ -32,7 +32,7 @@ export default function Settings() {
   
   const [isLoading, setIsLoading] = useState(false);
   
-  // Load user preferences from database on component mount
+  // Load user preferences from localStorage on component mount
   useEffect(() => {
     if (user) {
       loadUserPreferences();
@@ -44,21 +44,14 @@ export default function Settings() {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('user_preferences')
-        .select('preferences')
-        .eq('user_id', user.id)
-        .single();
+      // Use localStorage to store user preferences
+      const savedPrefs = localStorage.getItem(`user_preferences_${user.id}`);
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-        console.error("Error loading preferences:", error);
-        return;
-      }
-      
-      if (data?.preferences) {
+      if (savedPrefs) {
+        const parsedPrefs = JSON.parse(savedPrefs);
         setPreferences({
           ...preferences,
-          ...data.preferences
+          ...parsedPrefs
         });
       }
     } catch (error) {
@@ -73,17 +66,11 @@ export default function Settings() {
     setIsLoading(true);
     
     try {
-      const { error } = await supabase
-        .from('user_preferences')
-        .upsert({
-          user_id: user.id,
-          preferences: preferences
-        }, { 
-          onConflict: 'user_id',
-          ignoreDuplicates: false
-        });
-      
-      if (error) throw error;
+      // Store preferences in localStorage
+      localStorage.setItem(
+        `user_preferences_${user.id}`,
+        JSON.stringify(preferences)
+      );
       
       toast({
         title: "Preferences saved",
