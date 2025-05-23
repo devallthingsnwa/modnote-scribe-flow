@@ -1,8 +1,9 @@
-
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNavigation } from "@/components/MobileNavigation";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -23,10 +22,13 @@ import {
   useDeleteNotebook,
   Notebook
 } from "@/lib/api";
-import { Edit, Trash, Plus, BookOpen } from "lucide-react";
+import { Edit, Trash, Plus, BookOpen, Search } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Notebooks() {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -41,6 +43,12 @@ export default function Notebooks() {
   const updateNotebookMutation = useUpdateNotebook();
   const deleteNotebookMutation = useDeleteNotebook();
   
+  const filteredNotebooks = notebooks?.filter(notebook => {
+    if (!searchQuery) return true;
+    return notebook.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           notebook.description?.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const handleCreateNotebook = () => {
     if (newNotebookName.trim() === "") {
       toast({
@@ -158,52 +166,76 @@ export default function Notebooks() {
 
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-border p-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold">Notebooks</h1>
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> New Notebook
+        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
+          <div className="flex justify-between items-center gap-2">
+            {isMobile && <MobileNavigation />}
+            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Notebooks</h1>
+            <Button 
+              onClick={() => setIsCreateModalOpen(true)}
+              className={isMobile ? 'mobile-primary-button' : ''}
+              variant={isMobile ? "ghost" : "default"}
+              size={isMobile ? "icon" : "default"}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {!isMobile && "New Notebook"}
             </Button>
           </div>
+          
+          {/* Search Bar */}
+          <div className="mt-4 relative">
+            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`} />
+            <Input
+              placeholder="Search notebooks..."
+              className={`pl-10 w-full ${isMobile ? 'mobile-search' : ''}`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        
+        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-pulse">Loading notebooks...</div>
+              <div className={`animate-pulse ${isMobile ? 'text-gray-400' : ''}`}>Loading notebooks...</div>
             </div>
           ) : error ? (
-            <div className="text-center text-red-500 p-4">
+            <div className={`text-center p-4 ${isMobile ? 'text-red-400' : 'text-red-500'}`}>
               Error loading notebooks. Please try again.
             </div>
-          ) : notebooks && notebooks.length > 0 ? (
+          ) : filteredNotebooks && filteredNotebooks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {notebooks.map((notebook) => (
-                <Card key={notebook.id} className="overflow-hidden">
-                  <CardHeader className="bg-card">
-                    <CardTitle className="flex items-center gap-2">
+              {filteredNotebooks.map((notebook) => (
+                <Card key={notebook.id} className={`overflow-hidden ${isMobile ? 'bg-gray-900 border-gray-800' : ''}`}>
+                  <CardHeader className={isMobile ? 'bg-gray-800' : 'bg-card'}>
+                    <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-white' : ''}`}>
                       <BookOpen className="h-5 w-5" />
                       {notebook.name}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground line-clamp-2">
+                    <p className={`text-sm line-clamp-2 ${isMobile ? 'text-gray-300' : 'text-muted-foreground'}`}>
                       {notebook.description || "No description"}
                     </p>
                   </CardContent>
-                  <CardFooter className="bg-muted/50 border-t flex justify-between p-2">
+                  <CardFooter className={`border-t flex justify-between p-2 ${isMobile ? 'bg-gray-800 border-gray-700' : 'bg-muted/50'}`}>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={() => openEditModal(notebook)}
+                      className={isMobile ? 'mobile-ghost-button' : ''}
                     >
                       <Edit className="h-4 w-4 mr-1" /> Edit
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-destructive hover:text-destructive" 
+                      className={`text-destructive hover:text-destructive ${isMobile ? 'mobile-ghost-button' : ''}`}
                       onClick={() => openDeleteModal(notebook)}
                     >
                       <Trash className="h-4 w-4 mr-1" /> Delete
@@ -213,15 +245,32 @@ export default function Notebooks() {
               ))}
             </div>
           ) : (
-            <div className="text-center p-8">
-              <p className="text-muted-foreground mb-4">No notebooks found. Create your first notebook!</p>
-              <Button onClick={() => setIsCreateModalOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Create Notebook
-              </Button>
+            <div className={`text-center p-8 flex flex-col items-center ${isMobile ? 'mobile-empty-state' : ''}`}>
+              <div className={`rounded-full p-6 mb-4 ${isMobile ? 'mobile-empty-icon' : 'bg-muted/30'}`}>
+                <BookOpen className={`h-12 w-12 ${isMobile ? 'text-gray-400' : 'text-muted-foreground/60'}`} />
+              </div>
+              <p className={`mb-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
+                {searchQuery ? "No notebooks matching your search" : "No notebooks found. Create your first notebook!"}
+              </p>
+              {!searchQuery && (
+                <Button 
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className={isMobile ? 'mobile-primary-button' : ''}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Notebook
+                </Button>
+              )}
             </div>
           )}
         </main>
+        
+        {/* Mobile Bottom Navigation Space */}
+        <div className="h-20 md:hidden" />
       </div>
+      
+      {/* Mobile Navigation */}
+      {isMobile && <MobileNavigation />}
       
       {/* Create Notebook Dialog */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>

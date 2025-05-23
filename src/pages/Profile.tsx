@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +13,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNavigation } from "@/components/MobileNavigation";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const profileFormSchema = z.object({
   email: z.string().email({
@@ -29,6 +30,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 export default function Profile() {
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
   
   // Redirect if not authenticated
@@ -110,94 +112,136 @@ export default function Profile() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="space-y-0.5">
-            <h2 className="text-2xl font-bold tracking-tight">Profile Settings</h2>
-            <p className="text-muted-foreground">
-              Manage your account settings and preferences.
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.email}`} alt={user.email || "User"} />
-                  <AvatarFallback>{user.email?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <CardTitle className="text-xl">{user.user_metadata?.name || user.email?.split('@')[0]}</CardTitle>
-                  <CardDescription>{user.email}</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Your name" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          This is the name that will be displayed on your profile.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input placeholder="your.email@example.com" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          We'll send you a verification email if you change this.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? "Updating..." : "Update profile"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Password</CardTitle>
-              <CardDescription>
-                Change your password or reset it if you've forgotten it.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="current">Current password</Label>
-                <Input id="current" type="password" placeholder="••••••••" disabled />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" onClick={handlePasswordReset} disabled={isLoading}>
-                {isLoading ? "Sending..." : "Send password reset email"}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
+    <div className="flex h-screen">
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        <Sidebar />
       </div>
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
+          <div className="flex justify-between items-center gap-2">
+            {isMobile && <MobileNavigation />}
+            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Profile</h1>
+          </div>
+        </header>
+        
+        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
+          <div className="mx-auto max-w-3xl space-y-6">
+            <div className="space-y-0.5">
+              <h2 className={`text-2xl font-bold tracking-tight ${isMobile ? 'text-white' : ''}`}>Profile Settings</h2>
+              <p className={isMobile ? 'text-gray-400' : 'text-muted-foreground'}>
+                Manage your account settings and preferences.
+              </p>
+            </div>
+
+            <Card className={isMobile ? 'bg-gray-900 border-gray-800' : ''}>
+              <CardHeader>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} alt={user?.email || "User"} />
+                    <AvatarFallback>{user?.email?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <CardTitle className={`text-xl ${isMobile ? 'text-white' : ''}`}>{user?.user_metadata?.name || user?.email?.split('@')[0]}</CardTitle>
+                    <CardDescription className={isMobile ? 'text-gray-400' : ''}>{user?.email}</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className={isMobile ? 'text-white' : ''}>Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Your name" 
+                              {...field} 
+                              className={isMobile ? 'bg-gray-800 border-gray-700 text-white' : ''}
+                            />
+                          </FormControl>
+                          <FormDescription className={isMobile ? 'text-gray-400' : ''}>
+                            This is the name that will be displayed on your profile.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className={isMobile ? 'text-white' : ''}>Email</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="your.email@example.com" 
+                              {...field} 
+                              className={isMobile ? 'bg-gray-800 border-gray-700 text-white' : ''}
+                            />
+                          </FormControl>
+                          <FormDescription className={isMobile ? 'text-gray-400' : ''}>
+                            We'll send you a verification email if you change this.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading}
+                      className={isMobile ? 'mobile-primary-button' : ''}
+                    >
+                      {isLoading ? "Updating..." : "Update profile"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+
+            <Card className={isMobile ? 'bg-gray-900 border-gray-800' : ''}>
+              <CardHeader>
+                <CardTitle className={isMobile ? 'text-white' : ''}>Password</CardTitle>
+                <CardDescription className={isMobile ? 'text-gray-400' : ''}>
+                  Change your password or reset it if you've forgotten it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="current" className={isMobile ? 'text-white' : ''}>Current password</Label>
+                  <Input 
+                    id="current" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    disabled 
+                    className={isMobile ? 'bg-gray-800 border-gray-700' : ''}
+                  />
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={handlePasswordReset} 
+                  disabled={isLoading}
+                  className={isMobile ? 'mobile-ghost-button' : ''}
+                >
+                  {isLoading ? "Sending..." : "Send password reset email"}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </main>
+        
+        {/* Mobile Bottom Navigation Space */}
+        <div className="h-20 md:hidden" />
+      </div>
+      
+      {/* Mobile Navigation */}
+      {isMobile && <MobileNavigation />}
     </div>
   );
 }

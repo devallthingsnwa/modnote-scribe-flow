@@ -1,8 +1,9 @@
-
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNavigation } from "@/components/MobileNavigation";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,8 +28,9 @@ import {
   useDeleteTag,
   Tag
 } from "@/lib/api";
-import { Edit, Trash, Plus, Hash, CirclePlus } from "lucide-react";
+import { Edit, Trash, Plus, Hash, CirclePlus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Tag color options
 const colorOptions = [
@@ -55,6 +56,8 @@ const colorOptions = [
 
 export default function Tags() {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -184,41 +187,69 @@ export default function Tags() {
     setIsDeleteModalOpen(true);
   };
 
+  const filteredTags = tags?.filter(tag => {
+    if (!searchQuery) return true;
+    return tag.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-border p-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold">Tags</h1>
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> New Tag
+        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
+          <div className="flex justify-between items-center gap-2">
+            {isMobile && <MobileNavigation />}
+            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Tags</h1>
+            <Button 
+              onClick={() => setIsCreateModalOpen(true)}
+              className={isMobile ? 'mobile-primary-button' : ''}
+              variant={isMobile ? "ghost" : "default"}
+              size={isMobile ? "icon" : "default"}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {!isMobile && "New Tag"}
             </Button>
           </div>
+          
+          {/* Search Bar */}
+          <div className="mt-4 relative">
+            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`} />
+            <Input
+              placeholder="Search tags..."
+              className={`pl-10 w-full ${isMobile ? 'mobile-search' : ''}`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        
+        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-pulse">Loading tags...</div>
+              <div className={`animate-pulse ${isMobile ? 'text-gray-400' : ''}`}>Loading tags...</div>
             </div>
           ) : error ? (
-            <div className="text-center text-red-500 p-4">
+            <div className={`text-center p-4 ${isMobile ? 'text-red-400' : 'text-red-500'}`}>
               Error loading tags. Please try again.
             </div>
-          ) : tags && tags.length > 0 ? (
+          ) : filteredTags && filteredTags.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {tags.map((tag) => (
-                <Card key={tag.id} className="overflow-hidden">
+              {filteredTags.map((tag) => (
+                <Card key={tag.id} className={`overflow-hidden ${isMobile ? 'bg-gray-900 border-gray-800' : ''}`}>
                   <CardHeader className={cn("flex flex-row items-center gap-2 py-3", tag.color, "bg-opacity-15")}>
                     <div className={cn("h-3 w-3 rounded-full", tag.color)} />
-                    <span className="font-medium">{tag.name}</span>
+                    <span className={`font-medium ${isMobile ? 'text-white' : ''}`}>{tag.name}</span>
                   </CardHeader>
-                  <CardFooter className="bg-muted/50 border-t flex justify-between p-2">
+                  <CardFooter className={`border-t flex justify-between p-2 ${isMobile ? 'bg-gray-800 border-gray-700' : 'bg-muted/50'}`}>
                     <Button 
                       variant="ghost" 
                       size="sm" 
                       onClick={() => openEditModal(tag)}
-                      className="h-8 px-2"
+                      className={`h-8 px-2 ${isMobile ? 'mobile-ghost-button' : ''}`}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -226,7 +257,7 @@ export default function Tags() {
                       variant="ghost" 
                       size="sm"
                       onClick={() => openDeleteModal(tag)}
-                      className="h-8 px-2 text-destructive hover:text-destructive"
+                      className={`h-8 px-2 text-destructive hover:text-destructive ${isMobile ? 'mobile-ghost-button' : ''}`}
                     >
                       <Trash className="h-4 w-4" />
                     </Button>
@@ -234,25 +265,42 @@ export default function Tags() {
                 </Card>
               ))}
               <Card 
-                className="flex items-center justify-center cursor-pointer border-dashed"
+                className={`flex items-center justify-center cursor-pointer border-dashed ${isMobile ? 'bg-gray-900 border-gray-700' : ''}`}
                 onClick={() => setIsCreateModalOpen(true)}
               >
                 <CardContent className="flex flex-col items-center justify-center p-6">
-                  <CirclePlus className="h-8 w-8 mb-2 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Add New Tag</span>
+                  <CirclePlus className={`h-8 w-8 mb-2 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>Add New Tag</span>
                 </CardContent>
               </Card>
             </div>
           ) : (
-            <div className="text-center p-8">
-              <p className="text-muted-foreground mb-4">No tags found. Create your first tag!</p>
-              <Button onClick={() => setIsCreateModalOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Create Tag
-              </Button>
+            <div className={`text-center p-8 flex flex-col items-center ${isMobile ? 'mobile-empty-state' : ''}`}>
+              <div className={`rounded-full p-6 mb-4 ${isMobile ? 'mobile-empty-icon' : 'bg-muted/30'}`}>
+                <Hash className={`h-12 w-12 ${isMobile ? 'text-gray-400' : 'text-muted-foreground/60'}`} />
+              </div>
+              <p className={`mb-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
+                {searchQuery ? "No tags matching your search" : "No tags found. Create your first tag!"}
+              </p>
+              {!searchQuery && (
+                <Button 
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className={isMobile ? 'mobile-primary-button' : ''}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Tag
+                </Button>
+              )}
             </div>
           )}
         </main>
+        
+        {/* Mobile Bottom Navigation Space */}
+        <div className="h-20 md:hidden" />
       </div>
+      
+      {/* Mobile Navigation */}
+      {isMobile && <MobileNavigation />}
       
       {/* Create Tag Dialog */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>

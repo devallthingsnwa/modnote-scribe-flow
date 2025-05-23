@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNavigation } from "@/components/MobileNavigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useNotebooks } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Define types for user preferences
 interface UserPreferences {
@@ -21,6 +23,7 @@ export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: notebooks } = useNotebooks();
+  const isMobile = useIsMobile();
   
   // User preferences state
   const [preferences, setPreferences] = useState<UserPreferences>({
@@ -110,37 +113,49 @@ export default function Settings() {
   
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-border p-4">
-          <h1 className="text-2xl font-semibold">Settings</h1>
+        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
+          <div className="flex justify-between items-center gap-2">
+            {isMobile && <MobileNavigation />}
+            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Settings</h1>
+          </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        
+        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
           <div className="max-w-3xl mx-auto space-y-6">
-            <Card>
+            <Card className={isMobile ? 'bg-gray-900 border-gray-800' : ''}>
               <CardHeader>
-                <CardTitle>Application Settings</CardTitle>
-                <CardDescription>
+                <CardTitle className={isMobile ? 'text-white' : ''}>Application Settings</CardTitle>
+                <CardDescription className={isMobile ? 'text-gray-400' : ''}>
                   Configure your application preferences.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Default Notebook</h3>
-                  <p className="text-sm text-muted-foreground mb-2">
+                  <h3 className={`text-lg font-medium ${isMobile ? 'text-white' : ''}`}>Default Notebook</h3>
+                  <p className={`text-sm mb-2 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                     Select the default notebook for new notes.
                   </p>
                   <Select 
                     value={preferences.defaultNotebookId || "none"} 
                     onValueChange={(value) => handlePreferenceChange('defaultNotebookId', value)}
                   >
-                    <SelectTrigger className="w-full md:w-[250px]">
+                    <SelectTrigger className={`w-full md:w-[250px] ${isMobile ? 'bg-gray-800 border-gray-700 text-white' : ''}`}>
                       <SelectValue placeholder="Select a notebook" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
+                    <SelectContent className={isMobile ? 'bg-gray-800 border-gray-700' : ''}>
+                      <SelectItem value="none" className={isMobile ? 'text-white focus:bg-gray-700' : ''}>None</SelectItem>
                       {notebooks?.map((notebook) => (
-                        <SelectItem key={notebook.id} value={notebook.id}>
+                        <SelectItem 
+                          key={notebook.id} 
+                          value={notebook.id}
+                          className={isMobile ? 'text-white focus:bg-gray-700' : ''}
+                        >
                           {notebook.name}
                         </SelectItem>
                       ))}
@@ -149,15 +164,15 @@ export default function Settings() {
                 </div>
                 
                 <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Editor Preferences</h3>
-                  <p className="text-sm text-muted-foreground mb-2">
+                  <h3 className={`text-lg font-medium ${isMobile ? 'text-white' : ''}`}>Editor Preferences</h3>
+                  <p className={`text-sm mb-2 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                     Customize your note editor experience.
                   </p>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label htmlFor="auto-save">Auto-save interval (seconds)</Label>
-                        <p className="text-sm text-muted-foreground">
+                        <Label htmlFor="auto-save" className={isMobile ? 'text-white' : ''}>Auto-save interval (seconds)</Label>
+                        <p className={`text-sm ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                           How frequently should your notes be auto-saved?
                         </p>
                       </div>
@@ -165,22 +180,22 @@ export default function Settings() {
                         value={preferences.autoSaveInterval.toString()}
                         onValueChange={(value) => handlePreferenceChange('autoSaveInterval', parseInt(value))}
                       >
-                        <SelectTrigger className="w-[100px]">
+                        <SelectTrigger className={`w-[100px] ${isMobile ? 'bg-gray-800 border-gray-700 text-white' : ''}`}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="15">15</SelectItem>
-                          <SelectItem value="30">30</SelectItem>
-                          <SelectItem value="60">60</SelectItem>
-                          <SelectItem value="120">120</SelectItem>
+                        <SelectContent className={isMobile ? 'bg-gray-800 border-gray-700' : ''}>
+                          <SelectItem value="15" className={isMobile ? 'text-white focus:bg-gray-700' : ''}>15</SelectItem>
+                          <SelectItem value="30" className={isMobile ? 'text-white focus:bg-gray-700' : ''}>30</SelectItem>
+                          <SelectItem value="60" className={isMobile ? 'text-white focus:bg-gray-700' : ''}>60</SelectItem>
+                          <SelectItem value="120" className={isMobile ? 'text-white focus:bg-gray-700' : ''}>120</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label htmlFor="dark-mode">Dark mode by default</Label>
-                        <p className="text-sm text-muted-foreground">
+                        <Label htmlFor="dark-mode" className={isMobile ? 'text-white' : ''}>Dark mode by default</Label>
+                        <p className={`text-sm ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                           Enable dark mode by default when opening the app.
                         </p>
                       </div>
@@ -197,6 +212,7 @@ export default function Settings() {
                   <Button 
                     onClick={saveUserPreferences}
                     disabled={isLoading}
+                    className={isMobile ? 'mobile-primary-button' : ''}
                   >
                     {isLoading ? "Saving..." : "Save Preferences"}
                   </Button>
@@ -204,18 +220,18 @@ export default function Settings() {
               </CardContent>
             </Card>
             
-            <Card>
+            <Card className={isMobile ? 'bg-gray-900 border-gray-800' : ''}>
               <CardHeader>
-                <CardTitle>Danger Zone</CardTitle>
-                <CardDescription>
+                <CardTitle className={isMobile ? 'text-white' : ''}>Danger Zone</CardTitle>
+                <CardDescription className={isMobile ? 'text-gray-400' : ''}>
                   Be careful with these actions.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-medium">Clear all notes</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <h3 className={`font-medium ${isMobile ? 'text-white' : ''}`}>Clear all notes</h3>
+                    <p className={`text-sm ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
                       This will permanently delete all your notes.
                     </p>
                   </div>
@@ -230,7 +246,13 @@ export default function Settings() {
             </Card>
           </div>
         </main>
+        
+        {/* Mobile Bottom Navigation Space */}
+        <div className="h-20 md:hidden" />
       </div>
+      
+      {/* Mobile Navigation */}
+      {isMobile && <MobileNavigation />}
     </div>
   );
 }
