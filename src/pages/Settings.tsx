@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,6 +89,11 @@ export default function Settings() {
   
   // Handle preference changes
   const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
+    // Convert "none" back to null for defaultNotebookId
+    if (key === 'defaultNotebookId' && value === 'none') {
+      value = null;
+    }
+    
     setPreferences({
       ...preferences,
       [key]: value
@@ -127,14 +131,14 @@ export default function Settings() {
                     Select the default notebook for new notes.
                   </p>
                   <Select 
-                    value={preferences.defaultNotebookId || ""} 
-                    onValueChange={(value) => handlePreferenceChange('defaultNotebookId', value || null)}
+                    value={preferences.defaultNotebookId || "none"} 
+                    onValueChange={(value) => handlePreferenceChange('defaultNotebookId', value)}
                   >
                     <SelectTrigger className="w-full md:w-[250px]">
                       <SelectValue placeholder="Select a notebook" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {notebooks?.map((notebook) => (
                         <SelectItem key={notebook.id} value={notebook.id}>
                           {notebook.name}
