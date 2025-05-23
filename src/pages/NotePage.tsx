@@ -1,8 +1,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, ExternalLink, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
 import { NoteEditor } from "@/components/NoteEditor";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +13,8 @@ import { TranscriptPanel } from "@/components/video/TranscriptPanel";
 import { AISummaryPanel } from "@/components/video/AISummaryPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getYoutubeVideoId } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 export default function NotePage() {
   const { id } = useParams<{ id: string }>();
@@ -154,50 +156,90 @@ export default function NotePage() {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b border-border p-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" onClick={handleBack}>
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <h1 className="text-xl font-semibold ml-2">
-                {isLoading ? "Loading..." : note?.title || "Untitled Note"}
-              </h1>
-              
-              {note?.source_url && (
-                <a 
-                  href={note.source_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="ml-2 text-xs text-muted-foreground flex items-center hover:text-primary"
+        {/* Enhanced Header */}
+        <header className="border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="px-6 py-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-4">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleBack}
+                  className="hover:bg-muted/80 transition-colors"
                 >
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  Source
-                </a>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {!isLoading && note && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => handleSave({
-                    title: note.title,
-                    content: note.content,
-                    tags: note.tags.map(tag => tag.id)
-                  })}>
-                    <Save className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={handleDelete}>
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
-                  </Button>
-                </>
-              )}
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                
+                <div className="flex items-center space-x-3">
+                  {isVideoNote && (
+                    <div className="bg-red-500/10 p-2 rounded-lg">
+                      <Play className="h-4 w-4 text-red-500" />
+                    </div>
+                  )}
+                  
+                  <div>
+                    <h1 className="text-xl font-semibold tracking-tight">
+                      {isLoading ? (
+                        <div className="h-6 w-48 bg-muted animate-pulse rounded" />
+                      ) : (
+                        note?.title || "Untitled Note"
+                      )}
+                    </h1>
+                    
+                    {note?.source_url && (
+                      <div className="flex items-center mt-1 space-x-2">
+                        <Badge variant="secondary" className="text-xs">
+                          <FileText className="h-3 w-3 mr-1" />
+                          Video Note
+                        </Badge>
+                        <a 
+                          href={note.source_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center"
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View Source
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Enhanced Action Buttons */}
+              <div className="flex items-center gap-2">
+                {!isLoading && note && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleSave({
+                        title: note.title,
+                        content: note.content,
+                        tags: note.tags.map(tag => tag.id)
+                      })}
+                      className="hover:bg-green-50 hover:border-green-300 hover:text-green-700 transition-colors"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Note
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleDelete}
+                      className="hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </header>
@@ -205,101 +247,147 @@ export default function NotePage() {
         <main className="flex-1 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="animate-pulse">Loading note...</div>
+              <div className="text-center space-y-4">
+                <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                <p className="text-muted-foreground">Loading your note...</p>
+              </div>
             </div>
           ) : note ? (
             isVideoNote ? (
               <div className="flex flex-col h-full">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-4 pt-4 border-b">
-                    <TabsList>
-                      <TabsTrigger value="editor">Note Editor</TabsTrigger>
-                      <TabsTrigger value="video">Video & Transcript</TabsTrigger>
-                      <TabsTrigger value="summary">AI Summary</TabsTrigger>
+                <div className="bg-muted/30 px-6 py-3 border-b border-border/50">
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="bg-background/50 border border-border/50">
+                      <TabsTrigger 
+                        value="editor" 
+                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Notes
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="video"
+                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Video & Transcript
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="summary"
+                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        AI Summary
+                      </TabsTrigger>
                     </TabsList>
-                  </div>
-                  
-                  <div className="flex-1 overflow-auto">
+                  </Tabs>
+                </div>
+                
+                <div className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/10">
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsContent value="editor" className="m-0 h-full">
-                      <NoteEditor 
-                        initialNote={{
-                          id: note.id,
-                          title: note.title,
-                          content: note.content,
-                          tags: note.tags.map(tag => tag.id),
-                        }} 
-                        onSave={handleSave}
-                      />
+                      <div className="p-6 h-full">
+                        <NoteEditor 
+                          initialNote={{
+                            id: note.id,
+                            title: note.title,
+                            content: note.content,
+                            tags: note.tags.map(tag => tag.id),
+                          }} 
+                          onSave={handleSave}
+                        />
+                      </div>
                     </TabsContent>
                     
                     <TabsContent value="video" className="m-0 h-full">
-                      <div className="grid grid-cols-1 lg:grid-cols-2 h-full gap-4 p-4">
-                        <Card className="p-4 h-full flex flex-col overflow-hidden">
-                          <h3 className="text-lg font-medium mb-4">Video Player</h3>
-                          <div className="flex-1 overflow-hidden">
-                            <VideoPlayer 
-                              videoId={videoId || ''} 
-                              playerRef={playerRef}
-                              onTimeUpdate={setCurrentTimestamp}
-                            />
-                          </div>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 h-full gap-6 p-6">
+                        <Card className="overflow-hidden border-border/50 shadow-lg">
+                          <CardContent className="p-6 h-full flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-foreground">Video Player</h3>
+                              <Badge variant="secondary" className="text-xs">
+                                <Play className="h-3 w-3 mr-1" />
+                                Live
+                              </Badge>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <VideoPlayer 
+                                videoId={videoId || ''} 
+                                playerRef={playerRef}
+                                onTimeUpdate={setCurrentTimestamp}
+                              />
+                            </div>
+                          </CardContent>
                         </Card>
                         
-                        <Card className="p-4 h-full flex flex-col overflow-hidden">
-                          <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-medium">Transcript</h3>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={handleTranscriptRefresh}
-                            >
-                              Refresh Transcript
-                            </Button>
-                          </div>
-                          <div className="flex-1 overflow-auto">
-                            <TranscriptPanel
-                              transcript={note.content || ''}
-                              currentTime={currentTimestamp}
-                              onTimestampClick={handleTimestampClick}
-                            />
-                          </div>
+                        <Card className="overflow-hidden border-border/50 shadow-lg">
+                          <CardContent className="p-6 h-full flex flex-col">
+                            <div className="flex justify-between items-center mb-4">
+                              <h3 className="text-lg font-semibold text-foreground">Interactive Transcript</h3>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleTranscriptRefresh}
+                                className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                              >
+                                <Clock className="h-4 w-4 mr-2" />
+                                Refresh
+                              </Button>
+                            </div>
+                            <div className="flex-1 overflow-auto">
+                              <TranscriptPanel
+                                transcript={note.content || ''}
+                                currentTime={currentTimestamp}
+                                onTimestampClick={handleTimestampClick}
+                              />
+                            </div>
+                          </CardContent>
                         </Card>
                       </div>
                     </TabsContent>
                     
                     <TabsContent value="summary" className="m-0 h-full">
-                      <AISummaryPanel
-                        noteId={note.id}
-                        content={note.content || ''}
-                        onSummaryGenerated={(summary) => {
-                          if (!id) return;
-                          updateNoteMutation.mutate({
-                            id,
-                            updates: {
-                              content: summary,
-                              updated_at: new Date().toISOString(),
-                            },
-                          });
-                        }}
-                      />
+                      <div className="p-6 h-full">
+                        <AISummaryPanel
+                          noteId={note.id}
+                          content={note.content || ''}
+                          onSummaryGenerated={(summary) => {
+                            if (!id) return;
+                            updateNoteMutation.mutate({
+                              id,
+                              updates: {
+                                content: summary,
+                                updated_at: new Date().toISOString(),
+                              },
+                            });
+                          }}
+                        />
+                      </div>
                     </TabsContent>
-                  </div>
-                </Tabs>
+                  </Tabs>
+                </div>
               </div>
             ) : (
-              <NoteEditor 
-                initialNote={{
-                  id: note.id,
-                  title: note.title,
-                  content: note.content,
-                  tags: note.tags.map(tag => tag.id),
-                }} 
-                onSave={handleSave}
-              />
+              <div className="p-6 h-full">
+                <NoteEditor 
+                  initialNote={{
+                    id: note.id,
+                    title: note.title,
+                    content: note.content,
+                    tags: note.tags.map(tag => tag.id),
+                  }} 
+                  onSave={handleSave}
+                />
+              </div>
             )
           ) : (
             <div className="flex items-center justify-center h-full">
-              <div>Note not found</div>
+              <div className="text-center space-y-4">
+                <div className="bg-muted/50 rounded-full p-6">
+                  <FileText className="h-8 w-8 text-muted-foreground mx-auto" />
+                </div>
+                <p className="text-muted-foreground">Note not found</p>
+              </div>
             </div>
           )}
         </main>

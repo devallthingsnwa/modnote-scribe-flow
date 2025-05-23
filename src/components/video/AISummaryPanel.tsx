@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, List, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { Sparkles, List, FileText, CheckCircle, Loader2, Brain, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -94,73 +95,157 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
   };
 
   return (
-    <div className="p-4 flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold flex items-center">
-          <Sparkles className="h-5 w-5 mr-2 text-primary" />
-          AI Summary
-        </h2>
+    <div className="flex flex-col h-full space-y-6">
+      {/* Enhanced Header */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-2 rounded-lg">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">AI Summary</h2>
+              <p className="text-sm text-muted-foreground">
+                Generate intelligent insights from your video content
+              </p>
+            </div>
+          </div>
+          
+          <Button 
+            onClick={generateSummary}
+            disabled={isProcessing || !content || content.length < 50}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Brain className="h-4 w-4 mr-2" />
+                Generate Summary
+              </>
+            )}
+          </Button>
+        </div>
         
-        <Button 
-          onClick={generateSummary}
-          disabled={isProcessing || !content || content.length < 50}
-          className="flex items-center"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4 mr-2" />
-              Generate Summary
-            </>
+        {/* Status Indicators */}
+        <div className="flex items-center space-x-3">
+          <Badge 
+            variant={content ? "default" : "secondary"} 
+            className={content ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : ""}
+          >
+            <CheckCircle className="h-3 w-3 mr-1" />
+            {content ? `${Math.floor(content.length / 1000)}k characters` : "No content"}
+          </Badge>
+          
+          {summary && (
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-200">
+              <Sparkles className="h-3 w-3 mr-1" />
+              AI Summary Ready
+            </Badge>
           )}
-        </Button>
+        </div>
       </div>
       
       {!summary && !isProcessing ? (
-        <Card className="flex-1 flex items-center justify-center">
-          <CardContent className="text-center p-6">
-            <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-medium mb-2">No Summary Yet</h3>
-            <p className="text-muted-foreground max-w-md mx-auto mb-6">
-              Click the "Generate Summary" button to create an AI-powered summary of your video content.
-            </p>
+        <Card className="flex-1 bg-gradient-to-br from-background via-muted/20 to-primary/5 border-dashed border-2">
+          <CardContent className="flex flex-col items-center justify-center h-full text-center p-8 space-y-6">
+            <div className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/20 rounded-full p-6">
+              <Brain className="h-12 w-12 text-purple-600 dark:text-purple-400" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">Ready to Generate AI Summary</h3>
+              <p className="text-muted-foreground max-w-md">
+                Transform your video content into structured insights with AI-powered analysis
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="space-y-2">
+                <div className="bg-blue-100 dark:bg-blue-900/20 rounded-lg p-3">
+                  <FileText className="h-6 w-6 text-blue-600 mx-auto" />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <div className="font-medium">Full Summary</div>
+                  <div>Comprehensive overview</div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="bg-green-100 dark:bg-green-900/20 rounded-lg p-3">
+                  <List className="h-6 w-6 text-green-600 mx-auto" />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <div className="font-medium">Key Points</div>
+                  <div>Main takeaways</div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="bg-yellow-100 dark:bg-yellow-900/20 rounded-lg p-3">
+                  <Lightbulb className="h-6 w-6 text-yellow-600 mx-auto" />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <div className="font-medium">Highlights</div>
+                  <div>Important moments</div>
+                </div>
+              </div>
+            </div>
+            
             <Button 
               onClick={generateSummary}
               disabled={isProcessing || !content || content.length < 50}
+              size="lg"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
             >
-              Generate Summary
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generate AI Summary
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col space-y-4">
           <Tabs value={summaryType} onValueChange={setSummaryType} className="flex-1 flex flex-col">
-            <TabsList className="mb-4">
-              <TabsTrigger value="full" className="flex items-center">
+            <TabsList className="bg-muted/50 border border-border/50">
+              <TabsTrigger 
+                value="full" 
+                className="flex items-center data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
                 <FileText className="h-4 w-4 mr-2" />
                 Full Summary
               </TabsTrigger>
-              <TabsTrigger value="key-points" className="flex items-center">
+              <TabsTrigger 
+                value="key-points" 
+                className="flex items-center data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
                 <List className="h-4 w-4 mr-2" />
                 Key Points
               </TabsTrigger>
-              <TabsTrigger value="highlights" className="flex items-center">
+              <TabsTrigger 
+                value="highlights" 
+                className="flex items-center data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Highlights
               </TabsTrigger>
             </TabsList>
             
-            <Card className="flex-1">
-              <CardContent className="p-4 h-full">
+            <Card className="flex-1 border-border/50 shadow-lg">
+              <CardContent className="p-6 h-full">
                 {isProcessing ? (
                   <div className="flex items-center justify-center h-full">
-                    <div className="flex flex-col items-center">
-                      <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
-                      <p className="text-muted-foreground">Generating AI summary...</p>
+                    <div className="text-center space-y-4">
+                      <div className="relative">
+                        <div className="h-16 w-16 border-4 border-purple-200 dark:border-purple-800 rounded-full mx-auto" />
+                        <div className="h-16 w-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin absolute top-0 left-1/2 transform -translate-x-1/2" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">Generating AI summary...</p>
+                        <p className="text-sm text-muted-foreground">This may take a few moments</p>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -168,9 +253,17 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                     <TabsContent value="full" className="mt-0 h-full">
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         {summary ? (
-                          <div dangerouslySetInnerHTML={{ __html: summary.replace(/\n/g, "<br />") }} />
+                          <div 
+                            className="space-y-4 text-foreground leading-relaxed"
+                            dangerouslySetInnerHTML={{ 
+                              __html: summary.replace(/\n/g, "<br />").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                            }} 
+                          />
                         ) : (
-                          <p className="text-muted-foreground">No summary available.</p>
+                          <div className="text-center text-muted-foreground py-8">
+                            <FileText className="h-8 w-8 mx-auto mb-3 opacity-50" />
+                            <p>No summary available.</p>
+                          </div>
                         )}
                       </div>
                     </TabsContent>
@@ -178,9 +271,17 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                     <TabsContent value="key-points" className="mt-0 h-full">
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         {keyPoints ? (
-                          <div dangerouslySetInnerHTML={{ __html: keyPoints.replace(/\n/g, "<br />") }} />
+                          <div 
+                            className="space-y-4 text-foreground leading-relaxed"
+                            dangerouslySetInnerHTML={{ 
+                              __html: keyPoints.replace(/\n/g, "<br />").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                            }} 
+                          />
                         ) : (
-                          <p className="text-muted-foreground">No key points available.</p>
+                          <div className="text-center text-muted-foreground py-8">
+                            <List className="h-8 w-8 mx-auto mb-3 opacity-50" />
+                            <p>No key points available.</p>
+                          </div>
                         )}
                       </div>
                     </TabsContent>
@@ -188,9 +289,17 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                     <TabsContent value="highlights" className="mt-0 h-full">
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         {highlights ? (
-                          <div dangerouslySetInnerHTML={{ __html: highlights.replace(/\n/g, "<br />") }} />
+                          <div 
+                            className="space-y-4 text-foreground leading-relaxed"
+                            dangerouslySetInnerHTML={{ 
+                              __html: highlights.replace(/\n/g, "<br />").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                            }} 
+                          />
                         ) : (
-                          <p className="text-muted-foreground">No highlights available.</p>
+                          <div className="text-center text-muted-foreground py-8">
+                            <CheckCircle className="h-8 w-8 mx-auto mb-3 opacity-50" />
+                            <p>No highlights available.</p>
+                          </div>
                         )}
                       </div>
                     </TabsContent>
