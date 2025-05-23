@@ -28,11 +28,17 @@ serve(async (req) => {
 
     console.log(`Fetching transcript for video: ${videoId}`);
     
-    // Fetch the YouTube video page
+    // Fetch the YouTube video page with better headers
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const response = await fetch(videoUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
       }
     });
     
@@ -41,12 +47,62 @@ serve(async (req) => {
     }
     
     const html = await response.text();
+    console.log(`Fetched HTML page, length: ${html.length}`);
     
-    // Look for caption tracks in the page HTML
-    const captionRegex = /"captionTracks":\s*(\[.*?\])/;
-    const captionMatch = html.match(captionRegex);
+    // Multiple approaches to find caption tracks
+    let captionTracks = null;
     
-    if (!captionMatch) {
+    // Approach 1: Look for captionTracks in ytInitialPlayerResponse
+    const playerResponseRegex = /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/;
+    const playerResponseMatch = html.match(playerResponseRegex);
+    
+    if (playerResponseMatch) {
+      try {
+        const playerResponse = JSON.parse(playerResponseMatch[1]);
+        captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        console.log(`Found ${captionTracks?.length || 0} caption tracks in playerResponse`);
+      } catch (e) {
+        console.log("Error parsing playerResponse:", e);
+      }
+    }
+    
+    // Approach 2: Direct search for captionTracks
+    if (!captionTracks || captionTracks.length === 0) {
+      const captionRegex = /"captionTracks"\s*:\s*(\[.*?\])/;
+      const captionMatch = html.match(captionRegex);
+      
+      if (captionMatch) {
+        try {
+          captionTracks = JSON.parse(captionMatch[1]);
+          console.log(`Found ${captionTracks?.length || 0} caption tracks via direct search`);
+        } catch (e) {
+          console.log("Error parsing caption tracks:", e);
+        }
+      }
+    }
+    
+    // Approach 3: Look for automatic captions
+    if (!captionTracks || captionTracks.length === 0) {
+      const autoCaptionRegex = /"automaticCaptions"\s*:\s*({.*?})/;
+      const autoCaptionMatch = html.match(autoCaptionRegex);
+      
+      if (autoCaptionMatch) {
+        try {
+          const autoCaptions = JSON.parse(autoCaptionMatch[1]);
+          // Extract tracks from automatic captions
+          const languages = Object.keys(autoCaptions);
+          if (languages.length > 0) {
+            captionTracks = autoCaptions[languages[0]]; // Use first available language
+            console.log(`Found ${captionTracks?.length || 0} automatic caption tracks`);
+          }
+        } catch (e) {
+          console.log("Error parsing automatic captions:", e);
+        }
+      }
+    }
+    
+    if (!captionTracks || captionTracks.length === 0) {
+      console.log("No caption tracks found");
       return new Response(
         JSON.stringify({ 
           transcript: "No transcript available for this video. The video may not have captions enabled."
@@ -58,74 +114,100 @@ serve(async (req) => {
       );
     }
     
-    let captionTracks;
-    try {
-      captionTracks = JSON.parse(captionMatch[1]);
-    } catch (parseError) {
-      console.error("Error parsing caption tracks:", parseError);
-      return new Response(
-        JSON.stringify({ 
-          transcript: "Error parsing video captions. The video may not have accessible transcripts."
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    // Get the first available caption track (prefer English if available)
+    let selectedTrack = captionTracks[0];
+    
+    // Try to find English track
+    for (const track of captionTracks) {
+      if (track.languageCode === 'en' || track.vssId?.includes('en')) {
+        selectedTrack = track;
+        break;
+      }
     }
     
-    if (!captionTracks || captionTracks.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          transcript: "No caption tracks found for this video."
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    console.log(`Selected caption track:`, selectedTrack);
     
-    // Get the first available caption track (usually auto-generated or English)
-    const captionTrack = captionTracks[0];
-    let captionUrl = captionTrack.baseUrl;
+    let captionUrl = selectedTrack.baseUrl;
     
     // Ensure the URL is properly formatted
     if (!captionUrl.startsWith('http')) {
       captionUrl = `https://www.youtube.com${captionUrl}`;
     }
     
+    // Add format parameter to get plain text
+    if (!captionUrl.includes('fmt=')) {
+      captionUrl += captionUrl.includes('?') ? '&fmt=srv3' : '?fmt=srv3';
+    }
+    
     console.log(`Fetching captions from: ${captionUrl}`);
     
     // Fetch the caption content
-    const captionResponse = await fetch(captionUrl);
+    const captionResponse = await fetch(captionUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    
     if (!captionResponse.ok) {
       throw new Error(`Failed to fetch captions: ${captionResponse.status}`);
     }
     
-    const captionXml = await captionResponse.text();
+    const captionContent = await captionResponse.text();
+    console.log(`Caption content length: ${captionContent.length}`);
     
-    // Parse the XML to extract text and timestamps
-    const textRegex = /<text start="([^"]*)"[^>]*>([^<]*)<\/text>/g;
-    const transcript = [];
-    let match;
+    // Parse the caption content (could be XML or JSON depending on format)
+    let transcript = [];
     
-    while ((match = textRegex.exec(captionXml)) !== null) {
-      const startTime = parseFloat(match[1]);
-      const text = match[2]
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .trim();
+    if (captionContent.includes('<transcript>') || captionContent.includes('<text')) {
+      // XML format
+      const textRegex = /<text start="([^"]*)"[^>]*>([^<]*)<\/text>/g;
+      let match;
       
-      if (text) {
-        transcript.push({
-          start: startTime,
-          text: text
-        });
+      while ((match = textRegex.exec(captionContent)) !== null) {
+        const startTime = parseFloat(match[1]);
+        const text = match[2]
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&nbsp;/g, ' ')
+          .trim();
+        
+        if (text) {
+          transcript.push({
+            start: startTime,
+            text: text
+          });
+        }
+      }
+    } else {
+      // Try JSON format
+      try {
+        const jsonData = JSON.parse(captionContent);
+        if (jsonData.events) {
+          for (const event of jsonData.events) {
+            if (event.segs) {
+              for (const seg of event.segs) {
+                if (seg.utf8) {
+                  transcript.push({
+                    start: event.tStartMs / 1000,
+                    text: seg.utf8.trim()
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log("Not JSON format, trying plain text");
+        // If all else fails, treat as plain text
+        if (captionContent.trim()) {
+          transcript.push({
+            start: 0,
+            text: captionContent.trim()
+          });
+        }
       }
     }
     
@@ -149,7 +231,7 @@ serve(async (req) => {
       })
       .join("\n");
 
-    console.log(`Transcript fetched successfully: ${transcript.length} segments`);
+    console.log(`Transcript extracted successfully: ${transcript.length} segments`);
     
     return new Response(
       JSON.stringify({ transcript: formattedTranscript }),
