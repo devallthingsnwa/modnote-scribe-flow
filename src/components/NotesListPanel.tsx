@@ -102,7 +102,6 @@ export function NotesListPanel({
           <div className="hidden w-full h-full flex items-center justify-center bg-red-500/10 absolute top-0 left-0">
             <Video className="h-4 w-4 text-red-500" />
           </div>
-          {/* Video indicator overlay */}
           <div className="absolute bottom-0 right-0 bg-red-500 text-white rounded-tl px-1">
             <Play className="h-2 w-2" />
           </div>
@@ -110,7 +109,6 @@ export function NotesListPanel({
       );
     }
     
-    // If it's a video note without thumbnail, show video icon
     if (note.is_transcription || note.source_url?.includes('youtube')) {
       return (
         <div className="w-12 h-9 rounded-md bg-red-500/10 flex items-center justify-center flex-shrink-0">
@@ -119,7 +117,6 @@ export function NotesListPanel({
       );
     }
     
-    // For regular text notes, show document icon
     return (
       <div className="w-12 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
         <FileText className="h-4 w-4 text-primary" />
@@ -166,42 +163,56 @@ export function NotesListPanel({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Notes</h2>
+      <div className="p-3 border-b border-border space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-lg font-semibold truncate">Notes</h2>
             {onToggleCollapse && (
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={onToggleCollapse}
-                className="h-6 w-6"
+                className="h-6 w-6 flex-shrink-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             )}
           </div>
-          <div className="flex gap-2">
+          
+          {/* Action Buttons - Better responsive layout */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             {onSelectModeToggle && (
               <Button 
                 onClick={onSelectModeToggle} 
                 size="sm" 
                 variant={isSelectMode ? "default" : "outline"}
+                className="text-xs px-2 h-8"
               >
-                <MoreHorizontal className="h-4 w-4 mr-2" />
-                {isSelectMode ? "Cancel" : "Select"}
+                <MoreHorizontal className="h-3 w-3" />
+                <span className="hidden sm:inline ml-1">
+                  {isSelectMode ? "Cancel" : "Select"}
+                </span>
               </Button>
             )}
             {onImport && !isSelectMode && (
-              <Button onClick={onImport} size="sm" variant="outline">
-                <Upload className="h-4 w-4 mr-2" />
-                Import
+              <Button 
+                onClick={onImport} 
+                size="sm" 
+                variant="outline"
+                className="text-xs px-2 h-8"
+              >
+                <Upload className="h-3 w-3" />
+                <span className="hidden sm:inline ml-1">Import</span>
               </Button>
             )}
             {!isSelectMode && (
-              <Button onClick={onNewNote} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                New
+              <Button 
+                onClick={onNewNote} 
+                size="sm"
+                className="text-xs px-2 h-8"
+              >
+                <Plus className="h-3 w-3" />
+                <span className="hidden sm:inline ml-1">New</span>
               </Button>
             )}
           </div>
@@ -209,7 +220,7 @@ export function NotesListPanel({
 
         {/* Select Mode Actions */}
         {isSelectMode && (
-          <div className="flex items-center justify-between mb-3 p-2 bg-muted rounded-md">
+          <div className="flex items-center justify-between p-2 bg-muted rounded-md">
             <span className="text-sm text-muted-foreground">
               {selectedNoteIds.length} selected
             </span>
