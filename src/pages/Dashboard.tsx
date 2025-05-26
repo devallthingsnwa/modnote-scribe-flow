@@ -1,15 +1,14 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PlusCircle, Search } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNavigation } from "@/components/MobileNavigation";
-import { NoteCard, NoteCardProps } from "@/components/NoteCard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NotesListPanel } from "@/components/NotesListPanel";
+import { NoteContentPanel } from "@/components/NoteContentPanel";
 import { ImportModal } from "@/components/ImportModal";
 import { useToast } from "@/hooks/use-toast";
-import { useNotes, useCreateNote } from "@/lib/api";
-import { extractYouTubeId } from "@/components/import/ImportUtils";
+import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Dashboard() {
@@ -17,13 +16,17 @@ export default function Dashboard() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [showNoteContent, setShowNoteContent] = useState(false); // For mobile view
   
-  const { data: notes, isLoading, error } = useNotes();
-  const createNoteMutation = useCreateNote();
+  const { data: notes, isLoading, error, refetch } = useNotes();
 
-  const handleNoteClick = (id: string) => {
-    navigate(`/note/${id}`);
+  const handleNoteSelect = (noteId: string) => {
+    setSelectedNoteId(noteId);
+    if (isMobile) {
+      setShowNoteContent(true);
+    }
   };
 
   const handleNewNote = () => {
@@ -35,6 +38,18 @@ export default function Dashboard() {
       title: "Content import complete",
       description: `Your ${type} content has been processed and is available in your notes.`,
     });
+    refetch(); // Refresh notes list
+  };
+
+  const handleNoteDeleted = () => {
+    setSelectedNoteId(null);
+    setShowNoteContent(false);
+    refetch(); // Refresh notes list
+  };
+
+  const handleBackToList = () => {
+    setShowNoteContent(false);
+    setSelectedNoteId(null);
   };
   
   const filteredNotes = notes?.filter(note => {
@@ -43,113 +58,100 @@ export default function Dashboard() {
       note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.content?.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  });
+  }) || [];
 
-  // Transform notes from API to NoteCard format
-  const transformNotesToCardProps = (): NoteCardProps[] => {
-    if (!filteredNotes) return [];
-    
-    return filteredNotes.map(note => ({
-      id: note.id,
-      title: note.title,
-      content: note.content || "",
-      date: new Date(note.created_at),
-      tags: note.tags.map(tag => ({
-        id: tag.id,
-        name: tag.name,
-        color: tag.color
-      })),
-      notebook: note.notebook_id ? {
-        id: note.notebook_id,
-        name: "Unknown"
-      } : undefined,
-      thumbnail: note.thumbnail || undefined
-    }));
-  };
+  if (error) {
+    return (
+      <div className="flex h-screen">
+        <div className="hidden md:block">
+          <Sidebar />
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center p-4">
+            <p className="text-red-500 mb-4">Error loading notes. Please try again.</p>
+            <button onClick={() => refetch()} className="text-primary hover:underline">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <Sidebar />
       </div>
       
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
-          <div className="flex justify-between items-center gap-2">
-            <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Notes</h1>
-            <div className="flex space-x-2">
-              <Button 
-                variant={isMobile ? "ghost" : "default"} 
-                size={isMobile ? "icon" : "default"} 
-                onClick={() => setImportModalOpen(true)}
-                className={isMobile ? 'mobile-ghost-button' : ''}
-              >
-                {isMobile ? null : "Import"}
-              </Button>
-              {!isMobile && (
-                <Button onClick={handleNewNote}>
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  New Note
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {/* Search Bar */}
-          <div className="mt-4 relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`} />
-            <Input
-              placeholder="Search notes..."
-              className={`pl-10 w-full ${isMobile ? 'mobile-search' : ''}`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </header>
-        
-        <main className={`flex-1 overflow-y-auto p-4 pb-20 md:pb-4 ${isMobile ? 'bg-[#0f0f0f]' : ''}`}>
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className={`animate-pulse ${isMobile ? 'text-gray-400' : ''}`}>Loading notes...</div>
-            </div>
-          ) : error ? (
-            <div className={`text-center p-4 ${isMobile ? 'text-red-400' : 'text-red-500'}`}>
-              Error loading notes. Please try again.
-            </div>
-          ) : filteredNotes && filteredNotes.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {transformNotesToCardProps().map((note) => (
-                <NoteCard
-                  key={note.id}
-                  {...note}
-                  onClick={() => handleNoteClick(note.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className={`text-center p-8 flex flex-col items-center ${isMobile ? 'mobile-empty-state' : ''}`}>
-              <div className={`rounded-full p-6 mb-4 ${isMobile ? 'mobile-empty-icon' : 'bg-muted/30'}`}>
-                <PlusCircle className={`h-12 w-12 ${isMobile ? 'text-gray-400' : 'text-muted-foreground/60'}`} />
+      <div className="flex-1 flex overflow-hidden">
+        {/* Mobile: Show either list or content */}
+        {isMobile ? (
+          <>
+            {!showNoteContent ? (
+              <div className="flex-1 flex flex-col">
+                {/* Mobile Header */}
+                <header className="border-b p-4 bg-[#0f0f0f] border-gray-800">
+                  <div className="flex justify-between items-center gap-2">
+                    <h1 className="text-2xl font-semibold text-white">Notes</h1>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => setImportModalOpen(true)}
+                        className="mobile-ghost-button"
+                      >
+                        Import
+                      </button>
+                    </div>
+                  </div>
+                </header>
+                
+                <div className="flex-1 bg-[#0f0f0f]">
+                  <NotesListPanel
+                    notes={filteredNotes}
+                    selectedNoteId={selectedNoteId}
+                    onNoteSelect={handleNoteSelect}
+                    onNewNote={handleNewNote}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    isLoading={isLoading}
+                  />
+                </div>
+                
+                <div className="h-20" /> {/* Space for mobile nav */}
               </div>
-              <p className={`mb-4 ${isMobile ? 'text-gray-400' : 'text-muted-foreground'}`}>
-                {searchQuery ? "No notes matching your search" : "No notes found. Create your first note!"}
-              </p>
-              {!searchQuery && (
-                <Button 
-                  onClick={handleNewNote}
-                  className={isMobile ? 'mobile-primary-button' : ''}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  New Note
-                </Button>
-              )}
+            ) : (
+              <NoteContentPanel
+                noteId={selectedNoteId}
+                onBack={handleBackToList}
+                onNoteDeleted={handleNoteDeleted}
+              />
+            )}
+          </>
+        ) : (
+          /* Desktop: Two-panel layout */
+          <>
+            {/* Notes List Panel */}
+            <div className="w-80 flex-shrink-0">
+              <NotesListPanel
+                notes={filteredNotes}
+                selectedNoteId={selectedNoteId}
+                onNoteSelect={handleNoteSelect}
+                onNewNote={handleNewNote}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                isLoading={isLoading}
+              />
             </div>
-          )}
-        </main>
-        
-        {/* Mobile Bottom Navigation Space */}
-        <div className="h-20 md:hidden" />
+            
+            {/* Note Content Panel */}
+            <NoteContentPanel
+              noteId={selectedNoteId}
+              onBack={handleBackToList}
+              onNoteDeleted={handleNoteDeleted}
+            />
+          </>
+        )}
       </div>
       
       {/* Mobile Navigation */}

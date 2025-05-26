@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoProcessingOptions {
@@ -56,27 +55,44 @@ export class VideoNoteProcessor {
 
       // Fetch metadata if requested
       if (fetchMetadata) {
-        const metadataResult = await this.callEnhancedProcessor('fetch_metadata', videoId);
-        if (metadataResult.success) {
-          result.metadata = metadataResult.metadata;
-        } else {
-          console.warn('Failed to fetch metadata:', metadataResult.error);
+        try {
+          const metadataResult = await this.callEnhancedProcessor('fetch_metadata', videoId);
+          if (metadataResult.success) {
+            result.metadata = metadataResult.metadata;
+          }
+        } catch (error) {
+          console.warn('Failed to fetch metadata:', error);
         }
       }
 
-      // Fetch transcript if requested
+      // Fetch transcript if requested - this is the priority
       if (fetchTranscript) {
-        const transcriptResult = await this.callEnhancedProcessor('fetch_transcript', videoId);
-        if (transcriptResult.success) {
-          result.transcript = transcriptResult.transcript;
-        } else {
-          console.warn('Failed to fetch transcript:', transcriptResult.error);
-          result.transcript = "Transcript not available for this video.";
+        try {
+          // Try the enhanced processor first
+          const transcriptResult = await this.callEnhancedProcessor('fetch_transcript', videoId);
+          if (transcriptResult.success && transcriptResult.transcript) {
+            result.transcript = transcriptResult.transcript;
+          } else {
+            // Fallback to the original transcript function
+            const fallbackResult = await supabase.functions.invoke('fetch-youtube-transcript', {
+              body: { videoId }
+            });
+            
+            if (fallbackResult.data?.transcript) {
+              result.transcript = fallbackResult.data.transcript;
+            } else {
+              console.warn('No transcript available from either method');
+              result.transcript = "Transcript not available for this video. You can add your own notes here.";
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching transcript:', error);
+          result.transcript = "Transcript not available for this video. You can add your own notes here.";
         }
       }
 
-      // Generate AI summary if requested
-      if (generateSummary && result.transcript) {
+      // Generate AI summary if requested (keeping this for future use)
+      if (generateSummary && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
         try {
           const summaryResult = await supabase.functions.invoke('process-content-with-deepseek', {
             body: {
@@ -118,8 +134,33 @@ export class VideoNoteProcessor {
     user_id: string;
   }): Promise<{ success: boolean; noteId?: string; error?: string }> {
     try {
-      const result = await this.callEnhancedProcessor('save_note', '', { noteData });
-      return result;
+      // Use Supabase client directly for better error handling
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const notePayload = {
+        ...noteData,
+        user_id: userData.user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('notes')
+        .insert([notePayload])
+        .select('id')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        success: true,
+        noteId: data.id
+      };
     } catch (error) {
       console.error('Error saving video note:', error);
       return {
