@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,10 +22,7 @@ import { ContentTypeSelector } from "./import/ContentTypeSelector";
 import { UrlInput } from "./import/UrlInput";
 import { EnhancedVideoPreview } from "./import/EnhancedVideoPreview";
 import { ProcessingStatus } from "./import/ProcessingStatus";
-import { 
-  extractYouTubeId, 
-  fetchYouTubeTranscript
-} from "./import/ImportUtils";
+import { TranscriptionService } from "@/lib/transcriptionService";
 
 interface ImportModalProps {
   open: boolean;
@@ -40,6 +38,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
   const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
   const [progress, setProgress] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<any>(null);
   const [enableSummary, setEnableSummary] = useState(false);
   const [enableHighlights, setEnableHighlights] = useState(false);
   const [enableKeyPoints, setEnableKeyPoints] = useState(false);
@@ -51,6 +50,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     // Reset states when URL changes
     setThumbnail(null);
     setTranscript(null);
+    setMetadata(null);
     setCurrentStep("url");
   };
 
@@ -61,47 +61,26 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setCurrentStep("preview");
     
     try {
-      // For YouTube URLs, attempt to fetch transcript using the video ID
-      if (url.includes("youtube.com") || url.includes("youtu.be")) {
-        const videoId = extractYouTubeId(url);
-            
+      const mediaType = TranscriptionService.detectMediaType(url);
+      
+      if (mediaType === 'youtube') {
+        const videoId = TranscriptionService.extractVideoId(url);
+        
         if (videoId) {
-          setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
+          // Fetch YouTube metadata
+          const metadataResult = await TranscriptionService.getYouTubeMetadata(videoId);
+          setMetadata(metadataResult);
+          setThumbnail(metadataResult.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
           
-          // Use real transcript API with better error handling
-          try {
-            console.log("Fetching transcript for video ID:", videoId);
-            const fetchedTranscript = await fetchYouTubeTranscript(videoId);
-            console.log("Received transcript:", fetchedTranscript?.substring(0, 100) + "...");
-            
-            setTranscript(fetchedTranscript);
-            
-            // Check if transcript is valid
-            if (fetchedTranscript && 
-                !fetchedTranscript.startsWith("Error") && 
-                !fetchedTranscript.includes("No transcript available") &&
-                !fetchedTranscript.includes("Unable to fetch transcript") &&
-                fetchedTranscript.trim().length > 20) {
-              toast.success("Transcript fetched successfully!");
-            } else {
-              toast.warning("Transcript might be incomplete or unavailable for this video.");
-            }
-          } catch (error) {
-            console.error("Error fetching transcript:", error);
-            const errorMessage = "No transcript available for this video. The video may not have captions enabled.";
-            setTranscript(errorMessage);
-            toast.error("Failed to fetch transcript. The video might not have captions available.");
-          }
+          toast.success("Preview loaded successfully!");
         } else {
-          setThumbnail("https://placehold.co/600x400/eee/999?text=Cannot+Extract+YouTube+ID");
-          setTranscript("Invalid YouTube URL. Could not extract video ID.");
           toast.error("Invalid YouTube URL. Could not extract video ID.");
         }
       } else {
-        // For non-YouTube URLs, show a placeholder image
-        setThumbnail("https://placehold.co/600x400/eee/999?text=Content+Preview");
-        setTranscript("Non-YouTube content preview not available.");
-        toast.info("Non-YouTube URLs may have limited preview capabilities.");
+        // For other media types, show a placeholder
+        setThumbnail("https://placehold.co/600x400/eee/999?text=Media+Preview");
+        setMetadata({ title: `${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} Content` });
+        toast.info(`${mediaType} content detected. Ready for transcription.`);
       }
     } catch (error) {
       console.error("Error fetching preview:", error);
@@ -118,95 +97,65 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setProgress(20);
     
     try {
-      // Create a simple title from the URL
-      let noteTitle = "Imported Content";
-      if (url.includes("youtube.com") || url.includes("youtu.be")) {
-        noteTitle = `YouTube ${type === "video" ? "Video" : type === "audio" ? "Audio" : "Content"}`;
+      // Detect media type and get basic info
+      const mediaType = TranscriptionService.detectMediaType(url);
+      let noteTitle = metadata?.title || `Imported ${mediaType}`;
+      
+      setProgress(40);
+      
+      // Transcribe the content
+      console.log("Starting transcription...");
+      const transcriptionResult = await TranscriptionService.transcribeWithFallback(url);
+      
+      if (!transcriptionResult.success) {
+        throw new Error(transcriptionResult.error || 'Transcription failed');
       }
       
-      // If we don't have a transcript yet, try to fetch it
-      let finalTranscript = transcript;
-      if (!finalTranscript && (url.includes("youtube.com") || url.includes("youtu.be"))) {
-        const videoId = extractYouTubeId(url);
-        if (videoId) {
-          try {
-            setProgress(40);
-            finalTranscript = await fetchYouTubeTranscript(videoId);
-            setTranscript(finalTranscript);
-          } catch (error) {
-            console.error("Error fetching transcript during import:", error);
-            finalTranscript = "Transcript could not be fetched for this video.";
-          }
-        }
-      }
+      setTranscript(transcriptionResult.text || '');
+      setProgress(70);
       
-      setProgress(60);
-      
-      // Create the final content structure
+      // Process with AI if options are enabled
       let finalContent = "";
+      const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
       
-      if (finalTranscript && 
-          !finalTranscript.startsWith("Error") && 
-          !finalTranscript.includes("No transcript available") &&
-          !finalTranscript.includes("Transcript could not be fetched") &&
-          finalTranscript.trim().length > 50) {
-        
-        // Check if any AI processing is requested
-        const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-        
-        if (needsAIProcessing) {
-          setProgress(70);
-          
-          // Process with AI if any options are enabled
-          try {
-            const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
-              body: { 
-                content: finalTranscript, 
-                type: type,
-                options: {
-                  summary: enableSummary,
-                  highlights: enableHighlights,
-                  keyPoints: enableKeyPoints
-                }
+      if (needsAIProcessing && transcriptionResult.text) {
+        try {
+          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
+            body: { 
+              content: transcriptionResult.text, 
+              type: mediaType,
+              options: {
+                summary: enableSummary,
+                highlights: enableHighlights,
+                keyPoints: enableKeyPoints
               }
-            });
-
-            if (aiError) {
-              console.error("AI processing error:", aiError);
-              toast.warning("AI processing failed, importing raw transcript instead.");
-              finalContent = `# ${noteTitle}\n\n` +
-                `**Source:** ${url}\n\n` +
-                `## Transcript\n\n${finalTranscript}`;
-            } else if (aiData?.processedContent) {
-              finalContent = `# ${noteTitle}\n\n` +
-                `**Source:** ${url}\n\n` +
-                `${aiData.processedContent}\n\n` +
-                `## Original Transcript\n\n${finalTranscript}`;
-            } else {
-              finalContent = `# ${noteTitle}\n\n` +
-                `**Source:** ${url}\n\n` +
-                `## Transcript\n\n${finalTranscript}`;
             }
-          } catch (error) {
-            console.error("Error processing with AI:", error);
-            toast.warning("AI processing failed, importing raw transcript instead.");
+          });
+
+          if (aiData?.processedContent) {
             finalContent = `# ${noteTitle}\n\n` +
-              `**Source:** ${url}\n\n` +
-              `## Transcript\n\n${finalTranscript}`;
+              `**Source:** ${url}\n` +
+              `**Provider:** ${transcriptionResult.provider}\n` +
+              `**Duration:** ${metadata?.duration || 'Unknown'}\n\n` +
+              `${aiData.processedContent}\n\n` +
+              `## Original Transcript\n\n${transcriptionResult.text}`;
           }
-        } else {
-          // Just import raw transcript
-          finalContent = `# ${noteTitle}\n\n` +
-            `**Source:** ${url}\n\n` +
-            `## Transcript\n\n${finalTranscript}`;
+        } catch (error) {
+          console.error("AI processing failed:", error);
+          toast.warning("AI processing failed, importing raw transcript instead.");
         }
-      } else {
-        finalContent = `# ${noteTitle}\n\n` +
-          `**Source:** ${url}\n\n` +
-          `Content imported but transcript was not available.`;
       }
       
-      setProgress(80);
+      // Fallback to raw transcript
+      if (!finalContent) {
+        finalContent = `# ${noteTitle}\n\n` +
+          `**Source:** ${url}\n` +
+          `**Provider:** ${transcriptionResult.provider || 'Unknown'}\n` +
+          `**Duration:** ${metadata?.duration || 'Unknown'}\n\n` +
+          `## Transcript\n\n${transcriptionResult.text || 'Transcription failed'}`;
+      }
+      
+      setProgress(90);
       
       // Create the note in the database
       const { data: noteData, error: noteError } = await supabase
@@ -233,17 +182,17 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       queryClient.invalidateQueries({ queryKey: ['notes'] });
       
       // Call the onImport handler
-      onImport(url, type);
+      onImport(url, mediaType);
       
       const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-      if (finalTranscript && !finalTranscript.includes("could not be fetched")) {
+      if (transcriptionResult.text) {
         if (hasAIProcessing) {
-          toast.success("Content imported with AI analysis!");
+          toast.success(`Content imported with AI analysis! (via ${transcriptionResult.provider})`);
         } else {
-          toast.success("Content imported with transcript!");
+          toast.success(`Content transcribed and imported! (via ${transcriptionResult.provider})`);
         }
       } else {
-        toast.success("Content imported (transcript not available)!");
+        toast.success("Content imported (transcription not available)!");
       }
       
       // Close modal after completion
@@ -253,6 +202,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         setUrl("");
         setThumbnail(null);
         setTranscript(null);
+        setMetadata(null);
         setCurrentStep("url");
         setProgress(0);
         setEnableSummary(false);
@@ -273,10 +223,13 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
-            <span>Import Content</span>
+            <span>Import Multimedia Content</span>
+            <Badge variant="secondary" className="text-xs">
+              Auto-Transcription
+            </Badge>
           </DialogTitle>
           <DialogDescription>
-            Import from YouTube, podcast, or text source for automatic transcription and AI analysis.
+            Import from YouTube, podcasts, or audio/video files with automatic transcription using Podsqueeze, Whisper, or Riverside.fm APIs.
           </DialogDescription>
         </DialogHeader>
         
@@ -285,7 +238,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         <div className="grid gap-6 py-4">
           <div className="grid gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="url">Content URL</Label>
+              <Label htmlFor="url">Media URL</Label>
               <UrlInput 
                 url={url}
                 onChange={handleUrlChange}
@@ -301,8 +254,8 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             </div>
           </div>
           
-          {/* Enhanced Video Preview */}
-          {(thumbnail || transcript) && (
+          {/* Enhanced Preview */}
+          {(thumbnail || metadata) && (
             <EnhancedVideoPreview
               thumbnail={thumbnail}
               transcript={transcript}
@@ -329,7 +282,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             disabled={!url || currentStep === "processing" || currentStep === "complete" || !user}
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
           >
-            {currentStep === "processing" ? "Processing..." : "Import Content"}
+            {currentStep === "processing" ? "Transcribing..." : "Import & Transcribe"}
           </Button>
         </DialogFooter>
       </DialogContent>

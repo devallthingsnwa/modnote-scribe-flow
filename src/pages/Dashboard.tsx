@@ -35,8 +35,8 @@ export default function Dashboard() {
 
   const handleImport = (url: string, type: string) => {
     toast({
-      title: "Content import complete",
-      description: `Your ${type} content has been processed and is available in your notes.`,
+      title: "Multimedia import complete",
+      description: `Your ${type} content has been transcribed and is available in your notes.`,
     });
     refetch(); // Refresh notes list
   };
