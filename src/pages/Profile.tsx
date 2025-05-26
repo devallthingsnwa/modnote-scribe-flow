@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +15,7 @@ import * as z from "zod";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { LogOut } from "lucide-react";
 
 const profileFormSchema = z.object({
   email: z.string().email({
@@ -29,7 +29,7 @@ const profileFormSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function Profile() {
-  const { user, session } = useAuth();
+  const { user, session, signOut } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
@@ -108,6 +108,18 @@ export default function Profile() {
     }
   }
 
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to sign out",
+        variant: "destructive",
+      });
+    }
+  }
+
   if (!user) {
     return null; // Or a loading state
   }
@@ -123,6 +135,15 @@ export default function Profile() {
         <header className={`border-b p-4 ${isMobile ? 'bg-[#0f0f0f] border-gray-800' : 'border-border bg-background'}`}>
           <div className="flex justify-between items-center gap-2">
             <h1 className={`text-2xl font-semibold ${isMobile ? 'text-white' : ''}`}>Profile</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className={`gap-2 ${isMobile ? 'mobile-ghost-button' : ''}`}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
           </div>
         </header>
         
