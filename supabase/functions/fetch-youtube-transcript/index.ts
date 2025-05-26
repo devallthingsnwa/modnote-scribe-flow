@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
 const corsHeaders = {
@@ -27,6 +26,83 @@ serve(async (req) => {
     }
 
     console.log(`Fetching transcript for video: ${videoId}`);
+    
+    // Get the YouTube Transcript API key from environment
+    const apiKey = Deno.env.get('YOUTUBE_TRANSCRIPT_API_KEY');
+    
+    if (!apiKey) {
+      console.log("No YouTube Transcript API key found, falling back to web scraping");
+      return await fallbackToWebScraping(videoId);
+    }
+
+    try {
+      // Try using the YouTube Transcript API first
+      console.log("Using YouTube Transcript API");
+      const apiResponse = await fetch(`https://api.youtubetranscript.io/transcript?video_id=${videoId}`, {
+        headers: {
+          'X-API-Key': apiKey,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (apiResponse.ok) {
+        const apiData = await apiResponse.json();
+        console.log("YouTube Transcript API response:", apiData);
+        
+        if (apiData.transcript && Array.isArray(apiData.transcript)) {
+          // Format the transcript with timestamps
+          const formattedTranscript = apiData.transcript
+            .map((segment: any) => {
+              const startTime = formatTime(segment.start || 0);
+              const endTime = formatTime((segment.start || 0) + (segment.duration || 0));
+              return `[${startTime} - ${endTime}] ${segment.text}`;
+            })
+            .join("\n");
+
+          return new Response(
+            JSON.stringify({ 
+              transcript: formattedTranscript,
+              metadata: {
+                segments: apiData.transcript.length,
+                duration: apiData.transcript[apiData.transcript.length - 1]?.start + apiData.transcript[apiData.transcript.length - 1]?.duration || 0,
+                hasTimestamps: true,
+                source: 'youtube-transcript-api'
+              }
+            }),
+            {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+      
+      console.log("YouTube Transcript API failed or returned no data, falling back to web scraping");
+    } catch (error) {
+      console.log("YouTube Transcript API error:", error, "falling back to web scraping");
+    }
+    
+    // Fallback to web scraping
+    return await fallbackToWebScraping(videoId);
+    
+  } catch (error) {
+    console.error("Error in fetch-youtube-transcript function:", error);
+    
+    return new Response(
+      JSON.stringify({ 
+        transcript: "Unable to fetch transcript for this video. The video may not have captions available or may be restricted."
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});
+
+async function fallbackToWebScraping(videoId: string) {
+  try {
+    console.log("Attempting web scraping fallback for video:", videoId);
     
     // Fetch the YouTube video page with better headers
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -247,7 +323,8 @@ serve(async (req) => {
           duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
           speakers: [...new Set(transcript.map(t => t.speaker).filter(Boolean))],
           hasTimestamps: true,
-          hasSpeakers: transcript.some(t => t.speaker)
+          hasSpeakers: transcript.some(t => t.speaker),
+          source: 'web-scraping'
         }
       }),
       {
@@ -257,19 +334,17 @@ serve(async (req) => {
     );
     
   } catch (error) {
-    console.error("Error in fetch-youtube-transcript function:", error);
-    
-    return new Response(
-      JSON.stringify({ 
-        transcript: "Unable to fetch transcript for this video. The video may not have captions available or may be restricted."
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    console.error("Web scraping fallback failed:", error);
+    throw error;
   }
-});
+}
+
+// Helper function to format time for YouTube Transcript API response
+function formatTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 // Enhanced helper function to parse WebVTT time format with milliseconds
 function parseWebVTTTime(timeString: string): number {
