@@ -91,15 +91,24 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex h-screen">
+      <div className="flex h-screen bg-background">
         <div className="hidden md:block">
           <Sidebar />
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center p-4">
-            <p className="text-red-500 mb-4">Error loading notes. Please try again.</p>
-            <button onClick={() => refetch()} className="text-primary hover:underline">
-              Retry
+          <div className="text-center p-8 max-w-md">
+            <div className="bg-destructive/10 rounded-full p-6 w-fit mx-auto mb-4">
+              <PlusCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Something went wrong</h3>
+            <p className="text-muted-foreground mb-6">
+              We couldn't load your notes. Please check your connection and try again.
+            </p>
+            <button 
+              onClick={() => refetch()} 
+              className="bg-primary text-primary-foreground px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Try Again
             </button>
           </div>
         </div>
@@ -119,24 +128,33 @@ export default function Dashboard() {
         {isMobile ? (
           <>
             {!showNoteContent ? (
-              <div className="flex-1 flex flex-col">
-                {/* Mobile Header */}
-                <header className="border-b p-4 bg-[#0f0f0f] border-gray-800">
-                  <div className="flex justify-between items-center gap-2">
-                    <h1 className="text-2xl font-semibold text-white">Notes</h1>
-                    <div className="flex space-x-2 items-center">
-                      <AISearchNavbar />
-                      <button 
-                        onClick={() => setImportModalOpen(true)}
-                        className="mobile-ghost-button"
-                      >
-                        Import
-                      </button>
+              <div className="flex-1 flex flex-col bg-background">
+                {/* Enhanced Mobile Header */}
+                <header className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                          Notes
+                        </h1>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {notes?.length || 0} notes
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <AISearchNavbar />
+                        <button 
+                          onClick={() => setImportModalOpen(true)}
+                          className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                        >
+                          Import
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </header>
                 
-                <div className="flex-1 bg-[#0f0f0f]">
+                <div className="flex-1 bg-background">
                   <NotesListPanel
                     notes={filteredNotes}
                     selectedNoteId={selectedNoteId}
@@ -164,10 +182,10 @@ export default function Dashboard() {
             )}
           </>
         ) : (
-          /* Desktop: Evernote-style two-panel layout */
+          /* Enhanced Desktop Layout */
           <>
             {/* Left Panel: Notes List */}
-            <div className={`${isNotesPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 transition-all duration-300 border-r border-border`}>
+            <div className={`${isNotesPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 transition-all duration-300 border-r border-border bg-background/50`}>
               <NotesListPanel
                 notes={filteredNotes}
                 selectedNoteId={selectedNoteId}
@@ -187,12 +205,28 @@ export default function Dashboard() {
             </div>
             
             {/* Right Panel: Note Content */}
-            <div className="flex-1 flex flex-col">
-              {/* Desktop AI Search Navbar */}
-              <div className="p-4 border-b border-border bg-background/95 backdrop-blur">
-                <div className="flex justify-between items-center">
-                  <h1 className="text-lg font-semibold">Your Notes</h1>
-                  <AISearchNavbar />
+            <div className="flex-1 flex flex-col bg-background">
+              {/* Enhanced Desktop Header */}
+              <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+                <div className="px-6 py-4">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <h1 className="text-lg font-semibold text-foreground">
+                          {selectedNoteId ? 'Note Editor' : 'Your Notes'}
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedNoteId 
+                            ? 'Edit and organize your content' 
+                            : `${notes?.length || 0} notes available`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <AISearchNavbar />
+                    </div>
+                  </div>
                 </div>
               </div>
               
