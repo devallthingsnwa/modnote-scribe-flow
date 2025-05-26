@@ -64,8 +64,60 @@ export class TranscriptionService {
     }
   }
 
+  private static async fetchYouTubeTranscript(url: string): Promise<TranscriptionResult> {
+    try {
+      const videoId = this.extractVideoId(url);
+      if (!videoId) {
+        throw new Error('Invalid YouTube URL');
+      }
+
+      console.log(`Fetching YouTube transcript for video ID: ${videoId}`);
+      
+      const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
+        body: { videoId }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.transcript) {
+        return {
+          success: true,
+          text: data.transcript,
+          metadata: data.metadata,
+          provider: 'youtube-transcript'
+        };
+      } else {
+        throw new Error('No transcript available');
+      }
+    } catch (error) {
+      console.error('YouTube transcript fetch failed:', error);
+      return {
+        success: false,
+        error: error.message || 'YouTube transcript fetch failed',
+        provider: 'youtube-transcript'
+      };
+    }
+  }
+
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
-    // Try transcription providers in priority order
+    const mediaType = this.detectMediaType(url);
+    
+    // For YouTube videos, try YouTube transcript first
+    if (mediaType === 'youtube') {
+      console.log('Attempting YouTube transcript extraction...');
+      const youtubeResult = await this.fetchYouTubeTranscript(url);
+      
+      if (youtubeResult.success) {
+        console.log('YouTube transcript extraction successful');
+        return youtubeResult;
+      }
+      
+      console.warn('YouTube transcript failed, trying external providers...');
+    }
+    
+    // Try external transcription providers in priority order
     const providers = ['podsqueeze', 'whisper', 'riverside'];
     
     for (const provider of providers) {
