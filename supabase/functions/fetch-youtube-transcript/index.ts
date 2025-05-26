@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
 const corsHeaders = {
@@ -31,69 +30,55 @@ serve(async (req) => {
     // Get the YouTube Transcript API key from environment
     const apiKey = Deno.env.get('YOUTUBE_TRANSCRIPT_API_KEY');
     
-    if (!apiKey) {
-      console.log("No YouTube Transcript API key found, falling back to web scraping");
-      return await fallbackToWebScraping(videoId);
-    }
+    if (apiKey) {
+      try {
+        console.log("Using YouTube Transcript API");
+        const apiResponse = await fetch(`https://api.youtubetranscript.io/transcript?video_id=${videoId}`, {
+          headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+          }
+        });
 
-    try {
-      // Try using the YouTube Transcript API first
-      console.log("Using YouTube Transcript API");
-      const apiResponse = await fetch(`https://api.youtubetranscript.io/transcript?video_id=${videoId}`, {
-        headers: {
-          'X-API-Key': apiKey,
-          'Content-Type': 'application/json'
-        }
-      });
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          
+          if (apiData.transcript && Array.isArray(apiData.transcript) && apiData.transcript.length > 0) {
+            // Format the transcript with timestamps
+            const formattedTranscript = apiData.transcript
+              .map((segment: any) => {
+                const startTime = formatTime(segment.start || 0);
+                const endTime = formatTime((segment.start || 0) + (segment.duration || 0));
+                return `[${startTime} - ${endTime}] ${segment.text}`;
+              })
+              .join("\n");
 
-      console.log("YouTube Transcript API response status:", apiResponse.status);
+            console.log(`Successfully extracted ${apiData.transcript.length} transcript segments`);
 
-      if (apiResponse.ok) {
-        const apiData = await apiResponse.json();
-        console.log("YouTube Transcript API response data:", JSON.stringify(apiData, null, 2));
-        
-        if (apiData.transcript && Array.isArray(apiData.transcript) && apiData.transcript.length > 0) {
-          // Format the transcript with timestamps
-          const formattedTranscript = apiData.transcript
-            .map((segment: any) => {
-              const startTime = formatTime(segment.start || 0);
-              const endTime = formatTime((segment.start || 0) + (segment.duration || 0));
-              return `[${startTime} - ${endTime}] ${segment.text}`;
-            })
-            .join("\n");
-
-          console.log(`Successfully extracted ${apiData.transcript.length} transcript segments`);
-
-          return new Response(
-            JSON.stringify({ 
-              transcript: formattedTranscript,
-              metadata: {
-                segments: apiData.transcript.length,
-                duration: apiData.transcript[apiData.transcript.length - 1]?.start + apiData.transcript[apiData.transcript.length - 1]?.duration || 0,
-                hasTimestamps: true,
-                source: 'youtube-transcript-api'
+            return new Response(
+              JSON.stringify({ 
+                transcript: formattedTranscript,
+                metadata: {
+                  segments: apiData.transcript.length,
+                  duration: apiData.transcript[apiData.transcript.length - 1]?.start + apiData.transcript[apiData.transcript.length - 1]?.duration || 0,
+                  hasTimestamps: true,
+                  source: 'youtube-transcript-api'
+                }
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
               }
-            }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        } else {
-          console.log("YouTube Transcript API returned empty or invalid transcript data");
+            );
+          }
         }
-      } else {
-        const errorText = await apiResponse.text();
-        console.log("YouTube Transcript API failed with status:", apiResponse.status, "Error:", errorText);
+      } catch (error) {
+        console.log("YouTube Transcript API failed:", error);
       }
-      
-      console.log("YouTube Transcript API failed or returned no data, falling back to web scraping");
-    } catch (error) {
-      console.log("YouTube Transcript API error:", error, "falling back to web scraping");
     }
     
-    // Fallback to web scraping
-    return await fallbackToWebScraping(videoId);
+    // Enhanced fallback to web scraping with multiple strategies
+    return await enhancedWebScraping(videoId);
     
   } catch (error) {
     console.error("Error in fetch-youtube-transcript function:", error);
@@ -111,101 +96,184 @@ serve(async (req) => {
   }
 });
 
-async function fallbackToWebScraping(videoId: string) {
-  try {
-    console.log("Attempting web scraping fallback for video:", videoId);
-    
-    // Fetch the YouTube video page with better headers
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const response = await fetch(videoUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
+async function enhancedWebScraping(videoId: string) {
+  console.log("Using enhanced web scraping for video:", videoId);
+  
+  // Try multiple YouTube URL formats
+  const urlFormats = [
+    `https://www.youtube.com/watch?v=${videoId}`,
+    `https://m.youtube.com/watch?v=${videoId}`,
+    `https://youtube.com/watch?v=${videoId}`
+  ];
+
+  for (const videoUrl of urlFormats) {
+    try {
+      console.log(`Trying URL format: ${videoUrl}`);
+      
+      const response = await fetch(videoUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none'
+        }
+      });
+      
+      if (!response.ok) {
+        console.log(`Failed to fetch ${videoUrl}: ${response.status}`);
+        continue;
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch video page: ${response.status}`);
-    }
-    
-    const html = await response.text();
-    console.log(`Fetched HTML page, length: ${html.length}`);
-    
-    // Extract caption tracks from ytInitialPlayerResponse
-    let captionTracks = null;
-    
-    // Try multiple patterns to find player response
-    const patterns = [
-      /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/,
-      /var ytInitialPlayerResponse = ({.+?});/,
-      /window\["ytInitialPlayerResponse"\] = ({.+?});/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match) {
+      
+      const html = await response.text();
+      console.log(`Fetched HTML from ${videoUrl}, length: ${html.length}`);
+      
+      // Try multiple extraction patterns
+      const extractionMethods = [
+        () => extractFromYtInitialPlayerResponse(html),
+        () => extractFromPlayerResponse(html),
+        () => extractFromCaptionTracks(html)
+      ];
+      
+      for (const method of extractionMethods) {
         try {
-          const playerResponse = JSON.parse(match[1]);
-          captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-          console.log(`Found ${captionTracks?.length || 0} caption tracks using pattern`);
-          if (captionTracks && captionTracks.length > 0) break;
-        } catch (e) {
-          console.log("Error parsing playerResponse with pattern:", e);
+          const result = await method();
+          if (result) {
+            console.log("Successfully extracted transcript using method");
+            return result;
+          }
+        } catch (error) {
+          console.log("Extraction method failed:", error);
           continue;
         }
       }
+      
+    } catch (error) {
+      console.log(`Error with URL ${videoUrl}:`, error);
+      continue;
     }
-    
-    if (!captionTracks || captionTracks.length === 0) {
-      console.log("No caption tracks found in any pattern");
-      return new Response(
-        JSON.stringify({ 
-          transcript: "No transcript available for this video. The video may not have captions enabled.",
-          error: "No captions found"
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+  }
+
+  // If all methods fail, return appropriate message
+  return new Response(
+    JSON.stringify({ 
+      transcript: "No transcript available for this video. The video may not have captions enabled or may be restricted.",
+      error: "All extraction methods failed"
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+}
+
+async function extractFromYtInitialPlayerResponse(html: string) {
+  const patterns = [
+    /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/,
+    /var ytInitialPlayerResponse = ({.+?});/,
+    /window\["ytInitialPlayerResponse"\] = ({.+?});/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      try {
+        const playerResponse = JSON.parse(match[1]);
+        const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        
+        if (captionTracks && captionTracks.length > 0) {
+          return await processCaptionTracks(captionTracks);
         }
-      );
-    }
-    
-    // Get the first available caption track (prefer English if available)
-    let selectedTrack = captionTracks[0];
-    
-    // Try to find English track
-    for (const track of captionTracks) {
-      if (track.languageCode === 'en' || track.vssId?.includes('en') || track.name?.simpleText?.toLowerCase().includes('english')) {
-        selectedTrack = track;
-        break;
+      } catch (e) {
+        continue;
       }
     }
+  }
+  return null;
+}
+
+async function extractFromPlayerResponse(html: string) {
+  // Look for embedded player response in script tags
+  const scriptRegex = /<script[^>]*>(.*?ytInitialPlayerResponse.*?)<\/script>/gs;
+  let match;
+  
+  while ((match = scriptRegex.exec(html)) !== null) {
+    try {
+      const scriptContent = match[1];
+      const playerMatch = scriptContent.match(/ytInitialPlayerResponse["']?\s*[:=]\s*({.+?})/);
+      
+      if (playerMatch) {
+        const playerResponse = JSON.parse(playerMatch[1]);
+        const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        
+        if (captionTracks && captionTracks.length > 0) {
+          return await processCaptionTracks(captionTracks);
+        }
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function extractFromCaptionTracks(html: string) {
+  // Direct search for caption track URLs
+  const captionUrlRegex = /"baseUrl":"([^"]*\/api\/timedtext[^"]*)"/g;
+  const urls = [];
+  let match;
+  
+  while ((match = captionUrlRegex.exec(html)) !== null) {
+    urls.push(match[1].replace(/\\u0026/g, '&').replace(/\\/g, ''));
+  }
+  
+  if (urls.length > 0) {
+    return await fetchFromCaptionUrl(urls[0]);
+  }
+  
+  return null;
+}
+
+async function processCaptionTracks(captionTracks: any[]) {
+  // Prefer English captions
+  let selectedTrack = captionTracks[0];
+  
+  for (const track of captionTracks) {
+    if (track.languageCode === 'en' || 
+        track.vssId?.includes('en') || 
+        track.name?.simpleText?.toLowerCase().includes('english')) {
+      selectedTrack = track;
+      break;
+    }
+  }
+  
+  if (!selectedTrack.baseUrl) {
+    return null;
+  }
+  
+  return await fetchFromCaptionUrl(selectedTrack.baseUrl);
+}
+
+async function fetchFromCaptionUrl(baseUrl: string) {
+  try {
+    let captionUrl = baseUrl;
     
-    console.log(`Selected caption track:`, selectedTrack);
-    
-    let captionUrl = selectedTrack.baseUrl;
-    
-    // Ensure the URL is properly formatted
     if (!captionUrl.startsWith('http')) {
       captionUrl = `https://www.youtube.com${captionUrl}`;
     }
     
-    // Request WebVTT format specifically for better metadata
+    // Request WebVTT format
     if (!captionUrl.includes('fmt=')) {
       captionUrl += captionUrl.includes('?') ? '&fmt=vtt' : '?fmt=vtt';
-    } else {
-      // Replace any existing format with vtt
-      captionUrl = captionUrl.replace(/fmt=[^&]+/, 'fmt=vtt');
     }
     
-    console.log(`Fetching WebVTT captions from: ${captionUrl}`);
+    console.log(`Fetching captions from: ${captionUrl}`);
     
-    // Fetch the caption content in WebVTT format
     const captionResponse = await fetch(captionUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -218,19 +286,15 @@ async function fallbackToWebScraping(videoId: string) {
     
     const captionContent = await captionResponse.text();
     console.log(`Caption content length: ${captionContent.length}`);
-    console.log(`Caption content preview (first 500 chars): ${captionContent.substring(0, 500)}`);
     
-    // Parse WebVTT or XML format
     let transcript = [];
     
     if (captionContent.includes('WEBVTT')) {
-      console.log("Parsing WebVTT format");
       transcript = parseWebVTT(captionContent);
     } else if (captionContent.includes('<text')) {
-      console.log("Parsing XML format");
       transcript = parseXML(captionContent);
     } else {
-      console.log("Unknown caption format, attempting both parsers");
+      // Try both parsers
       transcript = parseWebVTT(captionContent);
       if (transcript.length === 0) {
         transcript = parseXML(captionContent);
@@ -238,19 +302,9 @@ async function fallbackToWebScraping(videoId: string) {
     }
     
     if (transcript.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          transcript: "No transcript content could be parsed from the video captions.",
-          error: "Parsing failed"
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return null;
     }
     
-    // Format transcript with timestamps
     const formattedTranscript = transcript
       .map((entry) => {
         const startTime = formatTimeWithMilliseconds(entry.start);
@@ -259,7 +313,7 @@ async function fallbackToWebScraping(videoId: string) {
       })
       .join("\n");
 
-    console.log(`Successfully extracted ${transcript.length} transcript segments via web scraping`);
+    console.log(`Successfully extracted ${transcript.length} transcript segments`);
     
     return new Response(
       JSON.stringify({ 
@@ -278,8 +332,8 @@ async function fallbackToWebScraping(videoId: string) {
     );
     
   } catch (error) {
-    console.error("Web scraping fallback failed:", error);
-    throw error;
+    console.error("Caption URL fetch failed:", error);
+    return null;
   }
 }
 

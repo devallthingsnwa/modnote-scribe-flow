@@ -3,18 +3,22 @@ import { useEffect, useState } from "react";
 import YouTube from "react-youtube";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Play, User, Clock } from "lucide-react";
+import { Play, User, Clock, AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface VideoPlayerProps {
   videoId: string;
   playerRef: React.MutableRefObject<any>;
   onTimeUpdate?: (time: number) => void;
+  onReady?: () => void;
 }
 
-export function VideoPlayer({ videoId, playerRef, onTimeUpdate }: VideoPlayerProps) {
+export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: VideoPlayerProps) {
   const [isReady, setIsReady] = useState(false);
   const [videoData, setVideoData] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const opts = {
     height: '100%',
@@ -27,33 +31,69 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate }: VideoPlayerPro
       controls: 1,
       disablekb: 0,
       enablejsapi: 1,
+      origin: window.location.origin
     },
   };
 
-  const onReady = (event: any) => {
+  const onPlayerReady = (event: any) => {
+    console.log("YouTube player ready for video:", videoId);
     playerRef.current = event.target;
     setIsReady(true);
+    setHasError(false);
     
-    // Get video info
-    const title = playerRef.current.getVideoData().title;
-    const author = playerRef.current.getVideoData().author;
-    const duration = playerRef.current.getDuration();
-    setVideoData({ title, author, duration });
+    // Get video info with error handling
+    try {
+      const videoInfo = playerRef.current.getVideoData();
+      const duration = playerRef.current.getDuration();
+      
+      setVideoData({ 
+        title: videoInfo.title || `YouTube Video ${videoId}`,
+        author: videoInfo.author || 'Unknown',
+        duration: duration || 0
+      });
+      
+      console.log("Video data loaded:", { title: videoInfo.title, author: videoInfo.author, duration });
+      onReady?.();
+    } catch (error) {
+      console.error("Error getting video data:", error);
+      setVideoData({ 
+        title: `YouTube Video ${videoId}`,
+        author: 'Unknown',
+        duration: 0
+      });
+    }
   };
 
-  const onStateChange = (event: any) => {
+  const onPlayerStateChange = (event: any) => {
     // YouTube player state: 1 = playing, 2 = paused
     setIsPlaying(event.data === 1);
+    console.log("Player state changed:", event.data);
+  };
+
+  const onPlayerError = (event: any) => {
+    console.error("YouTube player error:", event.data);
+    setHasError(true);
+    setIsReady(false);
+  };
+
+  const retryLoad = () => {
+    setRetryCount(prev => prev + 1);
+    setHasError(false);
+    setIsReady(false);
   };
 
   useEffect(() => {
     if (!isReady || !playerRef.current || !onTimeUpdate) return;
 
-    // Update time every second
+    // Update time every second with error handling
     const interval = setInterval(() => {
-      if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
-        const currentTime = playerRef.current.getCurrentTime();
-        onTimeUpdate(currentTime);
+      try {
+        if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
+          const currentTime = playerRef.current.getCurrentTime();
+          onTimeUpdate(currentTime);
+        }
+      } catch (error) {
+        console.error("Error getting current time:", error);
       }
     }, 1000);
 
@@ -84,21 +124,50 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate }: VideoPlayerPro
     );
   }
 
+  if (hasError) {
+    return (
+      <Card className="flex items-center justify-center h-64 bg-red-50 border-red-200 dark:bg-red-900/20">
+        <div className="text-center space-y-3">
+          <div className="bg-red-100 rounded-full p-4 dark:bg-red-900/50">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <div>
+            <p className="text-red-700 dark:text-red-300 font-medium">Failed to load video</p>
+            <p className="text-red-600 dark:text-red-400 text-sm mt-1">
+              The video might be private, unavailable, or restricted
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-3"
+              onClick={retryLoad}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full space-y-4">
       {/* Video Player Container */}
       <div className="relative group">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-lg">
           <YouTube 
+            key={`${videoId}-${retryCount}`}
             videoId={videoId}
             opts={opts} 
-            onReady={onReady}
-            onStateChange={onStateChange}
+            onReady={onPlayerReady}
+            onStateChange={onPlayerStateChange}
+            onError={onPlayerError}
             className="absolute inset-0 h-full w-full"
           />
           
           {/* Loading Overlay */}
-          {!isReady && (
+          {!isReady && !hasError && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="text-center space-y-3">
                 <div className="h-8 w-8 border-4 border-white/30 border-t-white rounded-full animate-spin" />
@@ -134,7 +203,7 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate }: VideoPlayerPro
                 <span>{videoData.author}</span>
               </div>
               
-              {videoData.duration && (
+              {videoData.duration > 0 && (
                 <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   <span>{formatDuration(videoData.duration)}</span>

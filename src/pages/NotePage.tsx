@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText, Download, MessageSquare, Youtube } from "lucide-react";
@@ -24,6 +23,8 @@ export default function NotePage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>("summary");
   const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
+  const [isVideoReady, setIsVideoReady] = useState<boolean>(false);
+  const [isRefreshingTranscript, setIsRefreshingTranscript] = useState<boolean>(false);
   const playerRef = useRef<any>(null);
   
   const { data: note, isLoading, error } = useNote(id || "");
@@ -99,49 +100,73 @@ export default function NotePage() {
   
   const handleTimestampClick = (timestamp: number) => {
     setCurrentTimestamp(timestamp);
-    if (playerRef.current) {
-      playerRef.current.seekTo(timestamp);
+    if (playerRef.current && isVideoReady) {
+      try {
+        playerRef.current.seekTo(timestamp);
+        console.log(`Seeking to timestamp: ${timestamp}`);
+      } catch (error) {
+        console.error("Error seeking to timestamp:", error);
+        toast({
+          title: "Seek failed",
+          description: "Unable to jump to the selected timestamp.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
   const handleTranscriptRefresh = async () => {
     if (!videoId || !id) return;
     
+    setIsRefreshingTranscript(true);
+    
     try {
-      const { data, error } = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
+      console.log("Refreshing transcript for video:", videoId);
+      
+      const response = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({ videoId }),
-      }).then(res => res.json());
+      });
 
-      if (error) {
-        throw new Error(error);
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
       }
 
-      if (data?.transcript) {
+      if (data.transcript) {
+        // Update the note content with the new transcript
+        const currentTitle = note?.title || `YouTube Video ${videoId}`;
+        const newContent = `# 🎥 ${currentTitle}\n\n**Source:** ${note?.source_url}\n**Type:** Video Transcript\n**Last Updated:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${data.transcript}`;
+        
         updateNoteMutation.mutate({
           id,
           updates: {
-            content: data.transcript,
+            content: newContent,
             updated_at: new Date().toISOString(),
           },
         });
         
         toast({
-          title: "Transcript updated",
-          description: "The video transcript has been successfully fetched and updated.",
+          title: "Transcript updated!",
+          description: `Successfully fetched transcript with ${data.metadata?.segments || 'unknown'} segments.`,
         });
+      } else {
+        throw new Error('No transcript data received');
       }
     } catch (error) {
       console.error("Error fetching transcript:", error);
       toast({
         title: "Transcript fetch failed",
-        description: "Could not fetch the transcript for this video.",
+        description: `Could not fetch the transcript: ${error.message}`,
         variant: "destructive",
       });
+    } finally {
+      setIsRefreshingTranscript(false);
     }
   };
 
@@ -205,6 +230,11 @@ export default function NotePage() {
                           <Youtube className="h-3 w-3 mr-1" />
                           Watch on YouTube
                         </a>
+                        {isVideoReady && (
+                          <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
+                            Video Ready
+                          </Badge>
+                        )}
                       </div>
                     )}
                   </div>
@@ -268,31 +298,55 @@ export default function NotePage() {
                 <ResizablePanel defaultSize={40} minSize={30}>
                   <div className="h-full flex flex-col bg-gradient-to-b from-background to-muted/10">
                     <div className="p-6 flex-1 overflow-auto space-y-6">
-                      {/* Video Player */}
+                      {/* Enhanced Video Player */}
                       <Card className="overflow-hidden border-border/50 shadow-lg">
                         <CardContent className="p-6">
                           <VideoPlayer 
                             videoId={videoId || ''} 
                             playerRef={playerRef}
                             onTimeUpdate={setCurrentTimestamp}
+                            onReady={() => {
+                              setIsVideoReady(true);
+                              toast({
+                                title: "Video ready!",
+                                description: "You can now interact with timestamps in the transcript.",
+                              });
+                            }}
                           />
                         </CardContent>
                       </Card>
                       
-                      {/* Interactive Transcript */}
+                      {/* Enhanced Interactive Transcript */}
                       <Card className="flex-1 overflow-hidden border-border/50 shadow-lg">
                         <CardContent className="p-6 h-full flex flex-col">
                           <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-semibold text-foreground">Interactive Transcript</h3>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={handleTranscriptRefresh}
-                              className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-                            >
-                              <Clock className="h-4 w-4 mr-2" />
-                              Refresh
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {isVideoReady && (
+                                <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
+                                  Click timestamps to jump
+                                </Badge>
+                              )}
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleTranscriptRefresh}
+                                disabled={isRefreshingTranscript}
+                                className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                              >
+                                {isRefreshingTranscript ? (
+                                  <>
+                                    <div className="h-4 w-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mr-2" />
+                                    Fetching...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Refresh Transcript
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
                           <div className="flex-1 overflow-auto">
                             <TranscriptPanel
