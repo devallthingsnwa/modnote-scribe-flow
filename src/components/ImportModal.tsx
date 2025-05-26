@@ -7,6 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Dialog,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -119,7 +120,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       
       if (needsAIProcessing && transcriptionResult.text) {
         try {
-          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-openai', {
+          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
             body: { 
               content: transcriptionResult.text, 
               type: mediaType,
@@ -140,8 +141,8 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
               `## Original Transcript\n\n${transcriptionResult.text}`;
           }
         } catch (error) {
-          console.error("AI processing failed:", error);
-          toast.warning("AI processing failed, importing raw transcript instead.");
+          console.error("DeepSeek AI processing failed:", error);
+          toast.warning("DeepSeek AI processing failed, importing raw transcript instead.");
         }
       }
       
@@ -186,7 +187,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
       if (transcriptionResult.text) {
         if (hasAIProcessing) {
-          toast.success(`Content imported with AI analysis! (via ${transcriptionResult.provider})`);
+          toast.success(`Content imported with DeepSeek AI analysis! (via ${transcriptionResult.provider})`);
         } else {
           toast.success(`Content transcribed and imported! (via ${transcriptionResult.provider})`);
         }

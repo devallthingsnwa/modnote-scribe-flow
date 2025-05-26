@@ -29,8 +29,8 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
     setIsProcessing(true);
 
     try {
-      // Call the OpenAI processing function instead of DeepSeek
-      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-openai', {
+      // Call the DeepSeek processing function instead of OpenAI
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: { 
           content: content, 
           type: "text",
@@ -55,16 +55,16 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
         
         toast({
           title: "AI Analysis Complete",
-          description: "Your content has been enhanced with AI-generated insights.",
+          description: "Your content has been enhanced with DeepSeek AI-generated insights.",
         });
       } else {
-        throw new Error("No processed content received from AI");
+        throw new Error("No processed content received from DeepSeek AI");
       }
     } catch (error: any) {
-      console.error("Error processing with AI:", error);
+      console.error("Error processing with DeepSeek AI:", error);
       toast({
         title: "AI Processing Failed",
-        description: error.message || "Failed to process content with AI. Please try again.",
+        description: error.message || "Failed to process content with DeepSeek AI. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -94,7 +94,7 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
         ) : (
           <>
             <Sparkles className="h-4 w-4 mr-2" />
-            AI Analysis
+            DeepSeek Analysis
           </>
         )}
       </Button>
