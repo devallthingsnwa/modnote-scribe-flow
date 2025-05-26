@@ -166,7 +166,7 @@ export function NotesListPanel({
       <div className="p-3 border-b border-border space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
-            <h2 className="text-lg font-semibold truncate">Notes</h2>
+            <h2 className="text-lg font-semibold truncate text-foreground">Notes</h2>
             {onToggleCollapse && (
               <Button 
                 variant="ghost" 
