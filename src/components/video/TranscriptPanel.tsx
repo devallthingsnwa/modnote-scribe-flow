@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Search, Clock, Play, MessageSquare } from "lucide-react";
+import { Search, Clock, Play, MessageSquare, User } from "lucide-react";
 
 interface TranscriptPanelProps {
   transcript: string;
@@ -16,6 +16,8 @@ interface TranscriptSegment {
   startTime: number;
   endTime: number;
   text: string;
+  speaker?: string;
+  confidence?: number;
 }
 
 export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick }: TranscriptPanelProps) {
@@ -24,41 +26,94 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
   const transcriptSegments = useMemo(() => {
     if (!transcript) return [];
     
-    // Parse transcript with timestamps
-    // Format: [MM:SS - MM:SS] Text
-    const regex = /\[(\d{2}:\d{2}) - (\d{2}:\d{2})\] (.*?)(?=\[\d{2}:\d{2} - \d{2}:\d{2}\]|$)/gs;
+    // Enhanced parsing for multiple formats with speaker metadata
     const segments: TranscriptSegment[] = [];
     
+    // Format 1: [MM:SS - MM:SS] Speaker: Text
+    const speakerRegex = /\[(\d{2}:\d{2}(?:\.\d{3})?)\s*-\s*(\d{2}:\d{2}(?:\.\d{3})?)\]\s*([^:]+):\s*(.*?)(?=\[\d{2}:\d{2}|$)/gs;
+    
+    // Format 2: [MM:SS - MM:SS] Text (without speaker)
+    const basicRegex = /\[(\d{2}:\d{2}(?:\.\d{3})?)\s*-\s*(\d{2}:\d{2}(?:\.\d{3})?)\]\s*(.*?)(?=\[\d{2}:\d{2}|$)/gs;
+    
     let match;
-    while ((match = regex.exec(transcript + " "))) { // Add space to catch the last segment
+    
+    // Try speaker format first
+    while ((match = speakerRegex.exec(transcript + " "))) {
       const startTimeStr = match[1];
       const endTimeStr = match[2];
-      const text = match[3].trim();
+      const speaker = match[3].trim();
+      const text = match[4].trim();
       
-      // Convert MM:SS to seconds
-      const startTimeParts = startTimeStr.split(':');
-      const endTimeParts = endTimeStr.split(':');
+      const startTime = parseTimeString(startTimeStr);
+      const endTime = parseTimeString(endTimeStr);
       
-      const startTime = parseInt(startTimeParts[0], 10) * 60 + parseInt(startTimeParts[1], 10);
-      const endTime = parseInt(endTimeParts[0], 10) * 60 + parseInt(endTimeParts[1], 10);
-      
-      segments.push({ startTime, endTime, text });
+      segments.push({ 
+        startTime, 
+        endTime, 
+        text, 
+        speaker: speaker !== 'Unknown' ? speaker : undefined 
+      });
     }
     
-    return segments;
+    // If no speaker segments found, try basic format
+    if (segments.length === 0) {
+      while ((match = basicRegex.exec(transcript + " "))) {
+        const startTimeStr = match[1];
+        const endTimeStr = match[2];
+        const text = match[3].trim();
+        
+        const startTime = parseTimeString(startTimeStr);
+        const endTime = parseTimeString(endTimeStr);
+        
+        segments.push({ startTime, endTime, text });
+      }
+    }
+    
+    return segments.sort((a, b) => a.startTime - b.startTime);
   }, [transcript]);
+  
+  const parseTimeString = (timeStr: string): number => {
+    const parts = timeStr.split(':');
+    const minutes = parseInt(parts[0], 10);
+    const secondsParts = parts[1].split('.');
+    const seconds = parseInt(secondsParts[0], 10);
+    const milliseconds = secondsParts[1] ? parseInt(secondsParts[1], 10) : 0;
+    
+    return minutes * 60 + seconds + (milliseconds / 1000);
+  };
   
   const filteredSegments = useMemo(() => {
     if (!searchTerm) return transcriptSegments;
     return transcriptSegments.filter(segment => 
-      segment.text.toLowerCase().includes(searchTerm.toLowerCase())
+      segment.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (segment.speaker && segment.speaker.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [transcriptSegments, searchTerm]);
   
   const formatTimestamp = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
+    const milliseconds = Math.floor((seconds % 1) * 1000);
+    
+    if (milliseconds > 0) {
+      return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+    }
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+  
+  const getSpeakerColor = (speaker: string | undefined): string => {
+    if (!speaker) return 'bg-gray-500';
+    
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500', 
+      'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-yellow-500'
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < speaker.length; i++) {
+      hash = speaker.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
   };
   
   if (!transcript) {
@@ -79,14 +134,16 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
     );
   }
   
+  const uniqueSpeakers = [...new Set(transcriptSegments.map(s => s.speaker).filter(Boolean))];
+  
   return (
     <div className="flex flex-col h-full space-y-4">
-      {/* Search Header */}
+      {/* Enhanced Search Header */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <MessageSquare className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">Transcript</span>
+            <span className="text-sm font-medium text-foreground">Interactive Transcript</span>
             <Badge variant="secondary" className="text-xs">
               {transcriptSegments.length} segments
             </Badge>
@@ -99,11 +156,24 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
           )}
         </div>
         
+        {/* Speaker Legend */}
+        {uniqueSpeakers.length > 0 && (
+          <div className="flex flex-wrap gap-2 p-3 bg-muted/20 rounded-lg border">
+            <div className="text-xs text-muted-foreground mr-2">Speakers:</div>
+            {uniqueSpeakers.map((speaker) => (
+              <Badge key={speaker} variant="outline" className="text-xs">
+                <div className={`w-2 h-2 rounded-full mr-1 ${getSpeakerColor(speaker)}`} />
+                {speaker}
+              </Badge>
+            ))}
+          </div>
+        )}
+        
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search in transcript..."
+            placeholder="Search in transcript or speaker..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 bg-background/50 border-border/50 focus:bg-background transition-colors"
@@ -111,44 +181,59 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
         </div>
       </div>
       
-      {/* Transcript Content */}
-      <div className="flex-1 overflow-y-auto space-y-2">
+      {/* Enhanced Transcript Content */}
+      <div className="flex-1 overflow-y-auto space-y-1">
         {filteredSegments.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {filteredSegments.map((segment, index) => {
               const isActive = currentTime >= segment.startTime && currentTime < segment.endTime;
               const isPast = currentTime > segment.endTime;
+              const duration = segment.endTime - segment.startTime;
               
               return (
                 <Card 
                   key={index}
-                  className={`p-4 transition-all duration-300 cursor-pointer hover:shadow-md border ${
+                  className={`p-3 transition-all duration-200 cursor-pointer hover:shadow-sm border ${
                     isActive 
-                      ? 'bg-primary/10 border-primary/30 shadow-md scale-[1.02]' 
+                      ? 'bg-primary/10 border-primary/30 shadow-sm scale-[1.01]' 
                       : isPast
-                      ? 'bg-muted/30 border-border/30'
-                      : 'bg-background/80 border-border/50 hover:bg-muted/20'
+                      ? 'bg-muted/20 border-border/30'
+                      : 'bg-background/80 border-border/50 hover:bg-muted/10'
                   }`}
                   onClick={() => onTimestampClick && onTimestampClick(segment.startTime)}
                 >
                   <div className="space-y-2">
+                    {/* Timestamp and Speaker Header */}
                     <div className="flex items-center justify-between">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={`text-xs font-mono h-6 px-2 ${
-                          isActive 
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                            : 'bg-muted/50 hover:bg-muted'
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTimestampClick && onTimestampClick(segment.startTime);
-                        }}
-                      >
-                        <Play className="h-3 w-3 mr-1" />
-                        {formatTimestamp(segment.startTime)}
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={`text-xs font-mono h-6 px-2 ${
+                            isActive 
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                              : 'bg-muted/50 hover:bg-muted'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTimestampClick && onTimestampClick(segment.startTime);
+                          }}
+                        >
+                          <Play className="h-3 w-3 mr-1" />
+                          {formatTimestamp(segment.startTime)}
+                        </Button>
+                        
+                        {segment.speaker && (
+                          <Badge variant="outline" className="text-xs">
+                            <div className={`w-2 h-2 rounded-full mr-1 ${getSpeakerColor(segment.speaker)}`} />
+                            {segment.speaker}
+                          </Badge>
+                        )}
+                        
+                        <span className="text-xs text-muted-foreground">
+                          ({duration.toFixed(1)}s)
+                        </span>
+                      </div>
                       
                       {isActive && (
                         <Badge variant="default" className="text-xs bg-primary">
@@ -158,6 +243,7 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
                       )}
                     </div>
                     
+                    {/* Transcript Text */}
                     <p className={`text-sm leading-relaxed ${
                       isActive 
                         ? 'font-medium text-foreground' 
@@ -201,13 +287,21 @@ export function TranscriptPanel({ transcript, currentTime = 0, onTimestampClick 
         )}
       </div>
       
-      {/* Footer Info */}
+      {/* Enhanced Footer Info */}
       {filteredSegments.length > 0 && (
         <div className="pt-3 border-t border-border/50">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {searchTerm ? `${filteredSegments.length} of ${transcriptSegments.length}` : `${transcriptSegments.length}`} segments
-            </span>
+            <div className="flex items-center space-x-3">
+              <span>
+                {searchTerm ? `${filteredSegments.length} of ${transcriptSegments.length}` : `${transcriptSegments.length}`} segments
+              </span>
+              {uniqueSpeakers.length > 0 && (
+                <span className="flex items-center">
+                  <User className="h-3 w-3 mr-1" />
+                  {uniqueSpeakers.length} speakers
+                </span>
+              )}
+            </div>
             <span>Click any timestamp to jump to that moment</span>
           </div>
         </div>

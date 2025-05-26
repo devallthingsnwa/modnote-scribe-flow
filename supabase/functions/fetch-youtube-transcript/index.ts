@@ -123,13 +123,14 @@ serve(async (req) => {
     console.log(`Caption content length: ${captionContent.length}`);
     console.log(`Caption content preview: ${captionContent.substring(0, 200)}`);
     
-    // Parse WebVTT format
+    // Parse WebVTT format with enhanced speaker detection
     let transcript = [];
     
     if (captionContent.includes('WEBVTT')) {
       // Parse WebVTT format
       const lines = captionContent.split('\n');
       let currentCue = null;
+      let speakerDetection = detectSpeakerPattern(captionContent);
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -153,11 +154,12 @@ serve(async (req) => {
           currentCue = {
             start: parseWebVTTTime(timestampMatch[1]),
             end: parseWebVTTTime(timestampMatch[2]),
-            text: ''
+            text: '',
+            speaker: null
           };
         } else if (currentCue && line) {
-          // Add text to current cue
-          currentCue.text += (currentCue.text ? ' ' : '') + line
+          // Clean and process text
+          let cleanText = line
             .replace(/&amp;/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
@@ -166,6 +168,15 @@ serve(async (req) => {
             .replace(/&nbsp;/g, ' ')
             .replace(/<[^>]*>/g, '') // Remove any HTML tags
             .trim();
+          
+          // Enhanced speaker detection
+          const speaker = detectSpeaker(cleanText, speakerDetection);
+          if (speaker) {
+            currentCue.speaker = speaker.name;
+            cleanText = speaker.text;
+          }
+          
+          currentCue.text += (currentCue.text ? ' ' : '') + cleanText;
         }
       }
       
@@ -193,7 +204,8 @@ serve(async (req) => {
           transcript.push({
             start: startTime,
             end: startTime + 5, // Estimate end time
-            text: text
+            text: text,
+            speaker: null
           });
         }
       }
@@ -211,19 +223,33 @@ serve(async (req) => {
       );
     }
     
-    // Format transcript for readability with timestamps
+    // Format transcript with enhanced metadata including speakers
     const formattedTranscript = transcript
       .map((entry) => {
-        const startTime = formatTime(entry.start);
-        const endTime = formatTime(entry.end);
-        return `[${startTime} - ${endTime}] ${entry.text}`;
+        const startTime = formatTimeWithMilliseconds(entry.start);
+        const endTime = formatTimeWithMilliseconds(entry.end);
+        
+        if (entry.speaker) {
+          return `[${startTime} - ${endTime}] ${entry.speaker}: ${entry.text}`;
+        } else {
+          return `[${startTime} - ${endTime}] ${entry.text}`;
+        }
       })
       .join("\n");
 
-    console.log(`WebVTT transcript extracted successfully: ${transcript.length} segments`);
+    console.log(`Enhanced transcript extracted successfully: ${transcript.length} segments`);
     
     return new Response(
-      JSON.stringify({ transcript: formattedTranscript }),
+      JSON.stringify({ 
+        transcript: formattedTranscript,
+        metadata: {
+          segments: transcript.length,
+          duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
+          speakers: [...new Set(transcript.map(t => t.speaker).filter(Boolean))],
+          hasTimestamps: true,
+          hasSpeakers: transcript.some(t => t.speaker)
+        }
+      }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -245,7 +271,7 @@ serve(async (req) => {
   }
 });
 
-// Helper function to parse WebVTT time format (HH:MM:SS.mmm) to seconds
+// Enhanced helper function to parse WebVTT time format with milliseconds
 function parseWebVTTTime(timeString: string): number {
   const parts = timeString.split(':');
   const hours = parseInt(parts[0], 10);
@@ -257,9 +283,78 @@ function parseWebVTTTime(timeString: string): number {
   return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
 }
 
-// Helper function to format time in MM:SS
-function formatTime(seconds: number): string {
+// Enhanced helper function to format time with milliseconds
+function formatTimeWithMilliseconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  
+  if (ms > 0) {
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+  }
   return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Enhanced speaker detection function
+function detectSpeakerPattern(content: string): { hasMultipleSpeakers: boolean, commonPatterns: string[] } {
+  const speakerPatterns = [
+    /^([A-Z][a-z]+ [A-Z][a-z]+):/,  // "John Smith:"
+    /^([A-Z][A-Z\s]+):/,             // "JOHN SMITH:"
+    /^([A-Z][a-z]+):/,               // "John:"
+    /^\[([^\]]+)\]:/,                // "[Speaker Name]:"
+    /^(\w+\s*\d*):/,                 // "Speaker1:" or "Host:"
+  ];
+  
+  const speakers = new Set();
+  const lines = content.split('\n');
+  
+  for (const line of lines) {
+    for (const pattern of speakerPatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        speakers.add(match[1]);
+      }
+    }
+  }
+  
+  return {
+    hasMultipleSpeakers: speakers.size > 1,
+    commonPatterns: Array.from(speakers)
+  };
+}
+
+// Function to detect and extract speaker from text
+function detectSpeaker(text: string, context: { hasMultipleSpeakers: boolean, commonPatterns: string[] }): { name: string, text: string } | null {
+  const speakerPatterns = [
+    /^([A-Z][a-z]+ [A-Z][a-z]+):\s*(.+)$/,  // "John Smith: text"
+    /^([A-Z][A-Z\s]+):\s*(.+)$/,             // "JOHN SMITH: text"
+    /^([A-Z][a-z]+):\s*(.+)$/,               // "John: text"
+    /^\[([^\]]+)\]:\s*(.+)$/,                // "[Speaker Name]: text"
+    /^(\w+\s*\d*):\s*(.+)$/,                 // "Speaker1: text" or "Host: text"
+  ];
+  
+  for (const pattern of speakerPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return {
+        name: match[1].trim(),
+        text: match[2].trim()
+      };
+    }
+  }
+  
+  // If multiple speakers detected but no explicit pattern, try to infer
+  if (context.hasMultipleSpeakers && context.commonPatterns.length > 0) {
+    // Simple heuristic: if text starts with a capital word followed by colon
+    const simplePattern = /^([A-Z]\w*):\s*(.+)$/;
+    const match = text.match(simplePattern);
+    if (match) {
+      return {
+        name: match[1],
+        text: match[2]
+      };
+    }
+  }
+  
+  return null;
 }
