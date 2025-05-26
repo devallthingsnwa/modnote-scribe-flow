@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
 const corsHeaders = {
@@ -99,20 +100,29 @@ serve(async (req) => {
 async function enhancedWebScraping(videoId: string) {
   console.log("Using enhanced web scraping for video:", videoId);
   
-  // Try multiple YouTube URL formats
-  const urlFormats = [
-    `https://www.youtube.com/watch?v=${videoId}`,
-    `https://m.youtube.com/watch?v=${videoId}`,
-    `https://youtube.com/watch?v=${videoId}`
+  // Try multiple YouTube URL formats with different user agents
+  const attempts = [
+    {
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    },
+    {
+      url: `https://m.youtube.com/watch?v=${videoId}`,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+    },
+    {
+      url: `https://youtube.com/watch?v=${videoId}`,
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
   ];
 
-  for (const videoUrl of urlFormats) {
+  for (const attempt of attempts) {
     try {
-      console.log(`Trying URL format: ${videoUrl}`);
+      console.log(`Trying URL: ${attempt.url} with user agent: ${attempt.userAgent.substring(0, 50)}...`);
       
-      const response = await fetch(videoUrl, {
+      const response = await fetch(attempt.url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': attempt.userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
           'Accept-Encoding': 'gzip, deflate, br',
@@ -121,30 +131,32 @@ async function enhancedWebScraping(videoId: string) {
           'Upgrade-Insecure-Requests': '1',
           'Sec-Fetch-Dest': 'document',
           'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none'
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'no-cache'
         }
       });
       
       if (!response.ok) {
-        console.log(`Failed to fetch ${videoUrl}: ${response.status}`);
+        console.log(`Failed to fetch ${attempt.url}: ${response.status}`);
         continue;
       }
       
       const html = await response.text();
-      console.log(`Fetched HTML from ${videoUrl}, length: ${html.length}`);
+      console.log(`Fetched HTML from ${attempt.url}, length: ${html.length}`);
       
-      // Try multiple extraction patterns
+      // Try enhanced extraction methods
       const extractionMethods = [
         () => extractFromYtInitialPlayerResponse(html),
         () => extractFromPlayerResponse(html),
-        () => extractFromCaptionTracks(html)
+        () => extractFromCaptionTracks(html),
+        () => extractFromScriptTags(html)
       ];
       
       for (const method of extractionMethods) {
         try {
           const result = await method();
           if (result) {
-            console.log("Successfully extracted transcript using method");
+            console.log("Successfully extracted transcript");
             return result;
           }
         } catch (error) {
@@ -154,7 +166,7 @@ async function enhancedWebScraping(videoId: string) {
       }
       
     } catch (error) {
-      console.log(`Error with URL ${videoUrl}:`, error);
+      console.log(`Error with URL ${attempt.url}:`, error);
       continue;
     }
   }
@@ -174,22 +186,31 @@ async function enhancedWebScraping(videoId: string) {
 
 async function extractFromYtInitialPlayerResponse(html: string) {
   const patterns = [
-    /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/,
-    /var ytInitialPlayerResponse = ({.+?});/,
-    /window\["ytInitialPlayerResponse"\] = ({.+?});/
+    /var ytInitialPlayerResponse = ({.+?});/s,
+    /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*(?:,|\})/s,
+    /window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});/s,
+    /ytInitialPlayerResponse\s*=\s*({.+?});/s
   ];
   
   for (const pattern of patterns) {
     const match = html.match(pattern);
     if (match) {
       try {
-        const playerResponse = JSON.parse(match[1]);
+        console.log("Found ytInitialPlayerResponse pattern");
+        let jsonStr = match[1];
+        
+        // Clean up common issues in JSON
+        jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+        
+        const playerResponse = JSON.parse(jsonStr);
         const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
         
         if (captionTracks && captionTracks.length > 0) {
+          console.log(`Found ${captionTracks.length} caption tracks`);
           return await processCaptionTracks(captionTracks);
         }
       } catch (e) {
+        console.log("Failed to parse ytInitialPlayerResponse:", e.message);
         continue;
       }
     }
@@ -198,21 +219,33 @@ async function extractFromYtInitialPlayerResponse(html: string) {
 }
 
 async function extractFromPlayerResponse(html: string) {
-  // Look for embedded player response in script tags
-  const scriptRegex = /<script[^>]*>(.*?ytInitialPlayerResponse.*?)<\/script>/gs;
+  // Look for embedded player response in script tags with better regex
+  const scriptRegex = /<script[^>]*>([^<]*ytInitialPlayerResponse[^<]*)<\/script>/gs;
   let match;
   
   while ((match = scriptRegex.exec(html)) !== null) {
     try {
       const scriptContent = match[1];
-      const playerMatch = scriptContent.match(/ytInitialPlayerResponse["']?\s*[:=]\s*({.+?})/);
+      const playerMatches = [
+        /ytInitialPlayerResponse["']?\s*[:=]\s*({[^;]+})/,
+        /"ytInitialPlayerResponse"\s*:\s*({[^}]+})/,
+        /ytInitialPlayerResponse\s*=\s*({[^;]+})/
+      ];
       
-      if (playerMatch) {
-        const playerResponse = JSON.parse(playerMatch[1]);
-        const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        
-        if (captionTracks && captionTracks.length > 0) {
-          return await processCaptionTracks(captionTracks);
+      for (const playerPattern of playerMatches) {
+        const playerMatch = scriptContent.match(playerPattern);
+        if (playerMatch) {
+          try {
+            const playerResponse = JSON.parse(playerMatch[1]);
+            const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+            
+            if (captionTracks && captionTracks.length > 0) {
+              console.log(`Found ${captionTracks.length} caption tracks in script`);
+              return await processCaptionTracks(captionTracks);
+            }
+          } catch (e) {
+            continue;
+          }
         }
       }
     } catch (e) {
@@ -223,40 +256,89 @@ async function extractFromPlayerResponse(html: string) {
 }
 
 async function extractFromCaptionTracks(html: string) {
-  // Direct search for caption track URLs
-  const captionUrlRegex = /"baseUrl":"([^"]*\/api\/timedtext[^"]*)"/g;
-  const urls = [];
-  let match;
+  // Enhanced direct search for caption track URLs
+  const captionUrlPatterns = [
+    /"baseUrl":"([^"]*\/api\/timedtext[^"]*)"/g,
+    /'baseUrl':'([^']*\/api\/timedtext[^']*)'/g,
+    /baseUrl["']?\s*:\s*["']([^"']*\/api\/timedtext[^"']*)/g
+  ];
   
-  while ((match = captionUrlRegex.exec(html)) !== null) {
-    urls.push(match[1].replace(/\\u0026/g, '&').replace(/\\/g, ''));
+  const urls = new Set();
+  
+  for (const pattern of captionUrlPatterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      const url = match[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
+      urls.add(url);
+    }
   }
   
-  if (urls.length > 0) {
-    return await fetchFromCaptionUrl(urls[0]);
+  console.log(`Found ${urls.size} potential caption URLs`);
+  
+  for (const url of urls) {
+    try {
+      const result = await fetchFromCaptionUrl(url as string);
+      if (result) return result;
+    } catch (e) {
+      continue;
+    }
+  }
+  
+  return null;
+}
+
+async function extractFromScriptTags(html: string) {
+  // Extract all script tags and look for caption data
+  const scriptTagRegex = /<script[^>]*>([^<]+)<\/script>/gs;
+  let match;
+  
+  while ((match = scriptTagRegex.exec(html)) !== null) {
+    const scriptContent = match[1];
+    
+    // Look for timedtext URLs in any script content
+    const timedtextRegex = /(https?:\/\/[^"'\s]*\/api\/timedtext[^"'\s]*)/g;
+    let urlMatch;
+    
+    while ((urlMatch = timedtextRegex.exec(scriptContent)) !== null) {
+      try {
+        const url = urlMatch[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
+        console.log(`Found timedtext URL in script: ${url}`);
+        const result = await fetchFromCaptionUrl(url);
+        if (result) return result;
+      } catch (e) {
+        continue;
+      }
+    }
   }
   
   return null;
 }
 
 async function processCaptionTracks(captionTracks: any[]) {
-  // Prefer English captions
-  let selectedTrack = captionTracks[0];
+  // Prefer English captions, then auto-generated, then any available
+  const priorities = [
+    (track: any) => track.languageCode === 'en' && !track.vssId?.includes('.'),
+    (track: any) => track.languageCode === 'en',
+    (track: any) => track.vssId?.includes('en'),
+    (track: any) => track.name?.simpleText?.toLowerCase().includes('english'),
+    (track: any) => !track.vssId?.includes('.'), // Non-auto-generated
+    () => true // Any track
+  ];
   
-  for (const track of captionTracks) {
-    if (track.languageCode === 'en' || 
-        track.vssId?.includes('en') || 
-        track.name?.simpleText?.toLowerCase().includes('english')) {
-      selectedTrack = track;
-      break;
+  for (const priorityFilter of priorities) {
+    const filteredTracks = captionTracks.filter(priorityFilter);
+    if (filteredTracks.length > 0) {
+      console.log(`Trying ${filteredTracks.length} tracks with current priority`);
+      for (const track of filteredTracks) {
+        if (track.baseUrl) {
+          const result = await fetchFromCaptionUrl(track.baseUrl);
+          if (result) return result;
+        }
+      }
     }
   }
   
-  if (!selectedTrack.baseUrl) {
-    return null;
-  }
-  
-  return await fetchFromCaptionUrl(selectedTrack.baseUrl);
+  return null;
 }
 
 async function fetchFromCaptionUrl(baseUrl: string) {
@@ -267,41 +349,48 @@ async function fetchFromCaptionUrl(baseUrl: string) {
       captionUrl = `https://www.youtube.com${captionUrl}`;
     }
     
-    // Request WebVTT format
-    if (!captionUrl.includes('fmt=')) {
-      captionUrl += captionUrl.includes('?') ? '&fmt=vtt' : '?fmt=vtt';
-    }
+    // Ensure we request WebVTT format
+    const url = new URL(captionUrl);
+    url.searchParams.set('fmt', 'vtt');
+    url.searchParams.set('tlang', 'en');
     
-    console.log(`Fetching captions from: ${captionUrl}`);
+    console.log(`Fetching captions from: ${url.toString()}`);
     
-    const captionResponse = await fetch(captionUrl, {
+    const captionResponse = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/vtt,text/plain,*/*',
+        'Accept-Language': 'en-US,en;q=0.9'
       }
     });
     
     if (!captionResponse.ok) {
-      throw new Error(`Failed to fetch captions: ${captionResponse.status}`);
+      console.log(`Caption fetch failed: ${captionResponse.status}`);
+      return null;
     }
     
     const captionContent = await captionResponse.text();
     console.log(`Caption content length: ${captionContent.length}`);
     
+    if (!captionContent || captionContent.length < 50) {
+      console.log("Caption content too short or empty");
+      return null;
+    }
+    
     let transcript = [];
     
-    if (captionContent.includes('WEBVTT')) {
+    // Enhanced parsing for WebVTT format
+    if (captionContent.includes('WEBVTT') || captionContent.includes('-->')) {
       transcript = parseWebVTT(captionContent);
     } else if (captionContent.includes('<text')) {
       transcript = parseXML(captionContent);
     } else {
-      // Try both parsers
-      transcript = parseWebVTT(captionContent);
-      if (transcript.length === 0) {
-        transcript = parseXML(captionContent);
-      }
+      // Try to parse as plain text with timestamps
+      transcript = parseTimestampedText(captionContent);
     }
     
     if (transcript.length === 0) {
+      console.log("No transcript segments extracted");
       return null;
     }
     
@@ -345,18 +434,27 @@ function parseWebVTT(content: string) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     
-    // Skip empty lines and WebVTT header
-    if (!line || line === 'WEBVTT' || line.startsWith('Kind:') || line.startsWith('Language:')) {
+    // Skip empty lines, WebVTT header, and metadata
+    if (!line || line === 'WEBVTT' || line.startsWith('Kind:') || line.startsWith('Language:') || line.startsWith('NOTE')) {
       continue;
     }
     
-    // Check if line contains timestamp (WebVTT format: 00:00:00.000 --> 00:00:05.000)
-    const timestampRegex = /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/;
-    const timestampMatch = line.match(timestampRegex);
+    // Enhanced timestamp detection for WebVTT
+    const timestampPatterns = [
+      /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/,
+      /^(\d{1,2}:\d{2}\.\d{3})\s+-->\s+(\d{1,2}:\d{2}\.\d{3})/,
+      /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})/
+    ];
+    
+    let timestampMatch = null;
+    for (const pattern of timestampPatterns) {
+      timestampMatch = line.match(pattern);
+      if (timestampMatch) break;
+    }
     
     if (timestampMatch) {
       // Save previous cue if exists
-      if (currentCue && currentCue.text) {
+      if (currentCue && currentCue.text.trim()) {
         transcript.push(currentCue);
       }
       
@@ -375,29 +473,33 @@ function parseWebVTT(content: string) {
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
         .replace(/&nbsp;/g, ' ')
-        .replace(/<[^>]*>/g, '') // Remove any HTML tags
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/\{[^}]*\}/g, '') // Remove WebVTT styling
         .trim();
       
-      currentCue.text += (currentCue.text ? ' ' : '') + cleanText;
+      if (cleanText) {
+        currentCue.text += (currentCue.text ? ' ' : '') + cleanText;
+      }
     }
   }
   
   // Add the last cue
-  if (currentCue && currentCue.text) {
+  if (currentCue && currentCue.text.trim()) {
     transcript.push(currentCue);
   }
   
-  return transcript;
+  return transcript.filter(entry => entry.text && entry.text.trim().length > 0);
 }
 
 function parseXML(content: string) {
   const transcript = [];
-  const textRegex = /<text start="([^"]*)"[^>]*>([^<]*)<\/text>/g;
+  const textRegex = /<text start="([^"]*)"[^>]*dur="([^"]*)"[^>]*>([^<]*)<\/text>/g;
   let match;
   
   while ((match = textRegex.exec(content)) !== null) {
     const startTime = parseFloat(match[1]);
-    const text = match[2]
+    const duration = parseFloat(match[2]) || 5;
+    const text = match[3]
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -409,8 +511,29 @@ function parseXML(content: string) {
     if (text) {
       transcript.push({
         start: startTime,
-        end: startTime + 5, // Estimate end time
+        end: startTime + duration,
         text: text
+      });
+    }
+  }
+  
+  return transcript;
+}
+
+function parseTimestampedText(content: string) {
+  const transcript = [];
+  const lines = content.split('\n');
+  
+  for (const line of lines) {
+    // Try to extract timestamps from various formats
+    const timestampPattern = /(\d{1,2}:\d{2}(?:\.\d{3})?)\s*-\s*(\d{1,2}:\d{2}(?:\.\d{3})?)\s*(.+)/;
+    const match = line.match(timestampPattern);
+    
+    if (match) {
+      transcript.push({
+        start: parseSimpleTime(match[1]),
+        end: parseSimpleTime(match[2]),
+        text: match[3].trim()
       });
     }
   }
@@ -427,14 +550,31 @@ function formatTime(seconds: number): string {
 
 // Enhanced helper function to parse WebVTT time format with milliseconds
 function parseWebVTTTime(timeString: string): number {
-  const parts = timeString.split(':');
-  const hours = parseInt(parts[0], 10);
-  const minutes = parseInt(parts[1], 10);
-  const secondsParts = parts[2].split('.');
-  const seconds = parseInt(secondsParts[0], 10);
-  const milliseconds = parseInt(secondsParts[1], 10);
+  // Handle both comma and dot as decimal separator
+  timeString = timeString.replace(',', '.');
   
-  return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+  const parts = timeString.split(':');
+  let hours = 0, minutes = 0, seconds = 0;
+  
+  if (parts.length === 3) {
+    hours = parseInt(parts[0], 10);
+    minutes = parseInt(parts[1], 10);
+    seconds = parseFloat(parts[2]);
+  } else if (parts.length === 2) {
+    minutes = parseInt(parts[0], 10);
+    seconds = parseFloat(parts[1]);
+  } else {
+    seconds = parseFloat(timeString);
+  }
+  
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function parseSimpleTime(timeString: string): number {
+  const parts = timeString.split(':');
+  const minutes = parseInt(parts[0], 10);
+  const seconds = parseFloat(parts[1] || '0');
+  return minutes * 60 + seconds;
 }
 
 // Enhanced helper function to format time with milliseconds
