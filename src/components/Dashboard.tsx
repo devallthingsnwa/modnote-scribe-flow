@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AISearchNavbar } from "@/components/AISearchNavbar";
+import { SearchBar } from "@/components/SearchBar";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -80,7 +81,14 @@ export default function Dashboard() {
       refetch();
     }
   };
-  
+
+  const handleSearchNoteSelect = (noteId: string) => {
+    setSelectedNoteId(noteId);
+    if (isMobile) {
+      setShowNoteContent(true);
+    }
+  };
+
   const filteredNotes = notes?.filter(note => {
     if (!searchQuery) return true;
     return (
@@ -123,121 +131,143 @@ export default function Dashboard() {
         <Sidebar />
       </div>
       
-      <div className="flex-1 flex overflow-hidden">
-        {/* Mobile: Show either list or content */}
-        {isMobile ? (
-          <>
-            {!showNoteContent ? (
-              <div className="flex-1 flex flex-col bg-background">
-                {/* Enhanced Mobile Header */}
-                <header className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
-                  <div className="p-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <div>
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                          Notes
-                        </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {notes?.length || 0} notes
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <AISearchNavbar />
-                        <button 
-                          onClick={() => setImportModalOpen(true)}
-                          className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded-lg transition-colors text-sm font-medium"
-                        >
-                          Import
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </header>
-                
-                <div className="flex-1 bg-background">
-                  <NotesListPanel
-                    notes={filteredNotes}
-                    selectedNoteId={selectedNoteId}
-                    onNoteSelect={handleNoteSelect}
-                    onNewNote={handleNewNote}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    isLoading={isLoading}
-                    onImport={() => setImportModalOpen(true)}
-                    isSelectMode={isSelectMode}
-                    selectedNoteIds={selectedNoteIds}
-                    onSelectModeToggle={handleSelectModeToggle}
-                    onBulkDelete={handleBulkDelete}
-                  />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Global Search Bar - Desktop */}
+        {!isMobile && (
+          <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-20">
+            <div className="px-6 py-3">
+              <div className="flex items-center gap-4">
+                <SearchBar 
+                  onNoteSelect={handleSearchNoteSelect}
+                  className="flex-1 max-w-md"
+                />
+                <div className="flex items-center gap-3">
+                  <AISearchNavbar />
                 </div>
-                
-                <div className="h-20" />
               </div>
-            ) : (
-              <NoteContentPanel
-                noteId={selectedNoteId}
-                onBack={handleBackToList}
-                onNoteDeleted={handleNoteDeleted}
-              />
-            )}
-          </>
-        ) : (
-          /* Enhanced Desktop Layout */
-          <>
-            {/* Left Panel: Notes List */}
-            <div className={`${isNotesPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 transition-all duration-300 border-r border-border bg-background/50`}>
-              <NotesListPanel
-                notes={filteredNotes}
-                selectedNoteId={selectedNoteId}
-                onNoteSelect={handleNoteSelect}
-                onNewNote={handleNewNote}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                isLoading={isLoading}
-                onImport={() => setImportModalOpen(true)}
-                isCollapsed={isNotesPanelCollapsed}
-                onToggleCollapse={toggleNotesPanel}
-                isSelectMode={isSelectMode}
-                selectedNoteIds={selectedNoteIds}
-                onSelectModeToggle={handleSelectModeToggle}
-                onBulkDelete={handleBulkDelete}
-              />
             </div>
-            
-            {/* Right Panel: Note Content */}
-            <div className="flex-1 flex flex-col bg-background">
-              {/* Enhanced Desktop Header */}
-              <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
-                <div className="px-6 py-4">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <h1 className="text-lg font-semibold text-foreground">
-                          {selectedNoteId ? 'Note Editor' : 'Your Notes'}
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                          {selectedNoteId 
-                            ? 'Edit and organize your content' 
-                            : `${notes?.length || 0} notes available`
-                          }
-                        </p>
+          </div>
+        )}
+
+        <div className="flex-1 flex overflow-hidden">
+          {/* Mobile: Show either list or content */}
+          {isMobile ? (
+            <>
+              {!showNoteContent ? (
+                <div className="flex-1 flex flex-col bg-background">
+                  {/* Enhanced Mobile Header with Search */}
+                  <header className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+                    <div className="p-4 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                            Notes
+                          </h1>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {notes?.length || 0} notes
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <AISearchNavbar />
+                          <button 
+                            onClick={() => setImportModalOpen(true)}
+                            className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                          >
+                            Import
+                          </button>
+                        </div>
                       </div>
+                      
+                      {/* Mobile Search Bar */}
+                      <SearchBar 
+                        onNoteSelect={handleSearchNoteSelect}
+                        className="w-full"
+                      />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <AISearchNavbar />
-                    </div>
+                  </header>
+                  
+                  <div className="flex-1 bg-background">
+                    <NotesListPanel
+                      notes={filteredNotes}
+                      selectedNoteId={selectedNoteId}
+                      onNoteSelect={handleNoteSelect}
+                      onNewNote={handleNewNote}
+                      searchQuery={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      isLoading={isLoading}
+                      onImport={() => setImportModalOpen(true)}
+                      isSelectMode={isSelectMode}
+                      selectedNoteIds={selectedNoteIds}
+                      onSelectModeToggle={handleSelectModeToggle}
+                      onBulkDelete={handleBulkDelete}
+                    />
                   </div>
+                  
+                  <div className="h-20" />
                 </div>
+              ) : (
+                <NoteContentPanel
+                  noteId={selectedNoteId}
+                  onBack={handleBackToList}
+                  onNoteDeleted={handleNoteDeleted}
+                />
+              )}
+            </>
+          ) : (
+            /* Enhanced Desktop Layout */
+            <>
+              {/* Left Panel: Notes List */}
+              <div className={`${isNotesPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 transition-all duration-300 border-r border-border bg-background/50`}>
+                <NotesListPanel
+                  notes={filteredNotes}
+                  selectedNoteId={selectedNoteId}
+                  onNoteSelect={handleNoteSelect}
+                  onNewNote={handleNewNote}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  isLoading={isLoading}
+                  onImport={() => setImportModalOpen(true)}
+                  isCollapsed={isNotesPanelCollapsed}
+                  onToggleCollapse={toggleNotesPanel}
+                  isSelectMode={isSelectMode}
+                  selectedNoteIds={selectedNoteIds}
+                  onSelectModeToggle={handleSelectModeToggle}
+                  onBulkDelete={handleBulkDelete}
+                />
               </div>
               
-              <NoteContentPanel
-                noteId={selectedNoteId}
-                onBack={handleBackToList}
-                onNoteDeleted={handleNoteDeleted}
-              />
-            </div>
-          </>
-        )}
+              {/* Right Panel: Note Content */}
+              <div className="flex-1 flex flex-col bg-background">
+                {/* Enhanced Desktop Content Header */}
+                <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <h1 className="text-lg font-semibold text-foreground">
+                            {selectedNoteId ? 'Note Editor' : 'Your Notes'}
+                          </h1>
+                          <p className="text-sm text-muted-foreground">
+                            {selectedNoteId 
+                              ? 'Edit and organize your content' 
+                              : `${notes?.length || 0} notes available`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <NoteContentPanel
+                  noteId={selectedNoteId}
+                  onBack={handleBackToList}
+                  onNoteDeleted={handleNoteDeleted}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
       
       {/* Mobile Navigation */}
