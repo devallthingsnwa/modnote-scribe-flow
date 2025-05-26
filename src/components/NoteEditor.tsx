@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Bold, Italic, List, ListChecks, Save } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
 import { AIProcessingButton } from "@/components/AIProcessingButton";
+import { AIChatModal } from "@/components/AIChatModal";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface NoteEditorProps {
@@ -102,11 +103,15 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
           </div>
 
           {initialNote?.id && (
-            <div className="mb-3">
+            <div className="mb-3 flex gap-2">
               <AIProcessingButton
                 noteId={initialNote.id}
                 content={note.content}
                 onContentUpdated={handleContentUpdate}
+              />
+              <AIChatModal
+                noteId={initialNote.id}
+                content={note.content || ""}
               />
             </div>
           )}
@@ -140,11 +145,17 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
 
         <div className="flex items-center gap-3">
           {initialNote?.id && (
-            <AIProcessingButton
-              noteId={initialNote.id}
-              content={note.content}
-              onContentUpdated={handleContentUpdate}
-            />
+            <>
+              <AIProcessingButton
+                noteId={initialNote.id}
+                content={note.content}
+                onContentUpdated={handleContentUpdate}
+              />
+              <AIChatModal
+                noteId={initialNote.id}
+                content={note.content || ""}
+              />
+            </>
           )}
           
           <Button 
