@@ -41,7 +41,7 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
       setMessages([{
         id: '1',
         role: 'assistant',
-        content: "Hi! I'm your AI learning assistant. I can help you understand this video content better, answer questions about the concepts discussed, create study guides, or explain complex topics. What would you like to know about this content?",
+        content: "Hi! I'm your AI learning assistant powered by DeepSeek. I can help you understand this video content better using advanced RAG (Retrieval-Augmented Generation) techniques. I can answer questions about the concepts discussed, create study guides, explain complex topics, and provide insights based on the transcript. What would you like to know about this content?",
         timestamp: new Date()
       }]);
     }
@@ -62,33 +62,34 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
     setIsLoading(true);
 
     try {
-      // Prepare context from the note content and chat history
-      const context = `
-Video/Note Content:
+      // Prepare context with the note content and chat history for RAG
+      const conversationHistory = messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n');
+      
+      const ragContext = `
+KNOWLEDGE BASE (Video/Note Content):
 ${content}
 
-Previous conversation:
-${messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+CONVERSATION HISTORY:
+${conversationHistory}
 
-Current question: ${inputMessage.trim()}
+USER QUESTION: ${inputMessage.trim()}
+
+Instructions: Using the knowledge base above as your primary source of truth, answer the user's question. If the answer isn't in the knowledge base, clearly state that the information isn't available in the provided content. Use RAG principles to:
+1. Retrieve relevant information from the knowledge base
+2. Augment your response with context from the conversation history
+3. Generate a comprehensive answer that references specific parts of the content when relevant
+4. Provide additional insights and explanations to enhance understanding
 `;
 
-      const { data, error } = await supabase.functions.invoke('process-content-with-openai', {
+      const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
-          content: context,
+          content: ragContext,
           type: "chat",
-          prompt: `Based on the video/note content provided, please answer the user's question: "${inputMessage.trim()}". 
-          
-          Provide a helpful, educational response that:
-          - Directly addresses their question
-          - References specific parts of the content when relevant
-          - Explains concepts clearly
-          - Offers additional insights or related information
-          - Maintains a conversational, helpful tone`,
           options: {
             conversational: true,
             helpful: true,
-            educational: true
+            educational: true,
+            rag: true
           }
         }
       });
@@ -112,7 +113,7 @@ Current question: ${inputMessage.trim()}
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "I'm sorry, I'm having trouble connecting right now. Please check if your OpenAI API key is configured properly and try again.",
+        content: "I'm sorry, I'm having trouble connecting right now. Please check if your DeepSeek API key is configured properly and try again.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -138,7 +139,7 @@ Current question: ${inputMessage.trim()}
     setMessages([{
       id: Date.now().toString(),
       role: 'assistant',
-      content: "Chat cleared! How can I help you understand this content better?",
+      content: "Chat cleared! How can I help you understand this content better using RAG analysis?",
       timestamp: new Date()
     }]);
   };
@@ -147,7 +148,9 @@ Current question: ${inputMessage.trim()}
     "Summarize the key points",
     "Explain the main concepts",
     "What are the practical applications?",
-    "Create a study guide"
+    "Create a study guide",
+    "What are the most important takeaways?",
+    "Can you elaborate on [specific topic]?"
   ];
 
   return (
@@ -156,13 +159,13 @@ Current question: ${inputMessage.trim()}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-r from-green-500 to-blue-500 p-2 rounded-lg">
+            <div className="bg-gradient-to-r from-purple-500 to-blue-500 p-2 rounded-lg">
               <MessageSquare className="h-5 w-5 text-white" />
             </div>
             <div>
               <h2 className="text-xl font-semibold">AI Learning Assistant</h2>
               <p className="text-sm text-muted-foreground">
-                Ask questions and get personalized explanations
+                Powered by DeepSeek with RAG capabilities
               </p>
             </div>
           </div>
@@ -184,7 +187,7 @@ Current question: ${inputMessage.trim()}
             className={content ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : ""}
           >
             <Sparkles className="h-3 w-3 mr-1" />
-            {content ? "Ready to Help" : "No Content"}
+            {content ? "RAG Ready" : "No Content"}
           </Badge>
           
           {messages.length > 1 && (
@@ -192,6 +195,10 @@ Current question: ${inputMessage.trim()}
               {messages.length - 1} messages
             </Badge>
           )}
+          
+          <Badge variant="outline" className="bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-200">
+            DeepSeek AI
+          </Badge>
         </div>
 
         {/* Suggested Questions */}
@@ -221,8 +228,8 @@ Current question: ${inputMessage.trim()}
       <Card className="flex-1 flex flex-col border-border/50 shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-600" />
-            Conversation
+            <Bot className="h-5 w-5 text-purple-600" />
+            RAG Conversation
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col p-0">
@@ -238,12 +245,12 @@ Current question: ${inputMessage.trim()}
                   <div className={`p-2 rounded-full ${
                     message.role === 'user' 
                       ? 'bg-blue-100 dark:bg-blue-900' 
-                      : 'bg-green-100 dark:bg-green-900'
+                      : 'bg-purple-100 dark:bg-purple-900'
                   }`}>
                     {message.role === 'user' ? (
                       <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     ) : (
-                      <Bot className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     )}
                   </div>
                   
@@ -268,14 +275,14 @@ Current question: ${inputMessage.trim()}
               
               {isLoading && (
                 <div className="flex items-start space-x-3">
-                  <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
-                    <Bot className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
+                    <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div className="flex-1">
                     <div className="inline-block bg-muted text-foreground p-3 rounded-lg">
                       <div className="flex items-center space-x-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Thinking...</span>
+                        <span className="text-sm">Processing with RAG...</span>
                       </div>
                     </div>
                   </div>
@@ -301,7 +308,7 @@ Current question: ${inputMessage.trim()}
             <Button 
               onClick={sendMessage}
               disabled={!inputMessage.trim() || isLoading}
-              className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600"
+              className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -311,7 +318,7 @@ Current question: ${inputMessage.trim()}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Press Enter to send • Shift + Enter for new line
+            Press Enter to send • Shift + Enter for new line • Powered by DeepSeek RAG
           </p>
         </CardContent>
       </Card>

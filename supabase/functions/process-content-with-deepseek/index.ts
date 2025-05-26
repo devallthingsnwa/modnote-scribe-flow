@@ -43,37 +43,44 @@ serve(async (req) => {
     console.log(`Processing ${type} content with DeepSeek. Options:`, options);
     console.log("API Key exists:", DEEPSEEK_API_KEY ? "Yes" : "No");
     
-    // Build the analysis prompt based on selected options
-    let analysisInstructions = "Please analyze the following content and provide:\n";
-    const requestedAnalysis = [];
+    // Prepare system prompt based on content type and options
+    let systemPrompt = "You are an expert AI assistant that helps users understand and extract value from various types of content.";
+    let analysisInstructions = "";
     
-    if (options?.summary) {
-      requestedAnalysis.push("1. **Summary**: A comprehensive summary of the main topics and key information");
-    }
-    
-    if (options?.highlights) {
-      requestedAnalysis.push("2. **Key Highlights**: The most important points, insights, or memorable moments");
-    }
-    
-    if (options?.keyPoints) {
-      requestedAnalysis.push("3. **Key Points**: A structured list of the main takeaways and actionable insights");
-    }
-    
-    // If no specific options selected, provide a general analysis
-    if (requestedAnalysis.length === 0) {
-      analysisInstructions += "A comprehensive analysis including summary, key highlights, and main takeaways.";
-    } else {
-      analysisInstructions += requestedAnalysis.join("\n");
-    }
-    
-    analysisInstructions += "\n\nPlease format your response with clear headings and structure it for easy reading.";
-    
-    // Prepare system prompt based on content type
-    let systemPrompt = "You are an expert content analyst that helps users understand and extract value from various types of content.";
-    if (type === "video" || type === "audio") {
+    if (type === "chat" && options?.rag) {
+      systemPrompt = "You are an advanced AI assistant with RAG (Retrieval-Augmented Generation) capabilities. You excel at analyzing content, retrieving relevant information, and providing comprehensive answers based on the provided knowledge base. You maintain context from conversations and provide educational, helpful responses.";
+      analysisInstructions = "Using the provided knowledge base and conversation context, provide a helpful, accurate, and educational response. Reference specific parts of the content when relevant and maintain conversational flow.";
+    } else if (type === "video" || type === "audio") {
       systemPrompt = "You are an expert content analyst specializing in video and audio transcript analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from spoken content.";
     } else if (type === "text") {
       systemPrompt = "You are an expert content analyst specializing in text analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from written content.";
+    }
+
+    // Build the analysis prompt based on selected options for non-chat requests
+    if (type !== "chat") {
+      analysisInstructions = "Please analyze the following content and provide:\n";
+      const requestedAnalysis = [];
+      
+      if (options?.summary) {
+        requestedAnalysis.push("1. **Summary**: A comprehensive summary of the main topics and key information");
+      }
+      
+      if (options?.highlights) {
+        requestedAnalysis.push("2. **Key Highlights**: The most important points, insights, or memorable moments");
+      }
+      
+      if (options?.keyPoints) {
+        requestedAnalysis.push("3. **Key Points**: A structured list of the main takeaways and actionable insights");
+      }
+      
+      // If no specific options selected, provide a general analysis
+      if (requestedAnalysis.length === 0) {
+        analysisInstructions += "A comprehensive analysis including summary, key highlights, and main takeaways.";
+      } else {
+        analysisInstructions += requestedAnalysis.join("\n");
+      }
+      
+      analysisInstructions += "\n\nPlease format your response with clear headings and structure it for easy reading.";
     }
 
     // Call DeepSeek API
@@ -93,11 +100,11 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: `${analysisInstructions}\n\nContent to analyze:\n\n${content}`
+            content: type === "chat" ? content : `${analysisInstructions}\n\nContent to analyze:\n\n${content}`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 3000
+        temperature: type === "chat" ? 0.7 : 0.5,
+        max_tokens: type === "chat" ? 2000 : 3000
       }),
     });
 
