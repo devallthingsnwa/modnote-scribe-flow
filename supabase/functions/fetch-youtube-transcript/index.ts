@@ -28,21 +28,27 @@ serve(async (req) => {
 
     console.log(`Fetching transcript for video: ${videoId}`);
     
-    // Get the YouTube Transcript API key from environment
+    // Try YouTube Transcript API first
     const apiKey = Deno.env.get('YOUTUBE_TRANSCRIPT_API_KEY');
     
     if (apiKey) {
+      console.log("Attempting YouTube Transcript API...");
       try {
-        console.log("Using YouTube Transcript API");
         const apiResponse = await fetch(`https://api.youtubetranscript.io/transcript?video_id=${videoId}`, {
+          method: 'GET',
           headers: {
             'X-API-Key': apiKey,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/json',
+            'User-Agent': 'Lovable-App/1.0'
+          },
+          signal: AbortSignal.timeout(30000) // 30 second timeout
         });
+
+        console.log(`API Response status: ${apiResponse.status}`);
 
         if (apiResponse.ok) {
           const apiData = await apiResponse.json();
+          console.log("API Response received:", JSON.stringify(apiData).substring(0, 200));
           
           if (apiData.transcript && Array.isArray(apiData.transcript) && apiData.transcript.length > 0) {
             // Format the transcript with timestamps
@@ -54,7 +60,7 @@ serve(async (req) => {
               })
               .join("\n");
 
-            console.log(`Successfully extracted ${apiData.transcript.length} transcript segments`);
+            console.log(`Successfully extracted ${apiData.transcript.length} transcript segments via API`);
 
             return new Response(
               JSON.stringify({ 
@@ -71,15 +77,23 @@ serve(async (req) => {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
               }
             );
+          } else {
+            console.log("API returned empty or invalid transcript data");
           }
+        } else {
+          const errorText = await apiResponse.text();
+          console.log(`API Error Response: ${errorText}`);
         }
       } catch (error) {
-        console.log("YouTube Transcript API failed:", error);
+        console.log("YouTube Transcript API failed:", error.message);
       }
+    } else {
+      console.log("No YouTube Transcript API key found, skipping API method");
     }
     
-    // Enhanced fallback to web scraping with multiple strategies
-    return await enhancedWebScraping(videoId);
+    // Enhanced fallback methods
+    console.log("Trying fallback transcript extraction methods...");
+    return await tryFallbackMethods(videoId);
     
   } catch (error) {
     console.error("Error in fetch-youtube-transcript function:", error);
@@ -97,10 +111,101 @@ serve(async (req) => {
   }
 });
 
+async function tryFallbackMethods(videoId: string) {
+  // Method 1: Try direct YouTube transcript extraction
+  try {
+    console.log("Trying direct YouTube transcript extraction...");
+    const result = await extractFromYouTubeDirectly(videoId);
+    if (result) return result;
+  } catch (error) {
+    console.log("Direct extraction failed:", error.message);
+  }
+
+  // Method 2: Try alternative transcript services
+  try {
+    console.log("Trying alternative transcript services...");
+    const result = await tryAlternativeServices(videoId);
+    if (result) return result;
+  } catch (error) {
+    console.log("Alternative services failed:", error.message);
+  }
+
+  // Method 3: Enhanced web scraping
+  console.log("Falling back to enhanced web scraping...");
+  return await enhancedWebScraping(videoId);
+}
+
+async function extractFromYouTubeDirectly(videoId: string) {
+  // Try to use YouTube's internal API endpoints
+  const endpoints = [
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&asr_langs=en&caps=asr&exp=xfm&fmt=vtt`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`Trying endpoint: ${endpoint}`);
+      const response = await fetch(endpoint, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/vtt,text/plain,*/*',
+          'Referer': `https://www.youtube.com/watch?v=${videoId}`
+        }
+      });
+
+      if (response.ok) {
+        const content = await response.text();
+        if (content && content.length > 100 && !content.includes('error')) {
+          console.log(`Success with endpoint: ${endpoint}`);
+          return await processTranscriptContent(content, 'youtube-direct');
+        }
+      }
+    } catch (error) {
+      console.log(`Endpoint ${endpoint} failed:`, error.message);
+    }
+  }
+
+  return null;
+}
+
+async function tryAlternativeServices(videoId: string) {
+  // Try youtube-transcript npm package approach via different endpoints
+  const alternativeEndpoints = [
+    `https://youtubetranscript.com/api/transcript?video_id=${videoId}`,
+    `https://transcript.rephrase.ai/api/youtube?video_id=${videoId}`,
+  ];
+
+  for (const endpoint of alternativeEndpoints) {
+    try {
+      console.log(`Trying alternative service: ${endpoint}`);
+      const response = await fetch(endpoint, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; TranscriptBot/1.0)',
+          'Accept': 'application/json,text/plain'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && (data.transcript || data.text || data.captions)) {
+          console.log(`Success with alternative service: ${endpoint}`);
+          const transcript = data.transcript || data.text || data.captions;
+          return await processTranscriptContent(transcript, 'alternative-service');
+        }
+      }
+    } catch (error) {
+      console.log(`Alternative service ${endpoint} failed:`, error.message);
+    }
+  }
+
+  return null;
+}
+
 async function enhancedWebScraping(videoId: string) {
   console.log("Using enhanced web scraping for video:", videoId);
   
-  // Try multiple YouTube URL formats with different user agents
   const attempts = [
     {
       url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -108,70 +213,46 @@ async function enhancedWebScraping(videoId: string) {
     },
     {
       url: `https://m.youtube.com/watch?v=${videoId}`,
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
-    },
-    {
-      url: `https://youtube.com/watch?v=${videoId}`,
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
     }
   ];
 
   for (const attempt of attempts) {
     try {
-      console.log(`Trying URL: ${attempt.url} with user agent: ${attempt.userAgent.substring(0, 50)}...`);
+      console.log(`Scraping: ${attempt.url}`);
       
       const response = await fetch(attempt.url, {
         headers: {
           'User-Agent': attempt.userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
           'Cache-Control': 'no-cache'
         }
       });
       
-      if (!response.ok) {
-        console.log(`Failed to fetch ${attempt.url}: ${response.status}`);
-        continue;
-      }
+      if (!response.ok) continue;
       
       const html = await response.text();
-      console.log(`Fetched HTML from ${attempt.url}, length: ${html.length}`);
+      console.log(`Fetched HTML, length: ${html.length}`);
       
-      // Try enhanced extraction methods
-      const extractionMethods = [
-        () => extractFromYtInitialPlayerResponse(html),
-        () => extractFromPlayerResponse(html),
-        () => extractFromCaptionTracks(html),
-        () => extractFromScriptTags(html)
-      ];
+      // Enhanced caption URL extraction
+      const captionUrls = extractCaptionUrls(html);
+      console.log(`Found ${captionUrls.length} caption URLs`);
       
-      for (const method of extractionMethods) {
+      for (const url of captionUrls) {
         try {
-          const result = await method();
-          if (result) {
-            console.log("Successfully extracted transcript");
-            return result;
-          }
-        } catch (error) {
-          console.log("Extraction method failed:", error);
-          continue;
+          const result = await fetchFromCaptionUrl(url);
+          if (result) return result;
+        } catch (e) {
+          console.log(`Caption URL failed: ${e.message}`);
         }
       }
       
     } catch (error) {
-      console.log(`Error with URL ${attempt.url}:`, error);
-      continue;
+      console.log(`Scraping attempt failed: ${error.message}`);
     }
   }
 
-  // If all methods fail, return appropriate message
   return new Response(
     JSON.stringify({ 
       transcript: "No transcript available for this video. The video may not have captions enabled or may be restricted.",
@@ -184,161 +265,32 @@ async function enhancedWebScraping(videoId: string) {
   );
 }
 
-async function extractFromYtInitialPlayerResponse(html: string) {
+function extractCaptionUrls(html: string): string[] {
+  const urls = new Set<string>();
+  
+  // Multiple patterns to find caption URLs
   const patterns = [
-    /var ytInitialPlayerResponse = ({.+?});/s,
-    /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*(?:,|\})/s,
-    /window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});/s,
-    /ytInitialPlayerResponse\s*=\s*({.+?});/s
+    /"baseUrl":"([^"]*api\/timedtext[^"]*)"/g,
+    /'baseUrl':'([^']*api\/timedtext[^']*)'/g,
+    /baseUrl["']?\s*:\s*["']([^"']*api\/timedtext[^"']*)/g,
+    /"url":"([^"]*api\/timedtext[^"]*)"/g,
+    /captionTracks.*?"baseUrl":"([^"]*)/g
   ];
   
   for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match) {
-      try {
-        console.log("Found ytInitialPlayerResponse pattern");
-        let jsonStr = match[1];
-        
-        // Clean up common issues in JSON
-        jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-        
-        const playerResponse = JSON.parse(jsonStr);
-        const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        
-        if (captionTracks && captionTracks.length > 0) {
-          console.log(`Found ${captionTracks.length} caption tracks`);
-          return await processCaptionTracks(captionTracks);
-        }
-      } catch (e) {
-        console.log("Failed to parse ytInitialPlayerResponse:", e.message);
-        continue;
-      }
-    }
-  }
-  return null;
-}
-
-async function extractFromPlayerResponse(html: string) {
-  // Look for embedded player response in script tags with better regex
-  const scriptRegex = /<script[^>]*>([^<]*ytInitialPlayerResponse[^<]*)<\/script>/gs;
-  let match;
-  
-  while ((match = scriptRegex.exec(html)) !== null) {
-    try {
-      const scriptContent = match[1];
-      const playerMatches = [
-        /ytInitialPlayerResponse["']?\s*[:=]\s*({[^;]+})/,
-        /"ytInitialPlayerResponse"\s*:\s*({[^}]+})/,
-        /ytInitialPlayerResponse\s*=\s*({[^;]+})/
-      ];
-      
-      for (const playerPattern of playerMatches) {
-        const playerMatch = scriptContent.match(playerPattern);
-        if (playerMatch) {
-          try {
-            const playerResponse = JSON.parse(playerMatch[1]);
-            const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-            
-            if (captionTracks && captionTracks.length > 0) {
-              console.log(`Found ${captionTracks.length} caption tracks in script`);
-              return await processCaptionTracks(captionTracks);
-            }
-          } catch (e) {
-            continue;
-          }
-        }
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-  return null;
-}
-
-async function extractFromCaptionTracks(html: string) {
-  // Enhanced direct search for caption track URLs
-  const captionUrlPatterns = [
-    /"baseUrl":"([^"]*\/api\/timedtext[^"]*)"/g,
-    /'baseUrl':'([^']*\/api\/timedtext[^']*)'/g,
-    /baseUrl["']?\s*:\s*["']([^"']*\/api\/timedtext[^"']*)/g
-  ];
-  
-  const urls = new Set();
-  
-  for (const pattern of captionUrlPatterns) {
     let match;
     while ((match = pattern.exec(html)) !== null) {
-      const url = match[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
-      urls.add(url);
-    }
-  }
-  
-  console.log(`Found ${urls.size} potential caption URLs`);
-  
-  for (const url of urls) {
-    try {
-      const result = await fetchFromCaptionUrl(url as string);
-      if (result) return result;
-    } catch (e) {
-      continue;
-    }
-  }
-  
-  return null;
-}
-
-async function extractFromScriptTags(html: string) {
-  // Extract all script tags and look for caption data
-  const scriptTagRegex = /<script[^>]*>([^<]+)<\/script>/gs;
-  let match;
-  
-  while ((match = scriptTagRegex.exec(html)) !== null) {
-    const scriptContent = match[1];
-    
-    // Look for timedtext URLs in any script content
-    const timedtextRegex = /(https?:\/\/[^"'\s]*\/api\/timedtext[^"'\s]*)/g;
-    let urlMatch;
-    
-    while ((urlMatch = timedtextRegex.exec(scriptContent)) !== null) {
-      try {
-        const url = urlMatch[1].replace(/\\u0026/g, '&').replace(/\\/g, '');
-        console.log(`Found timedtext URL in script: ${url}`);
-        const result = await fetchFromCaptionUrl(url);
-        if (result) return result;
-      } catch (e) {
-        continue;
-      }
-    }
-  }
-  
-  return null;
-}
-
-async function processCaptionTracks(captionTracks: any[]) {
-  // Prefer English captions, then auto-generated, then any available
-  const priorities = [
-    (track: any) => track.languageCode === 'en' && !track.vssId?.includes('.'),
-    (track: any) => track.languageCode === 'en',
-    (track: any) => track.vssId?.includes('en'),
-    (track: any) => track.name?.simpleText?.toLowerCase().includes('english'),
-    (track: any) => !track.vssId?.includes('.'), // Non-auto-generated
-    () => true // Any track
-  ];
-  
-  for (const priorityFilter of priorities) {
-    const filteredTracks = captionTracks.filter(priorityFilter);
-    if (filteredTracks.length > 0) {
-      console.log(`Trying ${filteredTracks.length} tracks with current priority`);
-      for (const track of filteredTracks) {
-        if (track.baseUrl) {
-          const result = await fetchFromCaptionUrl(track.baseUrl);
-          if (result) return result;
+      let url = match[1];
+      if (url) {
+        url = url.replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/\\/g, '');
+        if (url.includes('timedtext')) {
+          urls.add(url);
         }
       }
     }
   }
   
-  return null;
+  return Array.from(urls);
 }
 
 async function fetchFromCaptionUrl(baseUrl: string) {
@@ -349,48 +301,48 @@ async function fetchFromCaptionUrl(baseUrl: string) {
       captionUrl = `https://www.youtube.com${captionUrl}`;
     }
     
-    // Ensure we request WebVTT format
+    // Ensure we request VTT format
     const url = new URL(captionUrl);
     url.searchParams.set('fmt', 'vtt');
     url.searchParams.set('tlang', 'en');
     
-    console.log(`Fetching captions from: ${url.toString()}`);
+    console.log(`Fetching captions from: ${url.toString().substring(0, 100)}...`);
     
-    const captionResponse = await fetch(url.toString(), {
+    const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/vtt,text/plain,*/*',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/vtt,text/plain,*/*'
       }
     });
     
-    if (!captionResponse.ok) {
-      console.log(`Caption fetch failed: ${captionResponse.status}`);
-      return null;
-    }
+    if (!response.ok) return null;
     
-    const captionContent = await captionResponse.text();
-    console.log(`Caption content length: ${captionContent.length}`);
+    const content = await response.text();
+    if (!content || content.length < 50) return null;
     
-    if (!captionContent || captionContent.length < 50) {
-      console.log("Caption content too short or empty");
-      return null;
-    }
+    return await processTranscriptContent(content, 'web-scraping');
     
+  } catch (error) {
+    console.error("Caption URL fetch failed:", error);
+    return null;
+  }
+}
+
+async function processTranscriptContent(content: string, source: string) {
+  try {
     let transcript = [];
     
-    // Enhanced parsing for WebVTT format
-    if (captionContent.includes('WEBVTT') || captionContent.includes('-->')) {
-      transcript = parseWebVTT(captionContent);
-    } else if (captionContent.includes('<text')) {
-      transcript = parseXML(captionContent);
-    } else {
-      // Try to parse as plain text with timestamps
-      transcript = parseTimestampedText(captionContent);
+    if (content.includes('WEBVTT') || content.includes('-->')) {
+      transcript = parseWebVTT(content);
+    } else if (content.includes('<text')) {
+      transcript = parseXML(content);
+    } else if (typeof content === 'string' && content.length > 0) {
+      // Try to parse as simple text
+      transcript = parseSimpleText(content);
     }
     
     if (transcript.length === 0) {
-      console.log("No transcript segments extracted");
+      console.log("No transcript segments extracted from content");
       return null;
     }
     
@@ -402,7 +354,7 @@ async function fetchFromCaptionUrl(baseUrl: string) {
       })
       .join("\n");
 
-    console.log(`Successfully extracted ${transcript.length} transcript segments`);
+    console.log(`Successfully extracted ${transcript.length} transcript segments via ${source}`);
     
     return new Response(
       JSON.stringify({ 
@@ -411,7 +363,7 @@ async function fetchFromCaptionUrl(baseUrl: string) {
           segments: transcript.length,
           duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
           hasTimestamps: true,
-          source: 'web-scraping'
+          source: source
         }
       }),
       {
@@ -421,7 +373,7 @@ async function fetchFromCaptionUrl(baseUrl: string) {
     );
     
   } catch (error) {
-    console.error("Caption URL fetch failed:", error);
+    console.error("Error processing transcript content:", error);
     return null;
   }
 }
@@ -434,47 +386,29 @@ function parseWebVTT(content: string) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     
-    // Skip empty lines, WebVTT header, and metadata
     if (!line || line === 'WEBVTT' || line.startsWith('Kind:') || line.startsWith('Language:') || line.startsWith('NOTE')) {
       continue;
     }
     
-    // Enhanced timestamp detection for WebVTT
-    const timestampPatterns = [
-      /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/,
-      /^(\d{1,2}:\d{2}\.\d{3})\s+-->\s+(\d{1,2}:\d{2}\.\d{3})/,
-      /^(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})/
-    ];
-    
-    let timestampMatch = null;
-    for (const pattern of timestampPatterns) {
-      timestampMatch = line.match(pattern);
-      if (timestampMatch) break;
-    }
+    const timestampMatch = line.match(/^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/);
     
     if (timestampMatch) {
-      // Save previous cue if exists
       if (currentCue && currentCue.text.trim()) {
         transcript.push(currentCue);
       }
       
-      // Start new cue
       currentCue = {
         start: parseWebVTTTime(timestampMatch[1]),
         end: parseWebVTTTime(timestampMatch[2]),
         text: ''
       };
     } else if (currentCue && line) {
-      // Clean and process text
       let cleanText = line
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .replace(/<[^>]*>/g, '') // Remove HTML tags
-        .replace(/\{[^}]*\}/g, '') // Remove WebVTT styling
+        .replace(/<[^>]*>/g, '')
+        .replace(/\{[^}]*\}/g, '')
         .trim();
       
       if (cleanText) {
@@ -483,7 +417,6 @@ function parseWebVTT(content: string) {
     }
   }
   
-  // Add the last cue
   if (currentCue && currentCue.text.trim()) {
     transcript.push(currentCue);
   }
@@ -503,9 +436,6 @@ function parseXML(content: string) {
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, ' ')
       .trim();
     
     if (text) {
@@ -520,39 +450,34 @@ function parseXML(content: string) {
   return transcript;
 }
 
-function parseTimestampedText(content: string) {
+function parseSimpleText(content: string) {
   const transcript = [];
   const lines = content.split('\n');
+  let timeOffset = 0;
   
   for (const line of lines) {
-    // Try to extract timestamps from various formats
-    const timestampPattern = /(\d{1,2}:\d{2}(?:\.\d{3})?)\s*-\s*(\d{1,2}:\d{2}(?:\.\d{3})?)\s*(.+)/;
-    const match = line.match(timestampPattern);
-    
-    if (match) {
+    const cleanLine = line.trim();
+    if (cleanLine && !cleanLine.startsWith('WEBVTT') && cleanLine.length > 5) {
       transcript.push({
-        start: parseSimpleTime(match[1]),
-        end: parseSimpleTime(match[2]),
-        text: match[3].trim()
+        start: timeOffset,
+        end: timeOffset + 5, // 5 second segments
+        text: cleanLine
       });
+      timeOffset += 5;
     }
   }
   
   return transcript;
 }
 
-// Helper function to format time for YouTube Transcript API response
 function formatTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Enhanced helper function to parse WebVTT time format with milliseconds
 function parseWebVTTTime(timeString: string): number {
-  // Handle both comma and dot as decimal separator
   timeString = timeString.replace(',', '.');
-  
   const parts = timeString.split(':');
   let hours = 0, minutes = 0, seconds = 0;
   
@@ -563,21 +488,11 @@ function parseWebVTTTime(timeString: string): number {
   } else if (parts.length === 2) {
     minutes = parseInt(parts[0], 10);
     seconds = parseFloat(parts[1]);
-  } else {
-    seconds = parseFloat(timeString);
   }
   
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function parseSimpleTime(timeString: string): number {
-  const parts = timeString.split(':');
-  const minutes = parseInt(parts[0], 10);
-  const seconds = parseFloat(parts[1] || '0');
-  return minutes * 60 + seconds;
-}
-
-// Enhanced helper function to format time with milliseconds
 function formatTimeWithMilliseconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
