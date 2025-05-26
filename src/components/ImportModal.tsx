@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ import { ContentTypeSelector } from "./import/ContentTypeSelector";
 import { UrlInput } from "./import/UrlInput";
 import { EnhancedVideoPreview } from "./import/EnhancedVideoPreview";
 import { ProcessingStatus } from "./import/ProcessingStatus";
-import { TranscriptionService } from "@/lib/transcriptionService";
+import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
 
 interface ImportModalProps {
   open: boolean;
@@ -60,26 +61,37 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setCurrentStep("preview");
     
     try {
-      const mediaType = TranscriptionService.detectMediaType(url);
+      // Check if it's a YouTube URL
+      const videoId = VideoNoteProcessor.extractVideoId(url);
       
-      if (mediaType === 'youtube') {
-        const videoId = TranscriptionService.extractVideoId(url);
+      if (videoId) {
+        console.log("Processing YouTube video:", videoId);
         
-        if (videoId) {
-          // Fetch YouTube metadata
-          const metadataResult = await TranscriptionService.getYouTubeMetadata(videoId);
-          setMetadata(metadataResult);
-          setThumbnail(metadataResult.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-          
+        // Process the video to get metadata and thumbnail
+        const result = await VideoNoteProcessor.processVideo(videoId, {
+          fetchMetadata: true,
+          fetchTranscript: false // Don't fetch transcript yet, just preview
+        });
+        
+        if (result.success && result.metadata) {
+          setMetadata(result.metadata);
+          setThumbnail(result.metadata.thumbnail || VideoNoteProcessor.generateThumbnailUrl(videoId));
           toast.success("Preview loaded successfully!");
         } else {
-          toast.error("Invalid YouTube URL. Could not extract video ID.");
+          // Fallback if metadata fetch fails
+          setThumbnail(VideoNoteProcessor.generateThumbnailUrl(videoId));
+          setMetadata({ 
+            title: `YouTube Video ${videoId}`,
+            author: 'Unknown',
+            duration: 'Unknown'
+          });
+          toast.info("Preview loaded with limited metadata.");
         }
       } else {
-        // For other media types, show a placeholder
+        // For non-YouTube URLs, show a placeholder
         setThumbnail("https://placehold.co/600x400/eee/999?text=Media+Preview");
-        setMetadata({ title: `${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} Content` });
-        toast.info(`${mediaType} content detected. Ready for transcription.`);
+        setMetadata({ title: "Media Content" });
+        toast.info("Media content detected. Ready for transcription.");
       }
     } catch (error) {
       console.error("Error fetching preview:", error);
@@ -96,33 +108,42 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
     setProgress(20);
     
     try {
-      // Detect media type and get basic info
-      const mediaType = TranscriptionService.detectMediaType(url);
-      let noteTitle = metadata?.title || `Imported ${mediaType}`;
+      const videoId = VideoNoteProcessor.extractVideoId(url);
+      
+      if (!videoId) {
+        throw new Error('Invalid YouTube URL. Could not extract video ID.');
+      }
       
       setProgress(40);
       
-      // Transcribe the content
-      console.log("Starting transcription...");
-      const transcriptionResult = await TranscriptionService.transcribeWithFallback(url);
+      // Process the video to get transcript and metadata
+      console.log("Processing video for import:", videoId);
+      const result = await VideoNoteProcessor.processVideo(videoId, {
+        fetchMetadata: true,
+        fetchTranscript: true,
+        generateSummary: false // We'll handle AI processing separately
+      });
       
-      if (!transcriptionResult.success) {
-        throw new Error(transcriptionResult.error || 'Transcription failed');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process video');
       }
       
-      setTranscript(transcriptionResult.text || '');
+      let noteTitle = result.metadata?.title || `YouTube Video ${videoId}`;
+      let finalThumbnail = result.metadata?.thumbnail || thumbnail || VideoNoteProcessor.generateThumbnailUrl(videoId);
+      
       setProgress(70);
       
       // Process with AI if options are enabled
       let finalContent = "";
       const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
       
-      if (needsAIProcessing && transcriptionResult.text) {
+      if (needsAIProcessing && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
         try {
+          console.log("Processing content with DeepSeek AI...");
           const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
             body: { 
-              content: transcriptionResult.text, 
-              type: mediaType,
+              content: result.transcript, 
+              type: 'video',
               options: {
                 summary: enableSummary,
                 highlights: enableHighlights,
@@ -134,10 +155,10 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           if (aiData?.processedContent) {
             finalContent = `# ${noteTitle}\n\n` +
               `**Source:** ${url}\n` +
-              `**Provider:** ${transcriptionResult.provider}\n` +
-              `**Duration:** ${metadata?.duration || 'Unknown'}\n\n` +
+              `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
+              `**Duration:** ${result.metadata?.duration || 'Unknown'}\n\n` +
               `${aiData.processedContent}\n\n` +
-              `## Original Transcript\n\n${transcriptionResult.text}`;
+              `## Original Transcript\n\n${result.transcript}`;
           }
         } catch (error) {
           console.error("DeepSeek AI processing failed:", error);
@@ -149,9 +170,9 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       if (!finalContent) {
         finalContent = `# ${noteTitle}\n\n` +
           `**Source:** ${url}\n` +
-          `**Provider:** ${transcriptionResult.provider || 'Unknown'}\n` +
-          `**Duration:** ${metadata?.duration || 'Unknown'}\n\n` +
-          `## Transcript\n\n${transcriptionResult.text || 'Transcription failed'}`;
+          `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
+          `**Duration:** ${result.metadata?.duration || 'Unknown'}\n\n` +
+          `## Transcript\n\n${result.transcript || 'Transcription not available'}`;
       }
       
       setProgress(90);
@@ -164,7 +185,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           content: finalContent,
           user_id: user.id,
           source_url: url,
-          thumbnail: thumbnail,
+          thumbnail: finalThumbnail,
           is_transcription: true,
         })
         .select()
@@ -181,17 +202,17 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       queryClient.invalidateQueries({ queryKey: ['notes'] });
       
       // Call the onImport handler
-      onImport(url, mediaType);
+      onImport(url, 'video');
       
       const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-      if (transcriptionResult.text) {
+      if (result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
         if (hasAIProcessing) {
-          toast.success(`Content imported with DeepSeek AI analysis! (via ${transcriptionResult.provider})`);
+          toast.success("Content imported with DeepSeek AI analysis!");
         } else {
-          toast.success(`Content transcribed and imported! (via ${transcriptionResult.provider})`);
+          toast.success("Content transcribed and imported!");
         }
       } else {
-        toast.success("Content imported (transcription not available)!");
+        toast.success("Video imported (transcript not available)!");
       }
       
       // Close modal after completion
@@ -228,7 +249,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            Import from YouTube, podcasts, or audio/video files with automatic transcription using Podsqueeze, Whisper, or Riverside.fm APIs.
+            Import from YouTube with automatic transcription and thumbnail extraction.
           </DialogDescription>
         </DialogHeader>
         
@@ -237,7 +258,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
         <div className="grid gap-6 py-4">
           <div className="grid gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="url">Media URL</Label>
+              <Label htmlFor="url">YouTube URL</Label>
               <UrlInput 
                 url={url}
                 onChange={handleUrlChange}

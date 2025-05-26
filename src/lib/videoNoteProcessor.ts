@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoProcessingOptions {
@@ -15,6 +16,7 @@ export interface VideoProcessingResult {
     duration: string;
     viewCount?: string;
     description?: string;
+    thumbnail?: string;
   };
   transcript?: string;
   summary?: string;
@@ -22,23 +24,6 @@ export interface VideoProcessingResult {
 }
 
 export class VideoNoteProcessor {
-  private static async callEnhancedProcessor(action: string, videoId: string, options?: any): Promise<any> {
-    try {
-      const { data, error } = await supabase.functions.invoke('enhanced-youtube-processor', {
-        body: { videoId, action, options }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      console.error(`Error calling enhanced processor with action ${action}:`, error);
-      throw error;
-    }
-  }
-
   static async processVideo(
     videoId: string, 
     options: VideoProcessingOptions = {}
@@ -56,34 +41,53 @@ export class VideoNoteProcessor {
       // Fetch metadata if requested
       if (fetchMetadata) {
         try {
-          const metadataResult = await this.callEnhancedProcessor('fetch_metadata', videoId);
-          if (metadataResult.success) {
-            result.metadata = metadataResult.metadata;
+          console.log(`Fetching metadata for video: ${videoId}`);
+          const { data: metadataResult, error: metadataError } = await supabase.functions.invoke('youtube-metadata', {
+            body: { videoId }
+          });
+          
+          if (metadataError) {
+            console.warn('Failed to fetch metadata:', metadataError);
+          } else if (metadataResult) {
+            result.metadata = {
+              title: metadataResult.title || `YouTube Video ${videoId}`,
+              author: metadataResult.author || 'Unknown',
+              duration: metadataResult.duration || 'Unknown',
+              viewCount: metadataResult.viewCount,
+              description: metadataResult.description,
+              thumbnail: metadataResult.thumbnail || this.generateThumbnailUrl(videoId)
+            };
+            console.log('Metadata fetched successfully:', result.metadata);
           }
         } catch (error) {
           console.warn('Failed to fetch metadata:', error);
+          // Provide fallback metadata
+          result.metadata = {
+            title: `YouTube Video ${videoId}`,
+            author: 'Unknown',
+            duration: 'Unknown',
+            thumbnail: this.generateThumbnailUrl(videoId)
+          };
         }
       }
 
       // Fetch transcript if requested - this is the priority
       if (fetchTranscript) {
         try {
-          // Try the enhanced processor first
-          const transcriptResult = await this.callEnhancedProcessor('fetch_transcript', videoId);
-          if (transcriptResult.success && transcriptResult.transcript) {
+          console.log(`Fetching transcript for video: ${videoId}`);
+          const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
+            body: { videoId }
+          });
+          
+          if (transcriptError) {
+            console.error('Error fetching transcript:', transcriptError);
+            result.transcript = "Transcript not available for this video. You can add your own notes here.";
+          } else if (transcriptResult?.transcript) {
             result.transcript = transcriptResult.transcript;
+            console.log(`Transcript fetched successfully: ${transcriptResult.transcript.length} characters`);
           } else {
-            // Fallback to the original transcript function
-            const fallbackResult = await supabase.functions.invoke('fetch-youtube-transcript', {
-              body: { videoId }
-            });
-            
-            if (fallbackResult.data?.transcript) {
-              result.transcript = fallbackResult.data.transcript;
-            } else {
-              console.warn('No transcript available from either method');
-              result.transcript = "Transcript not available for this video. You can add your own notes here.";
-            }
+            console.warn('No transcript returned from function');
+            result.transcript = "Transcript not available for this video. You can add your own notes here.";
           }
         } catch (error) {
           console.error('Error fetching transcript:', error);
@@ -91,9 +95,10 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Generate AI summary if requested (keeping this for future use)
+      // Generate AI summary if requested
       if (generateSummary && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
         try {
+          console.log('Generating AI summary...');
           const summaryResult = await supabase.functions.invoke('process-content-with-deepseek', {
             body: {
               content: result.transcript,
@@ -108,6 +113,7 @@ export class VideoNoteProcessor {
 
           if (summaryResult.data?.processedContent) {
             result.summary = summaryResult.data.processedContent;
+            console.log('AI summary generated successfully');
           }
         } catch (error) {
           console.warn('Failed to generate AI summary:', error);
