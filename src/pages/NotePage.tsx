@@ -11,12 +11,12 @@ import { useNote, useUpdateNote, useDeleteNote } from "@/lib/api";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { TranscriptPanel } from "@/components/video/TranscriptPanel";
 import { AISummaryPanel } from "@/components/video/AISummaryPanel";
+import { AIChatPanel } from "@/components/AIChatPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { getYoutubeVideoId } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExportPanel } from "@/components/ExportPanel";
-import { AIChatPanel } from "@/components/AIChatPanel";
 
 export default function NotePage() {
   const { id } = useParams<{ id: string }>();
