@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,7 +119,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       
       if (needsAIProcessing && transcriptionResult.text) {
         try {
-          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
+          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-openai', {
             body: { 
               content: transcriptionResult.text, 
               type: mediaType,

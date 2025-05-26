@@ -29,8 +29,8 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
     setIsProcessing(true);
 
     try {
-      // Call the DeepSeek processing function
-      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
+      // Call the OpenAI processing function instead of DeepSeek
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-openai', {
         body: { 
           content: content, 
           type: "text",
