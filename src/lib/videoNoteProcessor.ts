@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoProcessingOptions {
@@ -38,7 +37,7 @@ export class VideoNoteProcessor {
 
       let result: VideoProcessingResult = { success: true };
 
-      // Fetch metadata if requested
+      // Fetch metadata if requested - this should now work with the API key
       if (fetchMetadata) {
         try {
           console.log(`Fetching metadata for video: ${videoId}`);
@@ -47,8 +46,15 @@ export class VideoNoteProcessor {
           });
           
           if (metadataError) {
-            console.warn('Failed to fetch metadata:', metadataError);
-          } else if (metadataResult) {
+            console.warn('Metadata fetch error:', metadataError);
+            // Provide enhanced fallback metadata
+            result.metadata = {
+              title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
+              author: 'Unknown',
+              duration: 'Unknown',
+              thumbnail: this.generateThumbnailUrl(videoId)
+            };
+          } else if (metadataResult && !metadataResult.error) {
             result.metadata = {
               title: metadataResult.title || `YouTube Video ${videoId}`,
               author: metadataResult.author || 'Unknown',
@@ -58,12 +64,21 @@ export class VideoNoteProcessor {
               thumbnail: metadataResult.thumbnail || this.generateThumbnailUrl(videoId)
             };
             console.log('Metadata fetched successfully:', result.metadata);
+          } else {
+            // API returned an error
+            console.warn('API returned error:', metadataResult?.error);
+            result.metadata = {
+              title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
+              author: 'Unknown',
+              duration: 'Unknown',
+              thumbnail: this.generateThumbnailUrl(videoId)
+            };
           }
         } catch (error) {
           console.warn('Failed to fetch metadata:', error);
-          // Provide fallback metadata
+          // Enhanced fallback with HTML scraping attempt
           result.metadata = {
-            title: `YouTube Video ${videoId}`,
+            title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
             author: 'Unknown',
             duration: 'Unknown',
             thumbnail: this.generateThumbnailUrl(videoId)
@@ -71,7 +86,7 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Fetch transcript if requested - this is the priority
+      // Fetch transcript if requested
       if (fetchTranscript) {
         try {
           console.log(`Fetching transcript for video: ${videoId}`);
@@ -83,7 +98,6 @@ export class VideoNoteProcessor {
             console.error('Error fetching transcript:', transcriptError);
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
           } else if (transcriptResult?.transcript) {
-            // Ensure we have actual content, not just metadata
             const transcriptContent = transcriptResult.transcript.trim();
             if (transcriptContent && transcriptContent.length > 50 && !transcriptContent.includes('Transcript not available')) {
               result.transcript = transcriptContent;
@@ -137,6 +151,52 @@ export class VideoNoteProcessor {
     }
   }
 
+  // New method to fetch video title from HTML as fallback
+  static async fetchVideoTitleFromHTML(videoId: string): Promise<string | null> {
+    try {
+      const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      
+      if (!response.ok) return null;
+      
+      const html = await response.text();
+      
+      // Try to extract title from various meta tags
+      const patterns = [
+        /<meta property="og:title" content="([^"]*)"[^>]*>/,
+        /<meta name="title" content="([^"]*)"[^>]*>/,
+        /<title>([^<]*)<\/title>/
+      ];
+      
+      for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (match && match[1]) {
+          let title = match[1]
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/ - YouTube$/, '')
+            .trim();
+          
+          if (title && title.length > 0) {
+            console.log('Extracted title from HTML:', title);
+            return title;
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('Failed to fetch title from HTML:', error);
+      return null;
+    }
+  }
+
   static async saveVideoNote(noteData: {
     id?: string;
     title: string;
@@ -147,7 +207,6 @@ export class VideoNoteProcessor {
     user_id: string;
   }): Promise<{ success: boolean; noteId?: string; error?: string }> {
     try {
-      // Use Supabase client directly for better error handling
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         throw new Error('User not authenticated');
