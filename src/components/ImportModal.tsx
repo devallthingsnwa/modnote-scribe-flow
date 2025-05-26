@@ -65,7 +65,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       const videoId = VideoNoteProcessor.extractVideoId(url);
       
       if (videoId) {
-        console.log("Processing YouTube video:", videoId);
+        console.log("Processing YouTube video for preview:", videoId);
         
         // Process the video to get metadata and thumbnail
         const result = await VideoNoteProcessor.processVideo(videoId, {
@@ -133,11 +133,16 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       
       setProgress(70);
       
-      // Process with AI if options are enabled
+      // Ensure we have valid transcript content
       let finalContent = "";
+      const hasValidTranscript = result.transcript && 
+        result.transcript !== "Transcript not available for this video. You can add your own notes here." &&
+        result.transcript.trim().length > 50;
+      
+      // Process with AI if options are enabled and we have valid transcript
       const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
       
-      if (needsAIProcessing && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
+      if (needsAIProcessing && hasValidTranscript) {
         try {
           console.log("Processing content with DeepSeek AI...");
           const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
@@ -153,26 +158,38 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
           });
 
           if (aiData?.processedContent) {
-            finalContent = `# ${noteTitle}\n\n` +
+            finalContent = `# 🎥 ${noteTitle}\n\n` +
               `**Source:** ${url}\n` +
               `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
               `**Duration:** ${result.metadata?.duration || 'Unknown'}\n\n` +
               `${aiData.processedContent}\n\n` +
-              `## Original Transcript\n\n${result.transcript}`;
+              `## 📝 Original Transcript\n\n${result.transcript}`;
           }
         } catch (error) {
           console.error("DeepSeek AI processing failed:", error);
-          toast.warning("DeepSeek AI processing failed, importing raw transcript instead.");
+          toast.warning("AI processing failed, importing raw transcript instead.");
         }
       }
       
-      // Fallback to raw transcript
+      // Fallback to formatted transcript
       if (!finalContent) {
-        finalContent = `# ${noteTitle}\n\n` +
-          `**Source:** ${url}\n` +
-          `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
-          `**Duration:** ${result.metadata?.duration || 'Unknown'}\n\n` +
-          `## Transcript\n\n${result.transcript || 'Transcription not available'}`;
+        if (hasValidTranscript) {
+          finalContent = `# 🎥 ${noteTitle}\n\n` +
+            `**Source:** ${url}\n` +
+            `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
+            `**Duration:** ${result.metadata?.duration || 'Unknown'}\n` +
+            `**Type:** Video Transcript\n\n` +
+            `---\n\n` +
+            `## 📝 Transcript\n\n${result.transcript}`;
+        } else {
+          finalContent = `# 🎥 ${noteTitle}\n\n` +
+            `**Source:** ${url}\n` +
+            `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
+            `**Duration:** ${result.metadata?.duration || 'Unknown'}\n` +
+            `**Type:** Video Note\n\n` +
+            `---\n\n` +
+            `## 📝 Notes\n\nTranscript not available for this video. You can add your own notes here.`;
+        }
       }
       
       setProgress(90);
@@ -205,14 +222,14 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       onImport(url, 'video');
       
       const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-      if (result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
+      if (hasValidTranscript) {
         if (hasAIProcessing) {
-          toast.success("Content imported with DeepSeek AI analysis!");
+          toast.success("Video imported with transcript and AI analysis!");
         } else {
-          toast.success("Content transcribed and imported!");
+          toast.success("Video imported with transcript!");
         }
       } else {
-        toast.success("Video imported (transcript not available)!");
+        toast.success("Video imported (transcript not available - you can add your own notes)!");
       }
       
       // Close modal after completion
@@ -243,7 +260,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
-            <span>Import Multimedia Content</span>
+            <span>Import YouTube Content</span>
             <Badge variant="secondary" className="text-xs">
               Auto-Transcription
             </Badge>
@@ -286,6 +303,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
               onSummaryChange={setEnableSummary}
               onHighlightsChange={setEnableHighlights}
               onKeyPointsChange={setEnableKeyPoints}
+              metadata={metadata}
             />
           )}
           
@@ -302,7 +320,7 @@ export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) 
             disabled={!url || currentStep === "processing" || currentStep === "complete" || !user}
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
           >
-            {currentStep === "processing" ? "Transcribing..." : "Import & Transcribe"}
+            {currentStep === "processing" ? "Importing..." : "Import & Transcribe"}
           </Button>
         </DialogFooter>
       </DialogContent>

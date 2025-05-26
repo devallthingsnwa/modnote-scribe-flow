@@ -83,8 +83,15 @@ export class VideoNoteProcessor {
             console.error('Error fetching transcript:', transcriptError);
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
           } else if (transcriptResult?.transcript) {
-            result.transcript = transcriptResult.transcript;
-            console.log(`Transcript fetched successfully: ${transcriptResult.transcript.length} characters`);
+            // Ensure we have actual content, not just metadata
+            const transcriptContent = transcriptResult.transcript.trim();
+            if (transcriptContent && transcriptContent.length > 50 && !transcriptContent.includes('Transcript not available')) {
+              result.transcript = transcriptContent;
+              console.log(`Transcript fetched successfully: ${transcriptContent.length} characters`);
+            } else {
+              console.warn('Transcript appears to be empty or invalid');
+              result.transcript = "Transcript not available for this video. You can add your own notes here.";
+            }
           } else {
             console.warn('No transcript returned from function');
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
@@ -95,7 +102,7 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Generate AI summary if requested
+      // Generate AI summary if requested and we have valid transcript
       if (generateSummary && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
         try {
           console.log('Generating AI summary...');
@@ -185,7 +192,7 @@ export class VideoNoteProcessor {
   static generateThumbnailUrl(videoId: string, quality: 'default' | 'medium' | 'high' | 'maxres' = 'maxres'): string {
     const qualityMap = {
       'default': 'default.jpg',
-      'medium': 'mqdefault.jpg',
+      'medium': 'mqdefault.jpg', 
       'high': 'hqdefault.jpg',
       'maxres': 'maxresdefault.jpg'
     };

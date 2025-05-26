@@ -18,7 +18,8 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [showNoteContent, setShowNoteContent] = useState(false); // For mobile view
+  const [showNoteContent, setShowNoteContent] = useState(false);
+  const [isNotesPanelCollapsed, setIsNotesPanelCollapsed] = useState(false);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
 
@@ -38,18 +39,22 @@ export default function Dashboard() {
       title: "Multimedia import complete",
       description: `Your ${type} content has been transcribed and is available in your notes.`,
     });
-    refetch(); // Refresh notes list
+    refetch();
   };
 
   const handleNoteDeleted = () => {
     setSelectedNoteId(null);
     setShowNoteContent(false);
-    refetch(); // Refresh notes list
+    refetch();
   };
 
   const handleBackToList = () => {
     setShowNoteContent(false);
     setSelectedNoteId(null);
+  };
+
+  const toggleNotesPanel = () => {
+    setIsNotesPanelCollapsed(!isNotesPanelCollapsed);
   };
   
   const filteredNotes = notes?.filter(note => {
@@ -115,10 +120,11 @@ export default function Dashboard() {
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     isLoading={isLoading}
+                    onImport={() => setImportModalOpen(true)}
                   />
                 </div>
                 
-                <div className="h-20" /> {/* Space for mobile nav */}
+                <div className="h-20" />
               </div>
             ) : (
               <NoteContentPanel
@@ -129,10 +135,10 @@ export default function Dashboard() {
             )}
           </>
         ) : (
-          /* Desktop: Two-panel layout */
+          /* Desktop: Evernote-style two-panel layout */
           <>
-            {/* Notes List Panel */}
-            <div className="w-80 flex-shrink-0">
+            {/* Left Panel: Notes List */}
+            <div className={`${isNotesPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 transition-all duration-300 border-r border-border`}>
               <NotesListPanel
                 notes={filteredNotes}
                 selectedNoteId={selectedNoteId}
@@ -141,15 +147,20 @@ export default function Dashboard() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 isLoading={isLoading}
+                onImport={() => setImportModalOpen(true)}
+                isCollapsed={isNotesPanelCollapsed}
+                onToggleCollapse={toggleNotesPanel}
               />
             </div>
             
-            {/* Note Content Panel */}
-            <NoteContentPanel
-              noteId={selectedNoteId}
-              onBack={handleBackToList}
-              onNoteDeleted={handleNoteDeleted}
-            />
+            {/* Right Panel: Note Content */}
+            <div className="flex-1 flex flex-col">
+              <NoteContentPanel
+                noteId={selectedNoteId}
+                onBack={handleBackToList}
+                onNoteDeleted={handleNoteDeleted}
+              />
+            </div>
           </>
         )}
       </div>

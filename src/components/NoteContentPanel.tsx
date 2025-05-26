@@ -1,12 +1,13 @@
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, ExternalLink, Save, Trash2, FileText } from "lucide-react";
+import { ChevronLeft, ExternalLink, Save, Trash2, FileText, Video, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { NoteEditor } from "@/components/NoteEditor";
 import { useNote, useUpdateNote, useDeleteNote } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface NoteContentPanelProps {
   noteId: string | null;
@@ -80,17 +81,37 @@ export function NoteContentPanel({ noteId, onBack, onNoteDeleted }: NoteContentP
     }
   };
 
+  const formatNoteContent = (content: string | null, note: any) => {
+    if (!content) return content;
+    
+    // If it's a video transcription, format it nicely
+    if (note?.is_transcription && note?.source_url) {
+      // Add video metadata header if not present
+      if (!content.includes('**Source:**')) {
+        const videoTitle = note.title || 'YouTube Video';
+        const formattedContent = `# 🎥 ${videoTitle}\n\n` +
+          `**Source:** ${note.source_url}\n` +
+          `**Type:** Video Transcript\n\n` +
+          `---\n\n` +
+          `## 📝 Transcript\n\n${content}`;
+        return formattedContent;
+      }
+    }
+    
+    return content;
+  };
+
   if (!noteId) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-muted/20">
-        <div className="text-center space-y-4">
-          <div className="bg-muted rounded-full p-6">
-            <FileText className="h-8 w-8 text-muted-foreground" />
+      <div className="flex-1 flex items-center justify-center bg-muted/5">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="bg-muted/50 rounded-full p-8 mx-auto w-fit">
+            <FileText className="h-12 w-12 text-muted-foreground" />
           </div>
           <div>
-            <p className="text-muted-foreground font-medium">Select a note to view</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">
-              Choose a note from the list to start reading or editing
+            <h3 className="text-lg font-medium text-foreground mb-2">Select a note to view</h3>
+            <p className="text-sm text-muted-foreground">
+              Choose a note from the list to start reading or editing. Your notes will appear here with full formatting and media support.
             </p>
           </div>
         </div>
@@ -126,40 +147,52 @@ export function NoteContentPanel({ noteId, onBack, onNoteDeleted }: NoteContentP
     );
   }
 
+  const formattedContent = formatNoteContent(note.content, note);
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur">
         <div className="px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
+          <div className="flex justify-between items-start">
+            <div className="flex items-start space-x-4 flex-1">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={onBack}
-                className="hover:bg-muted/80 transition-colors md:hidden"
+                className="hover:bg-muted/80 transition-colors md:hidden flex-shrink-0 mt-1"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
               
-              <div className="flex items-center space-x-3">
-                {note.is_transcription && (
-                  <div className="bg-red-500/10 p-2 rounded-lg">
-                    <FileText className="h-4 w-4 text-red-500" />
-                  </div>
-                )}
+              <div className="flex items-start space-x-3 flex-1">
+                {/* Note Type Indicator */}
+                <div className="flex-shrink-0 mt-1">
+                  {note.is_transcription ? (
+                    <div className="bg-red-500/10 p-2 rounded-lg">
+                      <Video className="h-5 w-5 text-red-500" />
+                    </div>
+                  ) : (
+                    <div className="bg-primary/10 p-2 rounded-lg">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
+                </div>
                 
-                <div>
-                  <h1 className="text-xl font-semibold tracking-tight">
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-xl font-semibold tracking-tight line-clamp-2">
                     {note.title || "Untitled Note"}
                   </h1>
                   
-                  {note.source_url && (
-                    <div className="flex items-center mt-1 space-x-2">
+                  <div className="flex items-center mt-2 space-x-2 flex-wrap gap-y-1">
+                    {note.is_transcription && (
                       <Badge variant="secondary" className="text-xs">
-                        <FileText className="h-3 w-3 mr-1" />
-                        Video Note
+                        <Video className="h-3 w-3 mr-1" />
+                        Video Transcript
                       </Badge>
+                    )}
+                    
+                    {note.source_url && (
                       <a 
                         href={note.source_url} 
                         target="_blank" 
@@ -169,14 +202,24 @@ export function NoteContentPanel({ noteId, onBack, onNoteDeleted }: NoteContentP
                         <ExternalLink className="h-3 w-3 mr-1" />
                         View Source
                       </a>
-                    </div>
-                  )}
+                    )}
+                    
+                    {note.tags.length > 0 && (
+                      <div className="flex gap-1 flex-wrap">
+                        {note.tags.map((tag) => (
+                          <Badge key={tag.id} variant="outline" className="text-xs">
+                            {tag.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
             
             {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -201,20 +244,44 @@ export function NoteContentPanel({ noteId, onBack, onNoteDeleted }: NoteContentP
               </Button>
             </div>
           </div>
+
+          {/* Video Thumbnail (if available) */}
+          {note.thumbnail && note.is_transcription && (
+            <div className="mt-4">
+              <Card className="overflow-hidden max-w-md">
+                <div className="relative">
+                  <img 
+                    src={note.thumbnail} 
+                    alt={note.title}
+                    className="w-full h-32 object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                    <div className="bg-white/90 rounded-full p-2">
+                      <Play className="h-6 w-6 text-black" />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        <NoteEditor 
-          initialNote={{
-            id: note.id,
-            title: note.title,
-            content: note.content,
-            tags: note.tags.map(tag => tag.id),
-          }} 
-          onSave={handleSave}
-        />
+        <ScrollArea className="h-full">
+          <div className="p-6">
+            <NoteEditor 
+              initialNote={{
+                id: note.id,
+                title: note.title,
+                content: formattedContent,
+                tags: note.tags.map(tag => tag.id),
+              }} 
+              onSave={handleSave}
+            />
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );
