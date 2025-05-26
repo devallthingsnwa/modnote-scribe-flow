@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +17,7 @@ interface EnhancedVideoPreviewProps {
   onSummaryChange: (checked: boolean) => void;
   onHighlightsChange: (checked: boolean) => void;
   onKeyPointsChange: (checked: boolean) => void;
+  metadata?: any;
 }
 
 export function EnhancedVideoPreview({
@@ -29,14 +29,18 @@ export function EnhancedVideoPreview({
   enableKeyPoints,
   onSummaryChange,
   onHighlightsChange,
-  onKeyPointsChange
+  onKeyPointsChange,
+  metadata
 }: EnhancedVideoPreviewProps) {
   const [activeTab, setActiveTab] = useState("preview");
 
   if (!thumbnail && !transcript) return null;
 
-  // Extract video title from URL or use default
+  // Extract video title from metadata or URL
   const getVideoTitle = () => {
+    if (metadata?.title) {
+      return metadata.title;
+    }
     if (url.includes("youtube.com") || url.includes("youtu.be")) {
       return "YouTube Video Import";
     }
@@ -46,7 +50,7 @@ export function EnhancedVideoPreview({
   const transcriptLines = transcript ? transcript.split('\n') : [];
   const displayLines = transcriptLines.slice(0, 15);
   const hasMoreLines = transcriptLines.length > 15;
-  const estimatedDuration = transcript ? Math.ceil(transcript.length / 1000) : 0;
+  const estimatedDuration = metadata?.duration || (transcript ? Math.ceil(transcript.length / 1000) : 0);
 
   return (
     <Card className="w-full border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20">
@@ -61,10 +65,13 @@ export function EnhancedVideoPreview({
               <div>
                 <h3 className="font-semibold text-lg">{getVideoTitle()}</h3>
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  {estimatedDuration > 0 && (
+                  {metadata?.author && (
+                    <span>by {metadata.author}</span>
+                  )}
+                  {estimatedDuration && (
                     <div className="flex items-center space-x-1">
                       <Clock className="h-3 w-3" />
-                      <span>~{estimatedDuration} min</span>
+                      <span>{typeof estimatedDuration === 'string' ? estimatedDuration : `~${estimatedDuration} min`}</span>
                     </div>
                   )}
                   {transcript && (
@@ -117,6 +124,9 @@ export function EnhancedVideoPreview({
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Video thumbnail loaded successfully
+                    {metadata?.viewCount && (
+                      <span className="ml-2">• {metadata.viewCount} views</span>
+                    )}
                   </div>
                 </div>
               )}
