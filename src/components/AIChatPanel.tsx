@@ -41,7 +41,7 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
       setMessages([{
         id: '1',
         role: 'assistant',
-        content: "Hi! I'm your AI learning assistant. I can help you understand this content better, answer questions, create study guides, or explain complex concepts. What would you like to know?",
+        content: "Hi! I'm your AI learning assistant. I can help you understand this video content better, answer questions about the concepts discussed, create study guides, or explain complex topics. What would you like to know about this content?",
         timestamp: new Date()
       }]);
     }
@@ -64,18 +64,27 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
     try {
       // Prepare context from the note content and chat history
       const context = `
-Note Content:
+Video/Note Content:
 ${content}
 
 Previous conversation:
-${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
+${messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+
+Current question: ${inputMessage.trim()}
 `;
 
       const { data, error } = await supabase.functions.invoke('process-content-with-openai', {
         body: {
           content: context,
           type: "chat",
-          prompt: inputMessage.trim(),
+          prompt: `Based on the video/note content provided, please answer the user's question: "${inputMessage.trim()}". 
+          
+          Provide a helpful, educational response that:
+          - Directly addresses their question
+          - References specific parts of the content when relevant
+          - Explains concepts clearly
+          - Offers additional insights or related information
+          - Maintains a conversational, helpful tone`,
           options: {
             conversational: true,
             helpful: true,
@@ -98,9 +107,19 @@ ${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "I'm sorry, I'm having trouble connecting right now. Please check if your OpenAI API key is configured properly and try again.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
       toast({
         title: "Message failed",
-        description: "Failed to send message. Please try again.",
+        description: "Failed to send message. Please check your API configuration.",
         variant: "destructive",
       });
     } finally {
@@ -123,6 +142,13 @@ ${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
       timestamp: new Date()
     }]);
   };
+
+  const suggestedQuestions = [
+    "Summarize the key points",
+    "Explain the main concepts",
+    "What are the practical applications?",
+    "Create a study guide"
+  ];
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -167,6 +193,28 @@ ${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
             </Badge>
           )}
         </div>
+
+        {/* Suggested Questions */}
+        {messages.length === 1 && content && (
+          <Card className="bg-muted/30 border-dashed">
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground mb-3">Try asking:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {suggestedQuestions.map((question, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8 justify-start"
+                    onClick={() => setInputMessage(question)}
+                  >
+                    {question}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
       
       {/* Chat Messages */}

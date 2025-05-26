@@ -1,7 +1,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText, Download, MessageSquare } from "lucide-react";
+import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText, Download, MessageSquare, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
@@ -22,7 +22,7 @@ export default function NotePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<string>("insights");
+  const [activeTab, setActiveTab] = useState<string>("summary");
   const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
   const playerRef = useRef<any>(null);
   
@@ -108,7 +108,6 @@ export default function NotePage() {
     if (!videoId || !id) return;
     
     try {
-      // Call the fetch-youtube-transcript function
       const { data, error } = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
         method: 'POST',
         headers: {
@@ -123,7 +122,6 @@ export default function NotePage() {
       }
 
       if (data?.transcript) {
-        // Update the note with the new transcript
         updateNoteMutation.mutate({
           id,
           updates: {
@@ -204,8 +202,8 @@ export default function NotePage() {
                           rel="noopener noreferrer"
                           className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center"
                         >
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          View Source
+                          <Youtube className="h-3 w-3 mr-1" />
+                          Watch on YouTube
                         </a>
                       </div>
                     )}
@@ -267,7 +265,7 @@ export default function NotePage() {
             isVideoNote ? (
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 {/* Left Panel: Video + Transcript */}
-                <ResizablePanel defaultSize={50} minSize={30}>
+                <ResizablePanel defaultSize={40} minSize={30}>
                   <div className="h-full flex flex-col bg-gradient-to-b from-background to-muted/10">
                     <div className="p-6 flex-1 overflow-auto space-y-6">
                       {/* Video Player */}
@@ -311,36 +309,36 @@ export default function NotePage() {
                 
                 <ResizableHandle withHandle />
                 
-                {/* Right Panel: AI Insights */}
-                <ResizablePanel defaultSize={50} minSize={30}>
+                {/* Right Panel: AI Analysis */}
+                <ResizablePanel defaultSize={60} minSize={40}>
                   <div className="h-full flex flex-col">
                     <div className="bg-muted/30 px-6 py-3 border-b border-border/50">
                       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="bg-background/50 border border-border/50">
+                        <TabsList className="bg-background/50 border border-border/50 grid w-full grid-cols-4">
                           <TabsTrigger 
-                            value="insights" 
-                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            value="summary" 
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"
                           >
-                            <Clock className="h-4 w-4 mr-2" />
-                            AI Insights
+                            <FileText className="h-4 w-4 mr-2" />
+                            Summary
                           </TabsTrigger>
                           <TabsTrigger 
                             value="chat"
-                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"
                           >
                             <MessageSquare className="h-4 w-4 mr-2" />
                             AI Chat
                           </TabsTrigger>
                           <TabsTrigger 
                             value="notes"
-                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"
                           >
                             <FileText className="h-4 w-4 mr-2" />
                             Notes
                           </TabsTrigger>
                           <TabsTrigger 
                             value="export"
-                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"
                           >
                             <Download className="h-4 w-4 mr-2" />
                             Export
@@ -351,7 +349,7 @@ export default function NotePage() {
                     
                     <div className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/10">
                       <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsContent value="insights" className="m-0 h-full">
+                        <TabsContent value="summary" className="m-0 h-full">
                           <div className="p-6 h-full">
                             <AISummaryPanel
                               noteId={note.id}
