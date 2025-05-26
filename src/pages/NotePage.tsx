@@ -1,7 +1,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText } from "lucide-react";
+import { ChevronLeft, ExternalLink, Save, Trash2, Play, Clock, FileText, Download, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,15 +12,17 @@ import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { TranscriptPanel } from "@/components/video/TranscriptPanel";
 import { AISummaryPanel } from "@/components/video/AISummaryPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { getYoutubeVideoId } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { ExportPanel } from "@/components/ExportPanel";
+import { AIChatPanel } from "@/components/AIChatPanel";
 
 export default function NotePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<string>("editor");
+  const [activeTab, setActiveTab] = useState<string>("insights");
   const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
   const playerRef = useRef<any>(null);
   
@@ -218,6 +220,15 @@ export default function NotePage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
+                      onClick={() => setActiveTab("export")}
+                      className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
                       onClick={() => handleSave({
                         title: note.title,
                         content: note.content,
@@ -254,119 +265,151 @@ export default function NotePage() {
             </div>
           ) : note ? (
             isVideoNote ? (
-              <div className="flex flex-col h-full">
-                <div className="bg-muted/30 px-6 py-3 border-b border-border/50">
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="bg-background/50 border border-border/50">
-                      <TabsTrigger 
-                        value="editor" 
-                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Notes
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="video"
-                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                      >
-                        <Play className="h-4 w-4 mr-2" />
-                        Video & Transcript
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="summary"
-                        className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                      >
-                        <Clock className="h-4 w-4 mr-2" />
-                        AI Summary
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                {/* Left Panel: Video + Transcript */}
+                <ResizablePanel defaultSize={50} minSize={30}>
+                  <div className="h-full flex flex-col bg-gradient-to-b from-background to-muted/10">
+                    <div className="p-6 flex-1 overflow-auto space-y-6">
+                      {/* Video Player */}
+                      <Card className="overflow-hidden border-border/50 shadow-lg">
+                        <CardContent className="p-6">
+                          <VideoPlayer 
+                            videoId={videoId || ''} 
+                            playerRef={playerRef}
+                            onTimeUpdate={setCurrentTimestamp}
+                          />
+                        </CardContent>
+                      </Card>
+                      
+                      {/* Interactive Transcript */}
+                      <Card className="flex-1 overflow-hidden border-border/50 shadow-lg">
+                        <CardContent className="p-6 h-full flex flex-col">
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold text-foreground">Interactive Transcript</h3>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleTranscriptRefresh}
+                              className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+                            >
+                              <Clock className="h-4 w-4 mr-2" />
+                              Refresh
+                            </Button>
+                          </div>
+                          <div className="flex-1 overflow-auto">
+                            <TranscriptPanel
+                              transcript={note.content || ''}
+                              currentTime={currentTimestamp}
+                              onTimestampClick={handleTimestampClick}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </ResizablePanel>
                 
-                <div className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/10">
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsContent value="editor" className="m-0 h-full">
-                      <div className="p-6 h-full">
-                        <NoteEditor 
-                          initialNote={{
-                            id: note.id,
-                            title: note.title,
-                            content: note.content,
-                            tags: note.tags.map(tag => tag.id),
-                          }} 
-                          onSave={handleSave}
-                        />
-                      </div>
-                    </TabsContent>
+                <ResizableHandle withHandle />
+                
+                {/* Right Panel: AI Insights */}
+                <ResizablePanel defaultSize={50} minSize={30}>
+                  <div className="h-full flex flex-col">
+                    <div className="bg-muted/30 px-6 py-3 border-b border-border/50">
+                      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <TabsList className="bg-background/50 border border-border/50">
+                          <TabsTrigger 
+                            value="insights" 
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                          >
+                            <Clock className="h-4 w-4 mr-2" />
+                            AI Insights
+                          </TabsTrigger>
+                          <TabsTrigger 
+                            value="chat"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                          >
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            AI Chat
+                          </TabsTrigger>
+                          <TabsTrigger 
+                            value="notes"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Notes
+                          </TabsTrigger>
+                          <TabsTrigger 
+                            value="export"
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
                     
-                    <TabsContent value="video" className="m-0 h-full">
-                      <div className="grid grid-cols-1 xl:grid-cols-2 h-full gap-6 p-6">
-                        <Card className="overflow-hidden border-border/50 shadow-lg">
-                          <CardContent className="p-6 h-full flex flex-col">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-semibold text-foreground">Video Player</h3>
-                              <Badge variant="secondary" className="text-xs">
-                                <Play className="h-3 w-3 mr-1" />
-                                Live
-                              </Badge>
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                              <VideoPlayer 
-                                videoId={videoId || ''} 
-                                playerRef={playerRef}
-                                onTimeUpdate={setCurrentTimestamp}
-                              />
-                            </div>
-                          </CardContent>
-                        </Card>
+                    <div className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/10">
+                      <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <TabsContent value="insights" className="m-0 h-full">
+                          <div className="p-6 h-full">
+                            <AISummaryPanel
+                              noteId={note.id}
+                              content={note.content || ''}
+                              onSummaryGenerated={(summary) => {
+                                if (!id) return;
+                                updateNoteMutation.mutate({
+                                  id,
+                                  updates: {
+                                    content: summary,
+                                    updated_at: new Date().toISOString(),
+                                  },
+                                });
+                              }}
+                            />
+                          </div>
+                        </TabsContent>
                         
-                        <Card className="overflow-hidden border-border/50 shadow-lg">
-                          <CardContent className="p-6 h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-4">
-                              <h3 className="text-lg font-semibold text-foreground">Interactive Transcript</h3>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={handleTranscriptRefresh}
-                                className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-                              >
-                                <Clock className="h-4 w-4 mr-2" />
-                                Refresh
-                              </Button>
-                            </div>
-                            <div className="flex-1 overflow-auto">
-                              <TranscriptPanel
-                                transcript={note.content || ''}
-                                currentTime={currentTimestamp}
-                                onTimestampClick={handleTimestampClick}
-                              />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </TabsContent>
-                    
-                    <TabsContent value="summary" className="m-0 h-full">
-                      <div className="p-6 h-full">
-                        <AISummaryPanel
-                          noteId={note.id}
-                          content={note.content || ''}
-                          onSummaryGenerated={(summary) => {
-                            if (!id) return;
-                            updateNoteMutation.mutate({
-                              id,
-                              updates: {
-                                content: summary,
-                                updated_at: new Date().toISOString(),
-                              },
-                            });
-                          }}
-                        />
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </div>
+                        <TabsContent value="chat" className="m-0 h-full">
+                          <div className="p-6 h-full">
+                            <AIChatPanel
+                              noteId={note.id}
+                              content={note.content || ''}
+                            />
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="notes" className="m-0 h-full">
+                          <div className="p-6 h-full">
+                            <NoteEditor 
+                              initialNote={{
+                                id: note.id,
+                                title: note.title,
+                                content: note.content,
+                                tags: note.tags.map(tag => tag.id),
+                              }} 
+                              onSave={handleSave}
+                            />
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="export" className="m-0 h-full">
+                          <div className="p-6 h-full">
+                            <ExportPanel
+                              note={{
+                                title: note.title,
+                                content: note.content || '',
+                                tags: note.tags.map(tag => tag.name),
+                                source_url: note.source_url
+                              }}
+                            />
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             ) : (
               <div className="p-6 h-full">
                 <NoteEditor 

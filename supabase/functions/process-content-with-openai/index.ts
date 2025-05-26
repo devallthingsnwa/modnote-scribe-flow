@@ -9,11 +9,15 @@ const corsHeaders = {
 
 interface ProcessingRequest {
   content: string;
-  type: 'text' | 'video' | 'audio' | 'podcast';
+  type: 'text' | 'video' | 'audio' | 'podcast' | 'chat';
+  prompt?: string;
   options?: {
     summary?: boolean;
     highlights?: boolean;
     keyPoints?: boolean;
+    conversational?: boolean;
+    helpful?: boolean;
+    educational?: boolean;
   };
 }
 
@@ -23,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    const { content, type, options = {} }: ProcessingRequest = await req.json();
+    const { content, type, prompt, options = {} }: ProcessingRequest = await req.json();
 
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
@@ -45,25 +49,44 @@ serve(async (req) => {
       );
     }
 
-    // Build the system prompt based on options
-    let systemPrompt = `You are an AI assistant that analyzes and processes content. `;
-    let tasks = [];
+    let systemPrompt = '';
+    let userContent = '';
 
-    if (options.summary) {
-      tasks.push("provide a comprehensive summary");
-    }
-    if (options.highlights) {
-      tasks.push("extract key highlights and important points");
-    }
-    if (options.keyPoints) {
-      tasks.push("identify the main key points");
-    }
+    if (type === 'chat') {
+      // Handle chat/conversational requests
+      systemPrompt = `You are an AI learning assistant that helps students understand content better. You are helpful, educational, and conversational. 
+      
+      When answering questions:
+      - Provide clear, concise explanations
+      - Use examples when helpful
+      - Break down complex concepts
+      - Encourage learning and curiosity
+      - Reference the provided content when relevant
+      
+      Always be supportive and encouraging in your responses.`;
+      
+      userContent = `Based on this content: ${content}\n\nUser question: ${prompt}`;
+    } else {
+      // Handle content processing requests
+      let tasks = [];
 
-    if (tasks.length === 0) {
-      tasks.push("provide a comprehensive summary and extract key highlights");
-    }
+      if (options.summary) {
+        tasks.push("provide a comprehensive summary");
+      }
+      if (options.highlights) {
+        tasks.push("extract key highlights and important points");
+      }
+      if (options.keyPoints) {
+        tasks.push("identify the main key points");
+      }
 
-    systemPrompt += `Please ${tasks.join(", ")} from the provided ${type} content. Format your response with clear sections using markdown headers.`;
+      if (tasks.length === 0) {
+        tasks.push("provide a comprehensive summary and extract key highlights");
+      }
+
+      systemPrompt = `You are an AI assistant that analyzes and processes content. Please ${tasks.join(", ")} from the provided ${type} content. Format your response with clear sections using markdown headers.`;
+      userContent = `Please analyze this ${type} content:\n\n${content}`;
+    }
 
     console.log('Making request to OpenAI API...');
 
@@ -82,11 +105,11 @@ serve(async (req) => {
           },
           {
             role: 'user',
-            content: `Please analyze this ${type} content:\n\n${content}`
+            content: userContent
           }
         ],
-        max_tokens: 2000,
-        temperature: 0.7,
+        max_tokens: type === 'chat' ? 1000 : 2000,
+        temperature: type === 'chat' ? 0.9 : 0.7,
       }),
     });
 
