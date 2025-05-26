@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Send, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { MessageSquare, Send, Bot, User, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,14 +25,14 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasApiError, setHasApiError] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Initialize with a welcome message
@@ -60,6 +60,7 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     setIsLoading(true);
+    setHasApiError(false);
 
     try {
       // Prepare context with the note content and chat history for RAG
@@ -108,19 +109,20 @@ Instructions: Using the knowledge base above as your primary source of truth, an
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
+      setHasApiError(true);
       
       // Add error message to chat
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "I'm sorry, I'm having trouble connecting right now. Please check if your DeepSeek API key is configured properly and try again.",
+        content: "I'm sorry, I'm having trouble connecting right now. It looks like there's an issue with the DeepSeek API configuration. Please check if your DeepSeek API key is properly configured in the project settings.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
       
       toast({
-        title: "Message failed",
-        description: "Failed to send message. Please check your API configuration.",
+        title: "API Configuration Error",
+        description: "The DeepSeek API key appears to be invalid or not configured. Please check your project settings.",
         variant: "destructive",
       });
     } finally {
@@ -142,6 +144,7 @@ Instructions: Using the knowledge base above as your primary source of truth, an
       content: "Chat cleared! How can I help you understand this content better using RAG analysis?",
       timestamp: new Date()
     }]);
+    setHasApiError(false);
   };
 
   const suggestedQuestions = [
@@ -154,9 +157,9 @@ Instructions: Using the knowledge base above as your primary source of truth, an
   ];
 
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className="flex flex-col h-full max-h-[70vh] space-y-4">
       {/* Header */}
-      <div className="space-y-4">
+      <div className="space-y-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="bg-gradient-to-r from-purple-500 to-blue-500 p-2 rounded-lg">
@@ -181,7 +184,7 @@ Instructions: Using the knowledge base above as your primary source of truth, an
         </div>
         
         {/* Status Indicators */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-wrap">
           <Badge 
             variant={content ? "default" : "secondary"} 
             className={content ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : ""}
@@ -189,6 +192,13 @@ Instructions: Using the knowledge base above as your primary source of truth, an
             <Sparkles className="h-3 w-3 mr-1" />
             {content ? "RAG Ready" : "No Content"}
           </Badge>
+          
+          {hasApiError && (
+            <Badge variant="destructive" className="text-xs">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              API Error
+            </Badge>
+          )}
           
           {messages.length > 1 && (
             <Badge variant="outline" className="text-xs">
@@ -201,8 +211,25 @@ Instructions: Using the knowledge base above as your primary source of truth, an
           </Badge>
         </div>
 
+        {/* API Error Warning */}
+        {hasApiError && (
+          <Card className="bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
+            <CardContent className="p-4">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-red-800 dark:text-red-200">DeepSeek API Configuration Issue</p>
+                  <p className="text-red-700 dark:text-red-300 mt-1">
+                    The API key appears to be invalid. Please check your project settings and ensure the DeepSeek API key is properly configured.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Suggested Questions */}
-        {messages.length === 1 && content && (
+        {messages.length === 1 && content && !hasApiError && (
           <Card className="bg-muted/30 border-dashed">
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground mb-3">Try asking:</p>
@@ -225,14 +252,14 @@ Instructions: Using the knowledge base above as your primary source of truth, an
       </div>
       
       {/* Chat Messages */}
-      <Card className="flex-1 flex flex-col border-border/50 shadow-lg">
-        <CardHeader className="pb-3">
+      <Card className="flex-1 flex flex-col border-border/50 shadow-lg min-h-0">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="text-lg flex items-center gap-2">
             <Bot className="h-5 w-5 text-purple-600" />
             RAG Conversation
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           <ScrollArea className="flex-1 px-6" ref={scrollAreaRef}>
             <div className="space-y-4 pb-4">
               {messages.map((message) => (
@@ -242,7 +269,7 @@ Instructions: Using the knowledge base above as your primary source of truth, an
                     message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                   }`}
                 >
-                  <div className={`p-2 rounded-full ${
+                  <div className={`p-2 rounded-full flex-shrink-0 ${
                     message.role === 'user' 
                       ? 'bg-blue-100 dark:bg-blue-900' 
                       : 'bg-purple-100 dark:bg-purple-900'
@@ -254,10 +281,10 @@ Instructions: Using the knowledge base above as your primary source of truth, an
                     )}
                   </div>
                   
-                  <div className={`flex-1 space-y-1 ${
+                  <div className={`flex-1 space-y-1 min-w-0 ${
                     message.role === 'user' ? 'text-right' : ''
                   }`}>
-                    <div className={`inline-block max-w-[80%] p-3 rounded-lg ${
+                    <div className={`inline-block max-w-[80%] p-3 rounded-lg break-words ${
                       message.role === 'user'
                         ? 'bg-blue-500 text-white ml-auto'
                         : 'bg-muted text-foreground'
@@ -288,13 +315,15 @@ Instructions: Using the knowledge base above as your primary source of truth, an
                   </div>
                 </div>
               )}
+              
+              <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
         </CardContent>
       </Card>
       
       {/* Message Input */}
-      <Card className="border-border/50">
+      <Card className="border-border/50 flex-shrink-0">
         <CardContent className="p-4">
           <div className="flex space-x-2">
             <Input
