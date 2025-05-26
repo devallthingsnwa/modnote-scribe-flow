@@ -20,13 +20,23 @@ export default function Dashboard() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [showNoteContent, setShowNoteContent] = useState(false);
   const [isNotesPanelCollapsed, setIsNotesPanelCollapsed] = useState(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
 
   const handleNoteSelect = (noteId: string) => {
-    setSelectedNoteId(noteId);
-    if (isMobile) {
-      setShowNoteContent(true);
+    if (isSelectMode) {
+      setSelectedNoteIds(prev => 
+        prev.includes(noteId) 
+          ? prev.filter(id => id !== noteId)
+          : [...prev, noteId]
+      );
+    } else {
+      setSelectedNoteId(noteId);
+      if (isMobile) {
+        setShowNoteContent(true);
+      }
     }
   };
 
@@ -55,6 +65,20 @@ export default function Dashboard() {
 
   const toggleNotesPanel = () => {
     setIsNotesPanelCollapsed(!isNotesPanelCollapsed);
+  };
+
+  const handleSelectModeToggle = () => {
+    setIsSelectMode(!isSelectMode);
+    setSelectedNoteIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedNoteIds.length > 0) {
+      // This will be handled by the NotesListPanel component
+      setSelectedNoteIds([]);
+      setIsSelectMode(false);
+      refetch();
+    }
   };
   
   const filteredNotes = notes?.filter(note => {
@@ -121,6 +145,10 @@ export default function Dashboard() {
                     onSearchChange={setSearchQuery}
                     isLoading={isLoading}
                     onImport={() => setImportModalOpen(true)}
+                    isSelectMode={isSelectMode}
+                    selectedNoteIds={selectedNoteIds}
+                    onSelectModeToggle={handleSelectModeToggle}
+                    onBulkDelete={handleBulkDelete}
                   />
                 </div>
                 
@@ -150,6 +178,10 @@ export default function Dashboard() {
                 onImport={() => setImportModalOpen(true)}
                 isCollapsed={isNotesPanelCollapsed}
                 onToggleCollapse={toggleNotesPanel}
+                isSelectMode={isSelectMode}
+                selectedNoteIds={selectedNoteIds}
+                onSelectModeToggle={handleSelectModeToggle}
+                onBulkDelete={handleBulkDelete}
               />
             </div>
             

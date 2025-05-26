@@ -1,12 +1,16 @@
 
 import { useState } from "react";
-import { Search, Plus, FileText, Play, Video, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Search, Plus, FileText, Play, Video, ChevronLeft, ChevronRight, Upload, MoreHorizontal, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useDeleteNote } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 interface Note {
   id: string;
@@ -35,6 +39,10 @@ interface NotesListPanelProps {
   onImport?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isSelectMode?: boolean;
+  selectedNoteIds?: string[];
+  onSelectModeToggle?: () => void;
+  onBulkDelete?: () => void;
 }
 
 export function NotesListPanel({ 
@@ -47,8 +55,36 @@ export function NotesListPanel({
   isLoading,
   onImport,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  isSelectMode = false,
+  selectedNoteIds = [],
+  onSelectModeToggle,
+  onBulkDelete
 }: NotesListPanelProps) {
+  const { toast } = useToast();
+  const deleteNoteMutation = useDeleteNote();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleBulkDeleteConfirm = async () => {
+    try {
+      for (const noteId of selectedNoteIds) {
+        await deleteNoteMutation.mutateAsync(noteId);
+      }
+      toast({
+        title: "Notes deleted",
+        description: `${selectedNoteIds.length} note(s) deleted successfully.`,
+      });
+      onBulkDelete?.();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete some notes. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setShowDeleteConfirm(false);
+  };
+
   const renderNoteIcon = (note: Note) => {
     // If it's a video note with thumbnail, show thumbnail
     if (note.thumbnail && (note.is_transcription || note.source_url)) {
@@ -146,29 +182,76 @@ export function NotesListPanel({
             )}
           </div>
           <div className="flex gap-2">
-            {onImport && (
+            {onSelectModeToggle && (
+              <Button 
+                onClick={onSelectModeToggle} 
+                size="sm" 
+                variant={isSelectMode ? "default" : "outline"}
+              >
+                <MoreHorizontal className="h-4 w-4 mr-2" />
+                {isSelectMode ? "Cancel" : "Select"}
+              </Button>
+            )}
+            {onImport && !isSelectMode && (
               <Button onClick={onImport} size="sm" variant="outline">
                 <Upload className="h-4 w-4 mr-2" />
                 Import
               </Button>
             )}
-            <Button onClick={onNewNote} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New
-            </Button>
+            {!isSelectMode && (
+              <Button onClick={onNewNote} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                New
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Select Mode Actions */}
+        {isSelectMode && (
+          <div className="flex items-center justify-between mb-3 p-2 bg-muted rounded-md">
+            <span className="text-sm text-muted-foreground">
+              {selectedNoteIds.length} selected
+            </span>
+            {selectedNoteIds.length > 0 && (
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete ({selectedNoteIds.length})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Notes</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete {selectedNoteIds.length} note(s)? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleBulkDeleteConfirm}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        )}
         
         {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search notes..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        {!isSelectMode && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search notes..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        )}
       </div>
 
       {/* Notes List */}
@@ -191,13 +274,27 @@ export function NotesListPanel({
                 key={note.id}
                 className={cn(
                   "p-3 mb-2 cursor-pointer transition-all hover:shadow-sm border",
-                  selectedNoteId === note.id 
+                  selectedNoteId === note.id && !isSelectMode
                     ? "bg-primary/10 border-primary/30 shadow-md" 
-                    : "hover:bg-muted/50 border-border"
+                    : "hover:bg-muted/50 border-border",
+                  selectedNoteIds.includes(note.id) && isSelectMode
+                    ? "bg-primary/10 border-primary/30"
+                    : ""
                 )}
                 onClick={() => onNoteSelect(note.id)}
               >
                 <div className="flex gap-3">
+                  {/* Checkbox for select mode */}
+                  {isSelectMode && (
+                    <div className="flex items-center pt-1">
+                      <Checkbox
+                        checked={selectedNoteIds.includes(note.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => onNoteSelect(note.id)}
+                      />
+                    </div>
+                  )}
+                  
                   {/* Note Icon/Thumbnail */}
                   {renderNoteIcon(note)}
                   
