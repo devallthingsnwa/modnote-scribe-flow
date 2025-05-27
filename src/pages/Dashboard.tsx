@@ -9,6 +9,7 @@ import { ImportModal } from "@/components/ImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCreateNote } from "@/lib/api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
+  const createNoteMutation = useCreateNote();
 
   const handleNoteSelect = (noteId: string) => {
     if (isSelectMode) {
@@ -50,11 +52,36 @@ export default function Dashboard() {
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    toast({
-      title: "Content imported successfully",
-      description: `Your content "${note.title}" has been imported and is available in your notes.`,
-    });
-    refetch();
+    createNoteMutation.mutate(
+      {
+        note: {
+          title: note.title,
+          content: note.content,
+          source_url: note.source_url,
+          thumbnail: note.thumbnail,
+          is_transcription: note.is_transcription,
+        },
+        tagIds: [],
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Content imported and saved",
+            description: `Your content "${note.title}" has been imported and saved successfully.`,
+          });
+          refetch();
+          setImportModalOpen(false);
+        },
+        onError: (error) => {
+          toast({
+            title: "Import failed",
+            description: "There was an error saving your imported content. Please try again.",
+            variant: "destructive",
+          });
+          console.error("Import error:", error);
+        }
+      }
+    );
   };
 
   const handleNoteDeleted = () => {

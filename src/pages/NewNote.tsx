@@ -96,17 +96,13 @@ export default function NewNote() {
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    toast({
-      title: "Content imported successfully",
-      description: `Your content "${note.title}" has been imported and is available in your notes.`,
-    });
-    
     createNoteMutation.mutate(
       {
         note: {
           title: note.title,
           content: note.content,
           source_url: note.source_url,
+          thumbnail: note.thumbnail,
           is_transcription: note.is_transcription,
         },
         tagIds: [],
@@ -114,11 +110,19 @@ export default function NewNote() {
       {
         onSuccess: () => {
           toast({
-            title: "Note created successfully",
-            description: "Your imported content has been saved.",
+            title: "Content imported and saved",
+            description: `Your content "${note.title}" has been imported and saved successfully.`,
           });
           navigate("/dashboard");
         },
+        onError: (error) => {
+          toast({
+            title: "Import failed",
+            description: "There was an error saving your imported content. Please try again.",
+            variant: "destructive",
+          });
+          console.error("Import error:", error);
+        }
       }
     );
   };
