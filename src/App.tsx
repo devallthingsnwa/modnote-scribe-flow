@@ -15,6 +15,7 @@ import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Notebooks from "./pages/Notebooks";
 import Tags from "./pages/Tags";
+import AIResearch from "./pages/AIResearch";
 import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/notebooks" element={<Notebooks />} />
               <Route path="/tags" element={<Tags />} />
+              <Route path="/ai-research" element={<AIResearch />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
