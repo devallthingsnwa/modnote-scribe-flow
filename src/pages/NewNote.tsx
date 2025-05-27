@@ -203,8 +203,8 @@ export default function NewNote() {
         <MobileNavigation />
         
         <ImportModal
-          open={importModalOpen}
-          onOpenChange={setImportModalOpen}
+          isOpen={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
           onImport={handleImport}
         />
       </div>
@@ -245,8 +245,8 @@ export default function NewNote() {
       </div>
       
       <ImportModal
-        open={importModalOpen}
-        onOpenChange={setImportModalOpen}
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
         onImport={handleImport}
       />
     </div>
