@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoProcessingOptions {
@@ -97,7 +98,7 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Fetch transcript with enhanced options
+      // Fetch transcript with enhanced options for natural formatting
       if (fetchTranscript) {
         try {
           console.log(`Fetching transcript for video: ${videoId} with options:`, transcriptOptions);
@@ -106,9 +107,9 @@ export class VideoNoteProcessor {
             body: { 
               videoId,
               options: {
-                includeTimestamps: true,
+                includeTimestamps: false, // Get natural flowing text
                 language: 'en',
-                format: 'json',
+                format: 'text',
                 maxRetries: 3,
                 ...transcriptOptions
               }

@@ -66,9 +66,12 @@ export class FallbackMethods {
           const segments = this.parseXMLCaptions(captionXml);
           
           if (segments.length > 0) {
+            // Format as natural flowing text like your example
+            const naturalTranscript = this.formatAsNaturalText(segments);
+            
             const transcriptResponse: TranscriptResponse = {
               success: true,
-              transcript: this.formatTranscriptText(segments),
+              transcript: naturalTranscript,
               segments,
               metadata: {
                 videoId,
@@ -122,9 +125,11 @@ export class FallbackMethods {
               const segments = this.parseXMLCaptions(xmlContent);
               
               if (segments.length > 0) {
+                const naturalTranscript = this.formatAsNaturalText(segments);
+                
                 const transcriptResponse: TranscriptResponse = {
                   success: true,
-                  transcript: this.formatTranscriptText(segments),
+                  transcript: naturalTranscript,
                   segments,
                   metadata: {
                     videoId,
@@ -170,7 +175,6 @@ export class FallbackMethods {
       if (response.ok) {
         const html = await response.text();
         // Look for any caption data in embed page
-        // This is a placeholder for more sophisticated embed scraping
         console.log("Embed page loaded, but no caption extraction implemented yet");
       }
 
@@ -186,7 +190,6 @@ export class FallbackMethods {
       console.log("Attempting alternative transcript services...");
       
       // This could call external transcript services if available
-      // For now, returning null as placeholder
       console.log("No alternative APIs configured");
       
       return null;
@@ -234,6 +237,20 @@ export class FallbackMethods {
       .replace(/&apos;/g, "'")
       .replace(/\n/g, ' ')
       .replace(/\s+/g, ' ');
+  }
+
+  private formatAsNaturalText(segments: TranscriptSegment[]): string {
+    // Format transcript as natural flowing text like the example
+    let transcript = segments.map(segment => segment.text).join(' ');
+    
+    // Clean up and format the text naturally
+    transcript = transcript
+      .replace(/\s+/g, ' ') // Multiple spaces to single space
+      .replace(/([.!?])\s+/g, '$1 ') // Proper sentence spacing
+      .replace(/,\s+/g, ', ') // Proper comma spacing
+      .trim();
+    
+    return transcript;
   }
 
   private formatTranscriptText(segments: TranscriptSegment[]): string {
