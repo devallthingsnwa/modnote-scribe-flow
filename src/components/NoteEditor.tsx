@@ -6,8 +6,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bold, Italic, List, ListChecks, Save, Video } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
-import { AIProcessingButton } from "@/components/AIProcessingButton";
-import { AIChatModal } from "@/components/AIChatModal";
 import { YouTubeTranscriptIntegration } from "@/components/YouTubeTranscriptIntegration";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -157,20 +155,6 @@ export function NoteEditor({
             >
               <ListChecks className="h-4 w-4" />
             </Button>
-            
-            <div className="h-4 w-px bg-border mx-2" />
-            
-            <AIProcessingButton
-              content={note.content}
-              onProcessed={(processedContent) => 
-                setNote(prev => ({ ...prev, content: processedContent }))
-              }
-            />
-            
-            <AIChatModal
-              noteContent={note.content}
-              noteTitle={note.title}
-            />
           </div>
         </CardContent>
       </Card>
@@ -189,7 +173,7 @@ export function NoteEditor({
       {/* Tags */}
       <TagSelector
         selectedTags={note.tags}
-        onTagsChange={handleTagChange}
+        onChange={handleTagChange}
       />
 
       {/* Save Button */}

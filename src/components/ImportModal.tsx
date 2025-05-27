@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,6 @@ import { Loader2, FileText, Video, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
-import { TranscriptionService } from "@/lib/transcriptionService";
 
 interface ImportModalProps {
   isOpen: boolean;
