@@ -1,11 +1,10 @@
-
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, List, FileText, CheckCircle, Loader2, Brain, Lightbulb } from "lucide-react";
+import { Sparkles, List, FileText, CheckCircle, Loader2, Brain, Lightbulb, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,10 +16,12 @@ interface AISummaryPanelProps {
 
 export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummaryPanelProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [summaryType, setSummaryType] = useState<string>("full");
   const [summary, setSummary] = useState<string | null>(null);
   const [keyPoints, setKeyPoints] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string | null>(null);
+  const [narrativeSummary, setNarrativeSummary] = useState<string | null>(null);
   const { toast } = useToast();
 
   const generateSummary = async () => {
@@ -70,7 +71,6 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
           setHighlights(highlightsMatch[0]);
         }
         
-        // Let the parent component know we have a summary
         if (onSummaryGenerated) {
           onSummaryGenerated(processedText);
         }
@@ -94,6 +94,58 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
     }
   };
 
+  const generateNarrativeSummary = async () => {
+    if (!content || content.length < 50) {
+      toast({
+        title: "Content too short",
+        description: "Please provide more content to generate a narrative summary.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingNarrative(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("process-content-with-deepseek", {
+        body: {
+          content,
+          type: "video",
+          options: {
+            summary: true,
+            conversational: true,
+            helpful: true,
+            educational: true
+          }
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.processedContent) {
+        setNarrativeSummary(data.processedContent);
+        setSummaryType("narrative");
+        
+        toast({
+          title: "Narrative summary generated",
+          description: "AI narrative summary has been successfully generated.",
+        });
+      } else {
+        throw new Error("No processed content returned");
+      }
+    } catch (error) {
+      console.error("Error generating narrative summary:", error);
+      toast({
+        title: "Error generating narrative summary",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingNarrative(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full space-y-6">
       {/* Enhanced Header */}
@@ -111,23 +163,44 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
             </div>
           </div>
           
-          <Button 
-            onClick={generateSummary}
-            disabled={isProcessing || !content || content.length < 50}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Brain className="h-4 w-4 mr-2" />
-                Generate Summary
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={generateSummary}
+              disabled={isProcessing || !content || content.length < 50}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Generate Summary
+                </>
+              )}
+            </Button>
+
+            <Button 
+              onClick={generateNarrativeSummary}
+              disabled={isGeneratingNarrative || !content || content.length < 50}
+              variant="outline"
+              className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+            >
+              {isGeneratingNarrative ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Narrative Summary
+                </>
+              )}
+            </Button>
+          </div>
         </div>
         
         {/* Status Indicators */}
@@ -146,10 +219,17 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
               AI Summary Ready
             </Badge>
           )}
+
+          {narrativeSummary && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+              <BookOpen className="h-3 w-3 mr-1" />
+              Narrative Ready
+            </Badge>
+          )}
         </div>
       </div>
       
-      {!summary && !isProcessing ? (
+      {!summary && !isProcessing && !isGeneratingNarrative ? (
         <Card className="flex-1 bg-gradient-to-br from-background via-muted/20 to-primary/5 border-dashed border-2">
           <CardContent className="flex flex-col items-center justify-center h-full text-center p-8 space-y-6">
             <div className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/20 rounded-full p-6">
@@ -163,7 +243,7 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
               </p>
             </div>
             
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-4 gap-4 text-center">
               <div className="space-y-2">
                 <div className="bg-blue-100 dark:bg-blue-900/20 rounded-lg p-3">
                   <FileText className="h-6 w-6 text-blue-600 mx-auto" />
@@ -193,17 +273,40 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                   <div>Important moments</div>
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <div className="bg-purple-100 dark:bg-purple-900/20 rounded-lg p-3">
+                  <BookOpen className="h-6 w-6 text-purple-600 mx-auto" />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <div className="font-medium">Narrative</div>
+                  <div>Story format</div>
+                </div>
+              </div>
             </div>
             
-            <Button 
-              onClick={generateSummary}
-              disabled={isProcessing || !content || content.length < 50}
-              size="lg"
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              Generate AI Summary
-            </Button>
+            <div className="flex gap-3">
+              <Button 
+                onClick={generateSummary}
+                disabled={isProcessing || !content || content.length < 50}
+                size="lg"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate AI Summary
+              </Button>
+              
+              <Button 
+                onClick={generateNarrativeSummary}
+                disabled={isGeneratingNarrative || !content || content.length < 50}
+                size="lg"
+                variant="outline"
+                className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Narrative Summary
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -231,11 +334,20 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Highlights
               </TabsTrigger>
+              {narrativeSummary && (
+                <TabsTrigger 
+                  value="narrative" 
+                  className="flex items-center data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Narrative
+                </TabsTrigger>
+              )}
             </TabsList>
             
             <Card className="flex-1 border-border/50 shadow-lg">
               <CardContent className="p-6 h-full">
-                {isProcessing ? (
+                {(isProcessing || isGeneratingNarrative) ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center space-y-4">
                       <div className="relative">
@@ -243,7 +355,9 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                         <div className="h-16 w-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin absolute top-0 left-1/2 transform -translate-x-1/2" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">Generating AI summary...</p>
+                        <p className="font-medium text-foreground">
+                          {isGeneratingNarrative ? "Generating narrative summary..." : "Generating AI summary..."}
+                        </p>
                         <p className="text-sm text-muted-foreground">This may take a few moments</p>
                       </div>
                     </div>
@@ -303,6 +417,19 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
                         )}
                       </div>
                     </TabsContent>
+
+                    {narrativeSummary && (
+                      <TabsContent value="narrative" className="mt-0 h-full">
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                          <div 
+                            className="space-y-4 text-foreground leading-relaxed"
+                            dangerouslySetInnerHTML={{ 
+                              __html: narrativeSummary.replace(/\n/g, "<br />").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                            }} 
+                          />
+                        </div>
+                      </TabsContent>
+                    )}
                   </ScrollArea>
                 )}
               </CardContent>
