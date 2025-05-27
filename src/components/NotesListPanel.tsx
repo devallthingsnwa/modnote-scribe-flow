@@ -10,6 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDeleteNote } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+
 interface Note {
   id: string;
   title: string;
@@ -25,6 +26,7 @@ interface Note {
     color: string;
   }>;
 }
+
 interface NotesListPanelProps {
   notes: Note[];
   selectedNoteId: string | null;
@@ -41,6 +43,7 @@ interface NotesListPanelProps {
   onSelectModeToggle?: () => void;
   onBulkDelete?: () => void;
 }
+
 export function NotesListPanel({
   notes,
   selectedNoteId,
@@ -57,11 +60,10 @@ export function NotesListPanel({
   onSelectModeToggle,
   onBulkDelete
 }: NotesListPanelProps) {
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const deleteNoteMutation = useDeleteNote();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleBulkDeleteConfirm = async () => {
     try {
       for (const noteId of selectedNoteIds) {
@@ -81,6 +83,7 @@ export function NotesListPanel({
     }
     setShowDeleteConfirm(false);
   };
+
   const renderNoteIcon = (note: Note) => {
     // If it's a video note with thumbnail, show thumbnail
     if (note.thumbnail && (note.is_transcription || note.source_url)) {
@@ -106,6 +109,7 @@ export function NotesListPanel({
         <FileText className="h-4 w-4 text-primary" />
       </div>;
   };
+
   if (isCollapsed) {
     return <div className="flex flex-col h-full bg-background/50 border-r border-border">
         <div className="p-3 border-b border-border flex justify-center">
@@ -123,6 +127,7 @@ export function NotesListPanel({
         </div>
       </div>;
   }
+
   return <div className="flex flex-col h-full bg-background">
       {/* Enhanced Header */}
       <div className="p-4 border-b border-border space-y-4 bg-gradient-to-b from-background to-background/80">
@@ -131,12 +136,22 @@ export function NotesListPanel({
             {onToggleCollapse && <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="h-8 w-8 hover:bg-primary/10 flex-shrink-0">
                 <ChevronLeft className="h-4 w-4" />
               </Button>}
-            {!isSelectMode}
+            <h2 className="text-lg font-semibold text-foreground truncate">Notes</h2>
           </div>
           
           {/* Enhanced Action Buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {onSelectModeToggle}
+            {onSelectModeToggle && (
+              <Button 
+                onClick={onSelectModeToggle} 
+                size="sm" 
+                variant={isSelectMode ? "default" : "outline"} 
+                className="text-xs px-3 h-8"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+                <span className="hidden sm:inline ml-1">Select</span>
+              </Button>
+            )}
             {onImport && !isSelectMode && <Button onClick={onImport} size="sm" variant="outline" className="text-xs px-3 h-8 hover:bg-primary/10 hover:border-primary/30 transition-all">
                 <Upload className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">Upload</span>
