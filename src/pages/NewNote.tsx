@@ -89,26 +89,32 @@ export default function NewNote() {
     navigate("/dashboard");
   };
 
-  const handleImport = (url: string, type: string) => {
+  const handleImport = (note: {
+    title: string;
+    content: string;
+    source_url?: string;
+    thumbnail?: string;
+    is_transcription?: boolean;
+  }) => {
     toast({
-      title: "Content import complete",
-      description: "Your content has been transcribed, summarized, and added to your notes.",
+      title: "Content imported successfully",
+      description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
     
     createNoteMutation.mutate(
       {
         note: {
-          title: `Imported ${type} from ${url.substring(0, 30)}...`,
-          content: "This is the transcribed and summarized content from your imported media.",
-          source_url: url,
-          is_transcription: true,
+          title: note.title,
+          content: note.content,
+          source_url: note.source_url,
+          is_transcription: note.is_transcription,
         },
         tagIds: [],
       },
       {
         onSuccess: () => {
           toast({
-            title: "Content imported successfully",
+            title: "Note created successfully",
             description: "Your imported content has been saved.",
           });
           navigate("/dashboard");

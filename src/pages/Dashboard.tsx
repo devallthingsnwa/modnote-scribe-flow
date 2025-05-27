@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
@@ -44,10 +43,16 @@ export default function Dashboard() {
     navigate("/new");
   };
 
-  const handleImport = (url: string, type: string) => {
+  const handleImport = (note: {
+    title: string;
+    content: string;
+    source_url?: string;
+    thumbnail?: string;
+    is_transcription?: boolean;
+  }) => {
     toast({
-      title: "Multimedia import complete",
-      description: `Your ${type} content has been transcribed and is available in your notes.`,
+      title: "Content imported successfully",
+      description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
     refetch();
   };
@@ -201,8 +206,8 @@ export default function Dashboard() {
       {isMobile && <MobileNavigation />}
       
       <ImportModal
-        open={importModalOpen}
-        onOpenChange={setImportModalOpen}
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
         onImport={handleImport}
       />
     </div>
