@@ -32,14 +32,14 @@ export class TranscriptExtractor {
   private strategies: ITranscriptStrategy[];
 
   constructor() {
-    // Initialize extraction strategies in order of preference
+    // Initialize extraction strategies in order of reliability and preference
     this.strategies = [
-      new YouTubeApiStrategy(),
-      new VideoPageStrategy(),
-      new CaptionTracksStrategy(),
-      new AlternativeApiStrategy(),
-      new EmbedExtractionStrategy(),
-      new WhisperStrategy() // AI fallback when captions aren't available
+      new CaptionTracksStrategy(),     // Most reliable - direct caption API
+      new VideoPageStrategy(),         // Second most reliable - page scraping
+      new YouTubeApiStrategy(),        // Third - requires API key
+      new EmbedExtractionStrategy(),   // Fourth - embed page extraction
+      new AlternativeApiStrategy(),    // Fifth - third-party APIs
+      new WhisperStrategy()            // Last resort - AI transcription (currently disabled)
     ];
   }
 
@@ -51,12 +51,14 @@ export class TranscriptExtractor {
       const strategy = this.strategies[i];
       
       try {
-        console.log(`Attempting extraction method ${i + 1}: ${strategy.getName()}`);
+        console.log(`Attempting extraction method ${i + 1}/${this.strategies.length}: ${strategy.getName()}`);
         const result = await strategy.extract(videoId, options);
         
         if (result) {
           console.log(`Successfully extracted transcript using ${strategy.getName()}`);
           return result;
+        } else {
+          console.log(`Strategy ${strategy.getName()} returned null - trying next method`);
         }
       } catch (error) {
         console.warn(`Strategy ${strategy.getName()} failed:`, error.message);
@@ -69,8 +71,8 @@ export class TranscriptExtractor {
     return new Response(
       JSON.stringify({
         success: false,
-        transcript: "Unable to extract transcript from this video. The video may be private, restricted, or have audio processing limitations.",
-        error: "All extraction methods failed including AI transcription",
+        transcript: "Unable to extract transcript from this video. The video may not have captions available, may be private, or captions may be disabled by the creator.",
+        error: "All extraction methods failed - no captions found",
         metadata: {
           videoId,
           segments: 0,

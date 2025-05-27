@@ -9,43 +9,74 @@ export class AlternativeApiStrategy implements ITranscriptStrategy {
 
   async extract(videoId: string, options: TranscriptOptions = {}): Promise<Response | null> {
     try {
-      console.log("Attempting alternative API extraction");
+      console.log("Attempting alternative API transcript extraction");
       
-      // Try alternative transcript API
-      const response = await fetch(`https://youtube-transcript-api.herokuapp.com/transcript/${videoId}`);
-      
-      if (!response.ok) {
-        return null;
-      }
+      // Try youtube-transcript-api alternative endpoints
+      const endpoints = [
+        `https://www.youtube-transcript-api.com/api/transcript?video_id=${videoId}&lang=${options.language || 'en'}`,
+        `https://api.streamelements.com/kappa/v2/youtube/transcript/${videoId}`,
+      ];
 
-      const data = await response.json();
-      
-      if (data && Array.isArray(data) && data.length > 0) {
-        // Format the transcript
-        const formattedTranscript = data
-          .map((item: any) => {
-            const startTime = this.formatTime(item.start || 0);
-            const endTime = this.formatTime((item.start || 0) + (item.duration || 0));
-            return `[${startTime} - ${endTime}] ${item.text || ''}`;
-          })
-          .join('\n');
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying alternative API: ${endpoint}`);
+          
+          const response = await fetch(endpoint, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; TranscriptBot/1.0)',
+              'Accept': 'application/json',
+            },
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+          });
 
-        return new Response(
-          JSON.stringify({
-            success: true,
-            transcript: formattedTranscript,
-            metadata: {
-              videoId,
-              segments: data.length,
-              duration: data[data.length - 1]?.start + data[data.length - 1]?.duration || 0,
-              extractionMethod: 'alternative-api'
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data && (data.transcript || data.text || Array.isArray(data))) {
+              let transcript = '';
+              
+              if (Array.isArray(data)) {
+                // Handle array format
+                transcript = data
+                  .filter(item => item.text || item.snippet)
+                  .map((item, index) => {
+                    const text = item.text || item.snippet || '';
+                    const start = item.start || item.offset || (index * 3);
+                    const duration = item.duration || 3;
+                    const startTime = this.formatTime(start);
+                    const endTime = this.formatTime(start + duration);
+                    return `[${startTime} - ${endTime}] ${text.trim()}`;
+                  })
+                  .join('\n');
+              } else if (data.transcript) {
+                transcript = data.transcript;
+              } else if (data.text) {
+                transcript = data.text;
+              }
+
+              if (transcript && transcript.length > 100) {
+                console.log(`Alternative API extraction successful: ${transcript.length} characters`);
+
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    transcript: transcript,
+                    metadata: {
+                      videoId,
+                      extractionMethod: 'alternative-api'
+                    }
+                  }),
+                  {
+                    status: 200,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                  }
+                );
+              }
             }
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
           }
-        );
+        } catch (error) {
+          console.log(`Alternative API failed: ${endpoint}`, error.message);
+        }
       }
 
       return null;
