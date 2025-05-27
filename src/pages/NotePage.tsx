@@ -16,7 +16,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { getYoutubeVideoId } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExportPanel } from "@/components/ExportPanel";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function NotePage() {
   const { id } = useParams<{ id: string }>();
@@ -179,7 +179,7 @@ export default function NotePage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxeGhnZXVqZXBkaGh6b2Flb211Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5Mjg4MjMsImV4cCI6MjA2MzUwNDgyM30.nXAsuClyrleY5I55yXBFH0q0L3KY6K7utBfv98UjJmk`,
           },
           body: JSON.stringify({ videoId }),
         });
