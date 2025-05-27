@@ -1,137 +1,201 @@
 
 import { useState } from "react";
-import {
-  LayoutDashboard,
-  Plus,
-  FileText,
-  FolderOpen,
-  Tag,
-  Settings as SettingsIcon,
-  User,
-  Book,
-} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { useTheme } from "@/providers/ThemeProvider";
-import { ModeToggle } from "@/components/ModeToggle";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-const navigationItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "New Note", href: "/new-note", icon: Plus },
-  { name: "NoteGPT", href: "/notegpt", icon: FileText },
-  { name: "Transcript Extractor", href: "/transcript-extractor", icon: FileText },
-  { name: "Notebooks", href: "/notebooks", icon: FolderOpen },
-  { name: "Tags", href: "/tags", icon: Tag },
-];
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  File,
+  Hash,
+  Home,
+  Plus,
+  Settings,
+  UserRound,
+} from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Logo } from "@/components/Logo";
+import { Separator } from "@/components/ui/separator";
+import { useNotebooks, useTags } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export function Sidebar() {
-  const { theme } = useTheme();
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user } = useAuth();
+  
+  const { data: notebooks, isLoading: notebooksLoading } = useNotebooks();
+  const { data: tags, isLoading: tagsLoading } = useTags();
 
-  const toggleSidebar = () => {
-    setIsCollapsed(!isCollapsed);
+  const isActive = (path: string) => {
+    return location.pathname === path;
   };
+
+  const sidebarItems = [
+    {
+      name: "Home",
+      icon: <Home className="h-5 w-5" />,
+      path: "/dashboard",
+    },
+    {
+      name: "New Note",
+      icon: <Plus className="h-5 w-5" />,
+      path: "/new",
+    },
+    {
+      name: "Notebooks",
+      icon: <BookOpen className="h-5 w-5" />,
+      path: "/notebooks",
+    },
+    {
+      name: "Tags",
+      icon: <Hash className="h-5 w-5" />,
+      path: "/tags",
+    },
+    {
+      name: "Profile",
+      icon: <UserRound className="h-5 w-5" />,
+      path: "/profile",
+    },
+    {
+      name: "Settings",
+      icon: <Settings className="h-5 w-5" />,
+      path: "/settings",
+    },
+  ];
 
   return (
     <div
-      className={`flex flex-col h-screen bg-background border-r border-border/50 transition-width duration-300 ${
-        isCollapsed ? "w-16" : "w-60"
-      } overflow-hidden`}
+      className={cn(
+        "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        collapsed ? "w-16" : "w-64"
+      )}
     >
-      <div className="flex items-center justify-between px-4 py-3">
-        <Link to="/dashboard" className="flex items-center space-x-2">
-          <Book className="h-6 w-6 text-primary" />
-          {!isCollapsed && (
-            <span className="font-bold text-lg tracking-tight">NoteSphere</span>
-          )}
-        </Link>
-        <button
-          onClick={toggleSidebar}
-          className="md:hidden text-muted-foreground hover:text-foreground focus:outline-none"
+      <div className="flex items-center justify-between p-4">
+        {!collapsed && <Logo />}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="ml-auto"
         >
-          {isCollapsed ? (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-            >
-              <polyline points="16 17 21 12 16 7" />
-              <polyline points="8 17 3 12 8 7" />
-            </svg>
+          {collapsed ? (
+            <ChevronRight className="h-5 w-5" />
           ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-            >
-              <path d="M3 3h18v18H3zM9.414 8.414l6.293 6.293-1.414 1.414L8 9.414z" />
-            </svg>
+            <ChevronLeft className="h-5 w-5" />
           )}
-        </button>
+        </Button>
       </div>
 
-      <nav className="flex-1 px-2 py-4 space-y-1">
-        {navigationItems.map((item) => (
-          <Link
-            key={item.name}
-            to={item.href}
-            className={`flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-muted transition-colors ${
-              location.pathname === item.href ? "bg-muted font-medium" : ""
-            }`}
-          >
-            <item.icon className="h-4 w-4" />
-            {!isCollapsed && <span>{item.name}</span>}
-          </Link>
-        ))}
-      </nav>
+      <div className="flex-1 overflow-y-auto py-2">
+        <nav className="px-2">
+          <ul className="space-y-1">
+            {sidebarItems.map((item) => (
+              <li key={item.name}>
+                <Link to={item.path}>
+                  <Button
+                    variant={isActive(item.path) ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start",
+                      isActive(item.path) && "bg-sidebar-accent"
+                    )}
+                  >
+                    {item.icon}
+                    {!collapsed && <span className="ml-3">{item.name}</span>}
+                  </Button>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      <div className="p-3 space-y-3 border-t border-border/50">
-        <ModeToggle />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full flex justify-between items-center text-sm px-3 py-2 rounded-md hover:bg-muted transition-colors">
-              <div className="flex items-center space-x-2">
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src="https://github.com/shadcn.png" />
-                  <AvatarFallback>SC</AvatarFallback>
-                </Avatar>
-                {!isCollapsed && <span>shadcn</span>}
+        {!collapsed && (
+          <>
+            <Separator className="my-4" />
+            
+            <div className="px-4 mb-2">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-sidebar-foreground/70">
+                  Notebooks
+                </h3>
+                <Link to="/notebooks">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
-              {!isCollapsed && <SettingsIcon className="h-4 w-4" />}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>
-              <User className="h-4 w-4 mr-2" />
-              <span>Profile</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <SettingsIcon className="h-4 w-4 mr-2" />
-              <span>Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </div>
+            <nav className="px-2">
+              {notebooksLoading ? (
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">Loading...</div>
+              ) : notebooks && notebooks.length > 0 ? (
+                <ul className="space-y-1">
+                  {notebooks.map((notebook) => (
+                    <li key={notebook.id}>
+                      <Button variant="ghost" className="w-full justify-start" size="sm">
+                        <BookOpen className="h-4 w-4 mr-2" />
+                        <span className="truncate">{notebook.name}</span>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">
+                  <Link to="/notebooks" className="hover:underline">Create your first notebook</Link>
+                </div>
+              )}
+            </nav>
+
+            <Separator className="my-4" />
+            
+            <div className="px-4 mb-2">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-sidebar-foreground/70">
+                  Tags
+                </h3>
+                <Link to="/tags">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <nav className="px-2">
+              {tagsLoading ? (
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">Loading...</div>
+              ) : tags && tags.length > 0 ? (
+                <ul className="space-y-1">
+                  {tags.map((tag) => (
+                    <li key={tag.id}>
+                      <Button variant="ghost" className="w-full justify-start" size="sm">
+                        <div className={cn("h-3 w-3 rounded-full mr-2", tag.color)} />
+                        <span className="truncate">{tag.name}</span>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-2 py-1 text-sm text-sidebar-foreground/50">
+                  <Link to="/tags" className="hover:underline">Create your first tag</Link>
+                </div>
+              )}
+            </nav>
+          </>
+        )}
+      </div>
+
+      <div className="p-4 border-t border-sidebar-border">
+        <div className="flex items-center">
+          <ThemeToggle />
+          {!collapsed && user && (
+            <div className="ml-3">
+              <p className="text-sm font-medium">{user.email?.split("@")[0] || "User"}</p>
+              <p className="text-xs text-sidebar-foreground/70">{user.email}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
