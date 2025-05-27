@@ -17,8 +17,8 @@ export class WhisperStrategy implements ITranscriptStrategy {
         return null;
       }
 
-      // Try to get audio using yt-dlp style extraction
-      const audioBuffer = await this.extractAudio(videoId);
+      // Try multiple methods to get audio
+      const audioBuffer = await this.extractAudioWithFallbacks(videoId);
       if (!audioBuffer) {
         console.warn("Could not extract audio for Whisper transcription");
         return null;
@@ -34,8 +34,8 @@ export class WhisperStrategy implements ITranscriptStrategy {
 
       // Prepare form data for Whisper API
       const formData = new FormData();
-      const audioBlob = new Blob([audioBuffer], { type: 'audio/mp4' });
-      formData.append('file', audioBlob, `${videoId}.mp4`);
+      const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+      formData.append('file', audioBlob, `${videoId}.webm`);
       formData.append('model', 'whisper-1');
       formData.append('response_format', 'verbose_json');
       formData.append('timestamp_granularities[]', 'segment');
@@ -98,111 +98,189 @@ export class WhisperStrategy implements ITranscriptStrategy {
     }
   }
 
-  private async extractAudio(videoId: string): Promise<ArrayBuffer | null> {
-    try {
-      // Use multiple approaches to get audio
-      const audioUrl = await this.getAudioUrl(videoId);
-      if (!audioUrl) {
-        console.warn("Could not find audio URL");
-        return null;
-      }
+  private async extractAudioWithFallbacks(videoId: string): Promise<ArrayBuffer | null> {
+    const methods = [
+      () => this.tryYTDLPMethod(videoId),
+      () => this.tryInnerTubeMethod(videoId),
+      () => this.tryEmbedMethod(videoId),
+      () => this.tryDirectStreamMethod(videoId)
+    ];
 
-      console.log("Downloading audio from extracted URL...");
+    for (let i = 0; i < methods.length; i++) {
+      try {
+        console.log(`Trying audio extraction method ${i + 1}/${methods.length}`);
+        const result = await methods[i]();
+        if (result) {
+          console.log(`Audio extraction method ${i + 1} successful`);
+          return result;
+        }
+      } catch (error) {
+        console.warn(`Audio extraction method ${i + 1} failed:`, error.message);
+      }
+    }
+
+    return null;
+  }
+
+  private async tryYTDLPMethod(videoId: string): Promise<ArrayBuffer | null> {
+    try {
+      // Use a YouTube audio extraction service that mimics yt-dlp behavior
+      const extractorUrl = `https://www.yt-download.org/api/button/mp3/${videoId}`;
       
-      // Download the audio with proper headers
-      const audioResponse = await fetch(audioUrl, {
+      const response = await fetch(extractorUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'audio/webm,audio/ogg,audio/*,*/*;q=0.1',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': `https://www.youtube.com/watch?v=${videoId}`,
-          'Origin': 'https://www.youtube.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://www.yt-download.org/',
         }
       });
 
-      if (!audioResponse.ok) {
-        throw new Error(`Failed to download audio: ${audioResponse.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.url) {
+          return await this.downloadAudio(data.url);
+        }
       }
-
-      return await audioResponse.arrayBuffer();
     } catch (error) {
-      console.error("Error extracting audio:", error);
-      return null;
+      console.warn("YT-DLP method failed:", error);
     }
+    return null;
   }
 
-  private async getAudioUrl(videoId: string): Promise<string | null> {
+  private async tryInnerTubeMethod(videoId: string): Promise<ArrayBuffer | null> {
     try {
-      // First, try to get the video page
-      const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      // Try the modern YouTube InnerTube API approach
+      const response = await fetch('https://www.youtube.com/youtubei/v1/player', {
+        method: 'POST',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20230101.00.00'
+            }
+          },
+          videoId: videoId
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const formats = data?.streamingData?.adaptiveFormats || [];
+        
+        // Find audio-only format
+        const audioFormat = formats.find((format: any) => 
+          format.mimeType?.includes('audio/webm') || format.mimeType?.includes('audio/mp4')
+        );
+
+        if (audioFormat?.url) {
+          return await this.downloadAudio(audioFormat.url);
+        }
+      }
+    } catch (error) {
+      console.warn("InnerTube method failed:", error);
+    }
+    return null;
+  }
+
+  private async tryEmbedMethod(videoId: string): Promise<ArrayBuffer | null> {
+    try {
+      // Try extracting from the embed page
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      const response = await fetch(embedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }
+      });
+
+      if (response.ok) {
+        const html = await response.text();
+        
+        // Look for streaming data in the embed page
+        const streamMatch = html.match(/"streamingData":\s*({[^}]+})/);
+        if (streamMatch) {
+          try {
+            const streamData = JSON.parse(streamMatch[1]);
+            const formats = streamData?.adaptiveFormats || [];
+            
+            const audioFormat = formats.find((format: any) => 
+              format.mimeType?.includes('audio')
+            );
+
+            if (audioFormat?.url) {
+              return await this.downloadAudio(audioFormat.url);
+            }
+          } catch (e) {
+            console.warn("Failed to parse embed stream data:", e);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Embed method failed:", error);
+    }
+    return null;
+  }
+
+  private async tryDirectStreamMethod(videoId: string): Promise<ArrayBuffer | null> {
+    try {
+      // Try direct streaming URLs (these might work for some videos)
+      const possibleUrls = [
+        `https://www.youtube.com/watch?v=${videoId}&format=audio`,
+        `https://r1---sn-4g5e6nls.googlevideo.com/videoplayback?id=${videoId}&itag=140`,
+        `https://r2---sn-4g5e6nls.googlevideo.com/videoplayback?id=${videoId}&itag=140`
+      ];
+
+      for (const url of possibleUrls) {
+        try {
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Range': 'bytes=0-1048576' // Only download first 1MB to test
+            }
+          });
+
+          if (response.ok && response.headers.get('content-type')?.includes('audio')) {
+            // If we can get some audio content, download the full file
+            return await this.downloadAudio(url);
+          }
+        } catch (e) {
+          console.warn(`Direct stream URL failed: ${url}`, e);
+        }
+      }
+    } catch (error) {
+      console.warn("Direct stream method failed:", error);
+    }
+    return null;
+  }
+
+  private async downloadAudio(url: string): Promise<ArrayBuffer | null> {
+    try {
+      console.log("Downloading audio from URL...");
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'audio/*,*/*;q=0.1',
+          'Accept-Language': 'en-US,en;q=0.9',
         }
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch video page: ${response.status}`);
+        throw new Error(`Failed to download audio: ${response.status}`);
       }
 
-      const html = await response.text();
+      const buffer = await response.arrayBuffer();
       
-      // Try to extract player response data
-      const playerResponseMatch = html.match(/var ytInitialPlayerResponse = ({.*?});/);
-      if (playerResponseMatch) {
-        try {
-          const playerResponse = JSON.parse(playerResponseMatch[1]);
-          const formats = playerResponse?.streamingData?.adaptiveFormats || [];
-          
-          // Find audio-only format (prefer medium quality for balance)
-          const audioFormat = formats.find((format: any) => 
-            format.mimeType?.includes('audio') && 
-            (format.audioQuality === 'AUDIO_QUALITY_MEDIUM' || format.audioQuality === 'AUDIO_QUALITY_LOW')
-          ) || formats.find((format: any) => format.mimeType?.includes('audio'));
-
-          if (audioFormat?.url) {
-            return audioFormat.url;
-          }
-        } catch (e) {
-          console.warn("Failed to parse player response:", e);
-        }
+      // Basic validation - ensure we have some audio-like content
+      if (buffer.byteLength < 1000) {
+        throw new Error('Downloaded content too small to be valid audio');
       }
 
-      // Fallback: try to extract from config data
-      const configMatch = html.match(/ytplayer\.config\s*=\s*({.*?});/);
-      if (configMatch) {
-        try {
-          const config = JSON.parse(configMatch[1]);
-          const streamMap = config?.args?.adaptive_fmts;
-          if (streamMap) {
-            const formats = streamMap.split(',').map((format: string) => {
-              const params = new URLSearchParams(format);
-              return {
-                url: params.get('url'),
-                type: params.get('type'),
-                quality: params.get('quality')
-              };
-            });
-            
-            const audioFormat = formats.find((format: any) => 
-              format.type?.includes('audio')
-            );
-            
-            if (audioFormat?.url) {
-              return audioFormat.url;
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to parse config data:", e);
-        }
-      }
-
-      return null;
+      return buffer;
     } catch (error) {
-      console.error("Error getting audio URL:", error);
+      console.error("Error downloading audio:", error);
       return null;
     }
   }
