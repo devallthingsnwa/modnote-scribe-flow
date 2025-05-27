@@ -7,7 +7,6 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
-  File,
   Hash,
   Home,
   Plus,
@@ -19,6 +18,7 @@ import { Logo } from "@/components/Logo";
 import { Separator } from "@/components/ui/separator";
 import { useNotebooks, useTags } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { DeepResearchWidget } from "@/components/DeepResearchWidget";
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -113,6 +113,13 @@ export function Sidebar() {
 
         {!collapsed && (
           <>
+            <Separator className="my-4" />
+            
+            {/* Deep Research Section */}
+            <div className="px-2 mb-4">
+              <DeepResearchWidget />
+            </div>
+
             <Separator className="my-4" />
             
             <div className="px-4 mb-2">
