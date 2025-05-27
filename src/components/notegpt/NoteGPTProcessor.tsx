@@ -133,31 +133,38 @@ ${transcript}
 *Add your personal notes here...*
 `;
 
-      const newNote = {
+      const noteData = {
         title: `📺 ${videoTitle}`,
         content: noteContent,
         source_url: videoUrl,
         is_transcription: true,
-        tags: ['youtube', 'transcript', 'ai-summary', ...summary.mainTopics.slice(0, 3).map(topic => topic.toLowerCase())]
       };
 
-      createNoteMutation.mutate(newNote, {
-        onSuccess: (data) => {
-          toast({
-            title: "Note Saved Successfully",
-            description: "Your transcript and AI summary have been saved as a note.",
-          });
-          onSaveComplete?.(data.id);
-        },
-        onError: (error) => {
-          toast({
-            title: "Save Failed",
-            description: "Unable to save note. Please try again.",
-            variant: "destructive",
-          });
-          console.error('Save error:', error);
+      const tagNames = ['youtube', 'transcript', 'ai-summary', ...summary.mainTopics.slice(0, 3).map(topic => topic.toLowerCase())];
+
+      createNoteMutation.mutate(
+        { 
+          note: noteData,
+          tagIds: tagNames 
+        }, 
+        {
+          onSuccess: (data) => {
+            toast({
+              title: "Note Saved Successfully",
+              description: "Your transcript and AI summary have been saved as a note.",
+            });
+            onSaveComplete?.(data.id);
+          },
+          onError: (error) => {
+            toast({
+              title: "Save Failed",
+              description: "Unable to save note. Please try again.",
+              variant: "destructive",
+            });
+            console.error('Save error:', error);
+          }
         }
-      });
+      );
     } catch (error) {
       toast({
         title: "Save Failed",

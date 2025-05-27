@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -10,7 +11,7 @@ import {
   Book,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { useTheme } from "@/components/ui/theme-provider";
+import { useTheme } from "@/providers/ThemeProvider";
 import { ModeToggle } from "@/components/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {

@@ -1,10 +1,11 @@
+
 import {
   BrowserRouter,
   Routes,
   Route,
 } from "react-router-dom";
-import { ThemeProvider } from "@/components/theme-provider"
-import { QueryClient } from "@tanstack/react-query";
+import { ThemeProvider } from "@/providers/ThemeProvider"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster"
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
@@ -19,10 +20,12 @@ import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
 import NoteGPT from "@/pages/NoteGPT";
 
+const queryClient = new QueryClient();
+
 function App() {
   return (
-    <QueryClient>
-      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
         <Toaster />
         <BrowserRouter>
           <Routes>
@@ -41,7 +44,7 @@ function App() {
           </Routes>
         </BrowserRouter>
       </ThemeProvider>
-    </QueryClient>
+    </QueryClientProvider>
   );
 }
 
