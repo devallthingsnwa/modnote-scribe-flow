@@ -98,16 +98,16 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Fetch transcript with enhanced options for natural formatting
+      // Enhanced transcript fetching with better error handling
       if (fetchTranscript) {
         try {
-          console.log(`Fetching transcript for video: ${videoId} with options:`, transcriptOptions);
+          console.log(`Attempting to fetch transcript for video: ${videoId}`);
           
           const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
             body: { 
               videoId,
               options: {
-                includeTimestamps: false, // Get natural flowing text
+                includeTimestamps: true,
                 language: 'en',
                 format: 'text',
                 maxRetries: 3,
@@ -117,30 +117,41 @@ export class VideoNoteProcessor {
           });
           
           if (transcriptError) {
-            console.error('Error fetching transcript:', transcriptError);
+            console.error('Supabase function error during transcript fetch:', transcriptError);
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
-          } else if (transcriptResult?.success && transcriptResult?.transcript) {
-            const transcriptContent = transcriptResult.transcript.trim();
-            if (transcriptContent && transcriptContent.length > 50) {
-              result.transcript = transcriptContent;
-              result.segments = transcriptResult.segments || [];
-              console.log(`Enhanced transcript fetched successfully: ${transcriptContent.length} characters, ${result.segments.length} segments`);
+          } else if (transcriptResult) {
+            console.log('Transcript response received:', {
+              success: transcriptResult.success,
+              hasTranscript: !!transcriptResult.transcript,
+              transcriptLength: transcriptResult.transcript?.length || 0
+            });
+            
+            if (transcriptResult.success && transcriptResult.transcript) {
+              const transcriptContent = transcriptResult.transcript.trim();
+              if (transcriptContent && transcriptContent.length > 20) {
+                result.transcript = transcriptContent;
+                result.segments = transcriptResult.segments || [];
+                console.log(`Enhanced transcript fetched successfully: ${transcriptContent.length} characters`);
+              } else {
+                console.warn('Transcript content is too short or empty');
+                result.transcript = "Transcript appears to be empty. You can add your own notes here.";
+              }
             } else {
-              console.warn('Transcript appears to be empty or invalid');
-              result.transcript = "Transcript not available for this video. You can add your own notes here.";
+              console.warn('Transcript fetch was not successful:', transcriptResult.error);
+              result.transcript = transcriptResult.transcript || "Transcript not available for this video. You can add your own notes here.";
             }
           } else {
-            console.warn('No transcript returned from enhanced function');
-            result.transcript = "Transcript not available for this video. You can add your own notes here.";
+            console.warn('No transcript response received');
+            result.transcript = "No response from transcript service. You can add your own notes here.";
           }
         } catch (error) {
-          console.error('Error fetching enhanced transcript:', error);
-          result.transcript = "Transcript not available for this video. You can add your own notes here.";
+          console.error('Error during transcript fetch:', error);
+          result.transcript = "Error fetching transcript. You can add your own notes here.";
         }
       }
 
       // Generate AI summary if requested and we have valid transcript
-      if (generateSummary && result.transcript && result.transcript !== "Transcript not available for this video. You can add your own notes here.") {
+      if (generateSummary && result.transcript && !result.transcript.includes("You can add your own notes here")) {
         try {
           console.log('Generating AI summary...');
           const summaryResult = await supabase.functions.invoke('process-content-with-deepseek', {

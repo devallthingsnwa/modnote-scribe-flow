@@ -16,39 +16,62 @@ export const formatTimestamp = (milliseconds: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// Function to fetch YouTube transcript using our edge function
+// Enhanced function to fetch YouTube transcript using our edge function
 export const fetchYouTubeTranscript = async (videoId: string): Promise<string> => {
   try {
-    console.log("Calling fetch-youtube-transcript edge function with videoId:", videoId);
+    console.log("Fetching transcript for video ID:", videoId);
     
     const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
-      body: { videoId }
+      body: { 
+        videoId,
+        options: {
+          includeTimestamps: true,
+          language: 'en',
+          format: 'text',
+          maxRetries: 3
+        }
+      }
     });
 
     if (error) {
-      console.error("Error from edge function:", error);
+      console.error("Supabase function error:", error);
       throw new Error(`Failed to fetch transcript: ${error.message}`);
     }
 
-    console.log("Response from edge function:", data);
+    console.log("Raw response from edge function:", data);
 
     if (!data) {
-      return "No response received from transcript service.";
+      throw new Error("No response received from transcript service");
     }
 
-    // Check if the response contains an error
-    if (data.error) {
-      console.error("Error in transcript response:", data.error);
-      return `Error fetching transcript: ${data.error}`;
+    // Handle both success and error responses consistently
+    if (data.success === false) {
+      console.warn("Transcript fetch indicated failure:", data.error);
+      return data.transcript || "No transcript available for this video. You can add your own notes here.";
     }
 
-    // Return the transcript or a fallback message
-    return data.transcript || "No transcript content available for this video.";
+    // Check for valid transcript content
+    if (data.transcript && typeof data.transcript === 'string') {
+      const transcriptContent = data.transcript.trim();
+      if (transcriptContent.length > 10) {
+        console.log(`Successfully fetched transcript: ${transcriptContent.length} characters`);
+        return transcriptContent;
+      }
+    }
+
+    // Fallback for empty or invalid transcript
+    console.warn("Transcript appears to be empty or invalid");
+    return "No transcript content available for this video. You can add your own notes here.";
     
   } catch (error: any) {
     console.error("Error in fetchYouTubeTranscript:", error);
-    // Return a user-friendly error message
-    return `Error fetching transcript: ${error.message}`;
+    
+    // Return user-friendly error message
+    if (error.message.includes('Failed to fetch transcript')) {
+      return `Unable to fetch transcript: ${error.message}`;
+    }
+    
+    return "Error fetching transcript. The video may not have captions available or may be restricted. You can add your own notes here.";
   }
 };
 
