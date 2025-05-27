@@ -131,20 +131,12 @@ export function NotesListPanel({
             {onToggleCollapse && <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="h-8 w-8 hover:bg-primary/10 flex-shrink-0">
                 <ChevronLeft className="h-4 w-4" />
               </Button>}
-            {!isSelectMode && <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                <h2 className="font-semibold text-foreground">Notes</h2>
-              </div>}
+            {!isSelectMode}
           </div>
           
           {/* Enhanced Action Buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {onSelectModeToggle && <Button onClick={onSelectModeToggle} size="sm" variant={isSelectMode ? "default" : "outline"} className="text-xs px-3 h-8 transition-all">
-                <MoreHorizontal className="h-3 w-3" />
-                <span className="hidden sm:inline ml-1">
-                  {isSelectMode ? "Cancel" : "Select"}
-                </span>
-              </Button>}
+            {onSelectModeToggle}
             {onImport && !isSelectMode && <Button onClick={onImport} size="sm" variant="outline" className="text-xs px-3 h-8 hover:bg-primary/10 hover:border-primary/30 transition-all">
                 <Upload className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">Upload</span>
