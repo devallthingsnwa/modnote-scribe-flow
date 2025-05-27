@@ -33,6 +33,37 @@ export function YouTubeTranscriptIntegration({
     return text.match(urlRegex) || [];
   };
 
+  const isValidTranscript = (transcript: string): boolean => {
+    if (!transcript || typeof transcript !== 'string') return false;
+    
+    const trimmed = transcript.trim();
+    
+    // Check if it's an error message
+    const errorMessages = [
+      'You can add your own notes here',
+      'Transcript not available',
+      'No transcript available',
+      'Unable to fetch transcript',
+      'Error fetching transcript',
+      'could not be fetched',
+      'Please try again later',
+      'All extraction methods failed',
+      'captions available or may be restricted',
+      'technical error'
+    ];
+    
+    const hasErrorMessage = errorMessages.some(msg => 
+      trimmed.toLowerCase().includes(msg.toLowerCase())
+    );
+    
+    // Require minimum length and proper formatting for valid transcripts
+    const hasTimestamps = trimmed.includes('[') && trimmed.includes(']');
+    const hasMultipleLines = trimmed.split('\n').length > 3;
+    const hasMinimumLength = trimmed.length > 200; // Increased minimum length
+    
+    return !hasErrorMessage && (hasTimestamps || hasMultipleLines) && hasMinimumLength;
+  };
+
   const extractTranscriptFromContent = async (content: string) => {
     const videoIds = extractYouTubeId(content);
     const urls = detectYouTubeUrls(content);
@@ -65,6 +96,11 @@ export function YouTubeTranscriptIntegration({
         throw new Error(result.error || "Failed to extract transcript");
       }
 
+      // Validate the transcript content
+      if (!result.transcript || !isValidTranscript(result.transcript)) {
+        throw new Error("No valid transcript available for this video. The video may not have captions enabled or may be restricted.");
+      }
+
       // Format the enhanced content
       const title = result.metadata?.title || `YouTube Video ${videoId}`;
       const author = result.metadata?.author || 'Unknown';
@@ -78,13 +114,7 @@ export function YouTubeTranscriptIntegration({
       enhancedContent += `**Extracted:** ${new Date().toLocaleString()}\n\n`;
       enhancedContent += `---\n\n`;
       enhancedContent += `## 📝 Transcript\n\n`;
-      
-      if (result.transcript && result.transcript.length > 100) {
-        enhancedContent += result.transcript;
-      } else {
-        enhancedContent += "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.";
-      }
-
+      enhancedContent += result.transcript;
       enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
 
       onTranscriptExtracted(enhancedContent);
@@ -98,7 +128,7 @@ export function YouTubeTranscriptIntegration({
       console.error("Transcript extraction error:", error);
       toast({
         title: "Extraction failed",
-        description: error.message || "Failed to extract transcript. Please try again.",
+        description: error.message || "Failed to extract transcript. This video may not have captions available or may be restricted.",
         variant: "destructive",
       });
     } finally {
