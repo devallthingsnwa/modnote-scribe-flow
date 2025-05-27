@@ -1,49 +1,48 @@
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+} from "react-router-dom";
+import { ThemeProvider } from "@/components/theme-provider"
+import { QueryClient } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster"
+import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
+import NewNote from "@/pages/NewNote";
+import NotePage from "@/pages/NotePage";
+import TranscriptExtractor from "@/pages/TranscriptExtractor";
+import Notebooks from "@/pages/Notebooks";
+import Tags from "@/pages/Tags";
+import Profile from "@/pages/Profile";
+import Settings from "@/pages/Settings";
+import NotFound from "@/pages/NotFound";
+import NoteGPT from "@/pages/NoteGPT";
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider } from "@/providers/ThemeProvider";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import NotePage from "./pages/NotePage";
-import NewNote from "./pages/NewNote";
-import NotFound from "./pages/NotFound";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings";
-import Notebooks from "./pages/Notebooks";
-import Tags from "./pages/Tags";
-import { AuthProvider } from "./hooks/useAuth";
-
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
+function App() {
+  return (
+    <QueryClient>
+      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
         <Toaster />
-        <Sonner />
         <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/note/:id" element={<NotePage />} />
-              <Route path="/new" element={<NewNote />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/notebooks" element={<Notebooks />} />
-              <Route path="/tags" element={<Tags />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/new-note" element={<NewNote />} />
+            <Route path="/note/:id" element={<NotePage />} />
+            <Route path="/notegpt" element={<NoteGPT />} />
+            <Route path="/transcript-extractor" element={<TranscriptExtractor />} />
+            <Route path="/notebooks" element={<Notebooks />} />
+            <Route path="/tags" element={<Tags />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+      </ThemeProvider>
+    </QueryClient>
+  );
+}
 
 export default App;

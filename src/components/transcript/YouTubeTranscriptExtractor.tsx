@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Search, Play, Pause, FileText, Lightbulb, Clock, Hash, Copy, Share2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getYoutubeVideoId } from '@/lib/utils';
+import { NoteGPTProcessor } from '@/components/notegpt/NoteGPTProcessor';
+import { InteractiveTranscript } from '@/components/notegpt/InteractiveTranscript';
 
 interface TranscriptEntry {
   text: string;
@@ -24,20 +25,11 @@ interface VideoInfo {
   videoId: string;
 }
 
-interface Summary {
-  keyPoints: string[];
-  mainTopics: string[];
-  actionItems: string[];
-  oneLineSummary: string;
-}
-
 export function YouTubeTranscriptExtractor() {
   const [videoUrl, setVideoUrl] = useState('');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
-  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
-  const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'transcript' | 'summary' | 'notes'>('transcript');
@@ -152,7 +144,6 @@ export function YouTubeTranscriptExtractor() {
     setError('');
     setTranscript([]);
     setVideoInfo(null);
-    setSummary(null);
 
     try {
       // Fetch video info and transcript in parallel
@@ -183,65 +174,11 @@ export function YouTubeTranscriptExtractor() {
     }
   }, [videoUrl, toast]);
 
-  // Generate AI summary
-  const generateSummary = async () => {
-    if (transcript.length === 0) return;
-
-    setSummaryLoading(true);
-    try {
-      const fullText = transcript.map(entry => entry.text).join(' ');
-      const sentences = fullText.split(/[.!?]+/).filter(s => s.trim().length > 20);
-      
-      const keyPoints = sentences
-        .slice(0, Math.min(5, Math.floor(sentences.length / 3)))
-        .map(sentence => sentence.trim())
-        .filter(sentence => sentence.length > 0);
-      
-      const words = fullText.toLowerCase().match(/\b\w{4,}\b/g) || [];
-      const wordCount: { [key: string]: number } = {};
-      words.forEach(word => {
-        wordCount[word] = (wordCount[word] || 0) + 1;
-      });
-      
-      const mainTopics = Object.entries(wordCount)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 6)
-        .map(([word]) => word.charAt(0).toUpperCase() + word.slice(1));
-      
-      const generatedSummary: Summary = {
-        oneLineSummary: `This video discusses ${mainTopics.slice(0, 3).join(', ')} with ${transcript.length} segments of content.`,
-        keyPoints: keyPoints.length > 0 ? keyPoints : ['Key points will be extracted from the transcript content'],
-        mainTopics: mainTopics.length > 0 ? mainTopics : ['Topics extracted from video content'],
-        actionItems: [
-          'Review the full transcript for detailed information',
-          'Take notes on important sections',
-          'Follow up on mentioned resources or concepts'
-        ]
-      };
-
-      setSummary(generatedSummary);
-    } catch (error) {
-      setError('Failed to generate summary');
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (transcript.length > 0) {
-      generateSummary();
-    }
-  }, [transcript]);
-
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
-
-  const filteredTranscript = transcript.filter(entry =>
-    entry.text.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const jumpToTime = (time: number) => {
     setCurrentTime(time);
@@ -259,12 +196,6 @@ export function YouTubeTranscriptExtractor() {
 Channel: ${videoInfo?.channel || 'Unknown'}
 Duration: ${videoInfo?.duration || 'Unknown'}
 URL: ${videoUrl}
-
-## Summary
-${summary?.oneLineSummary || 'Summary not available'}
-
-## Key Points
-${summary?.keyPoints.map(point => `• ${point}`).join('\n') || 'No key points available'}
 
 ## Full Transcript
 ${transcript.map(entry => `[${formatTime(entry.offset)}] ${entry.text}`).join('\n')}
@@ -301,11 +232,17 @@ ${notes || 'No notes added'}
     setVideoUrl('');
     setTranscript([]);
     setVideoInfo(null);
-    setSummary(null);
     setError('');
     setSearchTerm('');
     setNotes('');
     setActiveTab('transcript');
+  };
+
+  const handleSaveComplete = (noteId: string) => {
+    toast({
+      title: "Success!",
+      description: "Your transcript has been saved as a note. You can find it in your dashboard.",
+    });
   };
 
   return (
@@ -315,9 +252,9 @@ ${notes || 'No notes added'}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center justify-center gap-3">
             <FileText className="text-primary" size={40} />
-            YouTube Transcript Extractor
+            NoteGPT - AI YouTube Analyzer
           </h1>
-          <p className="text-muted-foreground text-lg">Extract real transcripts from YouTube videos with AI-powered analysis</p>
+          <p className="text-muted-foreground text-lg">Extract transcripts, generate AI summaries, and create smart notes from YouTube videos</p>
         </div>
 
         {/* Input Section */}
@@ -424,7 +361,7 @@ ${notes || 'No notes added'}
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="transcript" className="flex items-center gap-2">
                       <FileText size={18} />
-                      Transcript
+                      Interactive Transcript
                       {transcript.length > 0 && (
                         <Badge variant="secondary" className="ml-1 text-xs">
                           {transcript.length}
@@ -433,7 +370,7 @@ ${notes || 'No notes added'}
                     </TabsTrigger>
                     <TabsTrigger value="summary" className="flex items-center gap-2">
                       <Lightbulb size={18} />
-                      AI Summary
+                      AI Analysis
                     </TabsTrigger>
                     <TabsTrigger value="notes" className="flex items-center gap-2">
                       <Hash size={18} />
@@ -443,137 +380,43 @@ ${notes || 'No notes added'}
 
                   <TabsContent value="transcript" className="p-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                      <h2 className="text-xl font-bold">Video Transcript</h2>
-                      <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className="relative flex-1 sm:flex-none">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
-                          <Input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search transcript..."
-                            className="pl-10 w-full sm:w-64"
-                          />
-                        </div>
-                        <Button
-                          onClick={downloadTranscript}
-                          className="flex items-center gap-2 whitespace-nowrap"
-                        >
-                          <Download size={18} />
-                          Export
-                        </Button>
-                      </div>
+                      <h2 className="text-xl font-bold">Interactive Video Transcript</h2>
+                      <Button
+                        onClick={downloadTranscript}
+                        className="flex items-center gap-2 whitespace-nowrap"
+                      >
+                        <Download size={18} />
+                        Export Transcript
+                      </Button>
                     </div>
 
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {filteredTranscript.length > 0 ? (
-                        filteredTranscript.map((entry, index) => (
-                          <Card
-                            key={index}
-                            className="p-3 hover:bg-muted/50 cursor-pointer transition-colors group"
-                            onClick={() => jumpToTime(entry.offset)}
-                          >
-                            <div className="flex gap-4">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="flex-shrink-0 text-xs font-mono"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  jumpToTime(entry.offset);
-                                }}
-                              >
-                                <Play className="h-3 w-3 mr-1" />
-                                {formatTime(entry.offset)}
-                              </Button>
-                              <p className="flex-1 text-foreground leading-relaxed">
-                                {entry.text}
-                              </p>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="opacity-0 group-hover:opacity-100 transition-all"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(entry.text);
-                                }}
-                              >
-                                <Copy size={16} />
-                              </Button>
-                            </div>
-                          </Card>
-                        ))
-                      ) : transcript.length === 0 ? (
-                        <div className="text-center text-muted-foreground py-8">
-                          Enter a YouTube URL above to extract the transcript
-                        </div>
-                      ) : (
-                        <div className="text-center text-muted-foreground py-8">
-                          No results found for "{searchTerm}"
-                        </div>
-                      )}
-                    </div>
+                    <InteractiveTranscript
+                      transcript={transcript}
+                      videoId={videoInfo.videoId}
+                      onTimestampClick={jumpToTime}
+                    />
                   </TabsContent>
 
                   <TabsContent value="summary" className="p-6">
-                    {summaryLoading ? (
-                      <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">AI is analyzing the content...</p>
-                      </div>
-                    ) : summary ? (
-                      <div className="space-y-6">
-                        <Card className="bg-primary/5 border-primary/20">
-                          <CardContent className="p-4">
-                            <h3 className="font-bold text-primary mb-2">Quick Summary</h3>
-                            <p className="text-foreground">{summary.oneLineSummary}</p>
-                          </CardContent>
-                        </Card>
-
-                        <div>
-                          <h3 className="font-bold text-lg mb-3">Key Points</h3>
-                          <ul className="space-y-2">
-                            {summary.keyPoints.map((point, index) => (
-                              <li key={index} className="flex items-start gap-3">
-                                <Badge variant="secondary" className="w-6 h-6 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
-                                  {index + 1}
-                                </Badge>
-                                <span className="text-foreground">{point}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h3 className="font-bold text-lg mb-3">Main Topics</h3>
-                          <div className="flex flex-wrap gap-2">
-                            {summary.mainTopics.map((topic, index) => (
-                              <Badge key={index} variant="outline">
-                                {topic}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="font-bold text-lg mb-3">Action Items</h3>
-                          <ul className="space-y-2">
-                            {summary.actionItems.map((item, index) => (
-                              <li key={index} className="flex items-start gap-3">
-                                <span className="text-primary mt-1">✓</span>
-                                <span className="text-foreground">{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
+                    <h2 className="text-xl font-bold mb-6">AI-Powered Analysis</h2>
+                    
+                    {transcript.length > 0 ? (
+                      <NoteGPTProcessor
+                        videoId={videoInfo.videoId}
+                        videoTitle={videoInfo.title}
+                        videoUrl={videoUrl}
+                        transcript={transcript.map(entry => `[${formatTime(entry.offset)}] ${entry.text}`).join('\n')}
+                        onSaveComplete={handleSaveComplete}
+                      />
                     ) : (
-                      <div className="text-center text-muted-foreground py-8">Extract transcript first to see AI summary</div>
+                      <div className="text-center text-muted-foreground py-8">
+                        Extract transcript first to generate AI analysis
+                      </div>
                     )}
                   </TabsContent>
 
                   <TabsContent value="notes" className="p-6">
-                    <h2 className="text-xl font-bold mb-4">My Notes</h2>
+                    <h2 className="text-xl font-bold mb-4">Personal Notes</h2>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
