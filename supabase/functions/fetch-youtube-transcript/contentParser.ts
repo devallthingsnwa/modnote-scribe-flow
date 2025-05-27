@@ -38,6 +38,7 @@ export class ContentParser {
       
       return new Response(
         JSON.stringify({ 
+          success: true,
           transcript: formattedTranscript,
           metadata: {
             segments: transcript.length,
@@ -66,121 +67,117 @@ export class ContentParser {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      if (!line || line === 'WEBVTT' || line.startsWith('Kind:') || line.startsWith('Language:') || line.startsWith('NOTE')) {
+      // Skip WEBVTT header and empty lines
+      if (!line || line === 'WEBVTT' || line.startsWith('NOTE')) {
         continue;
       }
       
-      const timestampMatch = line.match(/^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/);
-      
-      if (timestampMatch) {
-        if (currentCue && currentCue.text?.trim()) {
+      // Parse time stamps (00:01.234 --> 00:05.678)
+      const timeMatch = line.match(/(\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}\.\d{3})/);
+      if (timeMatch) {
+        if (currentCue && currentCue.text) {
           transcript.push(currentCue as TranscriptSegment);
         }
         
         currentCue = {
-          start: this.parseWebVTTTime(timestampMatch[1]),
-          end: this.parseWebVTTTime(timestampMatch[2]),
+          start: this.parseTimeString(timeMatch[1]),
+          end: this.parseTimeString(timeMatch[2]),
           text: ''
         };
       } else if (currentCue && line) {
-        let cleanText = line
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/<[^>]*>/g, '')
-          .replace(/\{[^}]*\}/g, '')
-          .trim();
-        
-        if (cleanText) {
-          currentCue.text += (currentCue.text ? ' ' : '') + cleanText;
-        }
+        // This is transcript text
+        currentCue.text = currentCue.text ? `${currentCue.text} ${line}` : line;
       }
     }
     
-    if (currentCue && currentCue.text?.trim()) {
+    // Add the last cue
+    if (currentCue && currentCue.text) {
       transcript.push(currentCue as TranscriptSegment);
     }
     
-    return transcript.filter(entry => entry.text && entry.text.trim().length > 0);
+    return transcript;
   }
 
   private parseXML(content: string): TranscriptSegment[] {
     const transcript: TranscriptSegment[] = [];
-    const textRegex = /<text start="([^"]*)"[^>]*dur="([^"]*)"[^>]*>([^<]*)<\/text>/g;
+    
+    // Match XML text elements with start and dur attributes
+    const textRegex = /<text start="([^"]*)"(?:\s+dur="([^"]*)")?[^>]*>([^<]*)<\/text>/g;
     let match;
     
     while ((match = textRegex.exec(content)) !== null) {
-      const startTime = parseFloat(match[1]);
-      const duration = parseFloat(match[2]) || 5;
-      const text = match[3]
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .trim();
+      const start = parseFloat(match[1]);
+      const duration = match[2] ? parseFloat(match[2]) : 3; // Default 3 seconds if no duration
+      const text = this.cleanText(match[3]);
       
-      if (text) {
+      if (text && text.trim()) {
         transcript.push({
-          start: startTime,
-          end: startTime + duration,
-          text: text
+          start: start,
+          end: start + duration,
+          text: text.trim()
         });
       }
     }
     
-    return transcript;
+    return transcript.sort((a, b) => a.start - b.start);
   }
 
   private parseSimpleText(content: string): TranscriptSegment[] {
     const transcript: TranscriptSegment[] = [];
     const lines = content.split('\n');
-    let timeOffset = 0;
+    let currentTime = 0;
     
     for (const line of lines) {
-      const cleanLine = line.trim();
-      if (cleanLine && !cleanLine.startsWith('WEBVTT') && cleanLine.length > 5) {
+      const trimmedLine = line.trim();
+      if (trimmedLine) {
         transcript.push({
-          start: timeOffset,
-          end: timeOffset + 5, // 5 second segments
-          text: cleanLine
+          start: currentTime,
+          end: currentTime + 3, // Default 3 seconds per segment
+          text: this.cleanText(trimmedLine)
         });
-        timeOffset += 5;
+        currentTime += 3;
       }
     }
     
     return transcript;
   }
 
+  private parseTimeString(timeStr: string): number {
+    const parts = timeStr.split(':');
+    const minutes = parseInt(parts[0], 10);
+    const secondsParts = parts[1].split('.');
+    const seconds = parseInt(secondsParts[0], 10);
+    const milliseconds = secondsParts[1] ? parseInt(secondsParts[1], 10) : 0;
+    
+    return minutes * 60 + seconds + (milliseconds / 1000);
+  }
+
+  private cleanText(text: string): string {
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .replace(/<[^>]*>/g, '') // Remove any HTML tags
+      .trim();
+  }
+
   formatTime(seconds: number): string {
     const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  private parseWebVTTTime(timeString: string): number {
-    timeString = timeString.replace(',', '.');
-    const parts = timeString.split(':');
-    let hours = 0, minutes = 0, seconds = 0;
-    
-    if (parts.length === 3) {
-      hours = parseInt(parts[0], 10);
-      minutes = parseInt(parts[1], 10);
-      seconds = parseFloat(parts[2]);
-    } else if (parts.length === 2) {
-      minutes = parseInt(parts[0], 10);
-      seconds = parseFloat(parts[1]);
-    }
-    
-    return hours * 3600 + minutes * 60 + seconds;
-  }
-
-  private formatTimeWithMilliseconds(seconds: number): string {
+  formatTimeWithMilliseconds(seconds: number): string {
     const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
+    const remainingSeconds = Math.floor(seconds % 60);
+    const milliseconds = Math.floor((seconds % 1) * 1000);
     
-    if (ms > 0) {
-      return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    if (milliseconds > 0) {
+      return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
     }
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 }

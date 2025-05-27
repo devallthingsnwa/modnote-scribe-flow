@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoProcessingOptions {
@@ -98,60 +97,13 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Enhanced transcript fetching with better error handling
+      // Enhanced transcript fetching with multiple retry attempts
       if (fetchTranscript) {
-        try {
-          console.log(`Attempting to fetch transcript for video: ${videoId}`);
-          
-          const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
-            body: { 
-              videoId,
-              options: {
-                includeTimestamps: true,
-                language: 'en',
-                format: 'text',
-                maxRetries: 3,
-                ...transcriptOptions
-              }
-            }
-          });
-          
-          if (transcriptError) {
-            console.error('Supabase function error during transcript fetch:', transcriptError);
-            result.transcript = "Transcript not available for this video. You can add your own notes here.";
-          } else if (transcriptResult) {
-            console.log('Transcript response received:', {
-              success: transcriptResult.success,
-              hasTranscript: !!transcriptResult.transcript,
-              transcriptLength: transcriptResult.transcript?.length || 0
-            });
-            
-            if (transcriptResult.success && transcriptResult.transcript) {
-              const transcriptContent = transcriptResult.transcript.trim();
-              if (transcriptContent && transcriptContent.length > 20) {
-                result.transcript = transcriptContent;
-                result.segments = transcriptResult.segments || [];
-                console.log(`Enhanced transcript fetched successfully: ${transcriptContent.length} characters`);
-              } else {
-                console.warn('Transcript content is too short or empty');
-                result.transcript = "Transcript appears to be empty. You can add your own notes here.";
-              }
-            } else {
-              console.warn('Transcript fetch was not successful:', transcriptResult.error);
-              result.transcript = transcriptResult.transcript || "Transcript not available for this video. You can add your own notes here.";
-            }
-          } else {
-            console.warn('No transcript response received');
-            result.transcript = "No response from transcript service. You can add your own notes here.";
-          }
-        } catch (error) {
-          console.error('Error during transcript fetch:', error);
-          result.transcript = "Error fetching transcript. You can add your own notes here.";
-        }
+        result.transcript = await this.fetchTranscriptWithRetries(videoId, transcriptOptions);
       }
 
       // Generate AI summary if requested and we have valid transcript
-      if (generateSummary && result.transcript && !result.transcript.includes("You can add your own notes here")) {
+      if (generateSummary && result.transcript && this.isValidTranscript(result.transcript)) {
         try {
           console.log('Generating AI summary...');
           const summaryResult = await supabase.functions.invoke('process-content-with-deepseek', {
@@ -183,6 +135,111 @@ export class VideoNoteProcessor {
         error: error.message || 'Failed to process video'
       };
     }
+  }
+
+  private static async fetchTranscriptWithRetries(
+    videoId: string, 
+    options: any = {}
+  ): Promise<string> {
+    const maxRetries = options.maxRetries || 3;
+    let lastError: string = '';
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Transcript fetch attempt ${attempt} for video: ${videoId}`);
+        
+        const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
+          body: { 
+            videoId,
+            options: {
+              includeTimestamps: true,
+              language: 'en',
+              format: 'text',
+              ...options
+            }
+          }
+        });
+        
+        if (transcriptError) {
+          lastError = `Supabase function error: ${transcriptError.message}`;
+          console.error('Supabase function error during transcript fetch:', transcriptError);
+          
+          // If it's the last attempt, continue to return fallback
+          if (attempt === maxRetries) break;
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+
+        if (transcriptResult) {
+          console.log('Transcript response received:', {
+            success: transcriptResult.success,
+            hasTranscript: !!transcriptResult.transcript,
+            transcriptLength: transcriptResult.transcript?.length || 0
+          });
+          
+          if (transcriptResult.success && transcriptResult.transcript) {
+            const transcriptContent = transcriptResult.transcript.trim();
+            if (this.isValidTranscript(transcriptContent)) {
+              console.log(`Successfully fetched transcript: ${transcriptContent.length} characters`);
+              return transcriptContent;
+            }
+          }
+          
+          // If we got a response but it indicates failure, log it and continue
+          if (transcriptResult.transcript) {
+            lastError = transcriptResult.error || 'Invalid transcript content';
+            console.warn('Transcript fetch indicated failure:', lastError);
+            return transcriptResult.transcript; // Return even failed transcript as it might have useful info
+          }
+        }
+
+        lastError = 'No transcript response received';
+        console.warn('No transcript response received on attempt', attempt);
+        
+        // Wait before retry (exponential backoff)
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+        }
+        
+      } catch (error: any) {
+        lastError = error.message || 'Unknown error';
+        console.error(`Error during transcript fetch attempt ${attempt}:`, error);
+        
+        // Wait before retry
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+
+    // All attempts failed, return user-friendly message
+    console.error(`All ${maxRetries} transcript fetch attempts failed. Last error:`, lastError);
+    return `Transcript could not be fetched after ${maxRetries} attempts. ${lastError.includes('captions') ? 'This video may not have captions available.' : 'Please try again later.'} You can add your own notes here.`;
+  }
+
+  private static isValidTranscript(transcript: string): boolean {
+    if (!transcript || typeof transcript !== 'string') return false;
+    
+    const trimmed = transcript.trim();
+    
+    // Check if it's a meaningful transcript (not just error messages)
+    const errorMessages = [
+      'You can add your own notes here',
+      'Transcript not available',
+      'No transcript available',
+      'Unable to fetch transcript',
+      'Error fetching transcript',
+      'could not be fetched',
+      'Please try again later'
+    ];
+    
+    const hasErrorMessage = errorMessages.some(msg => 
+      trimmed.toLowerCase().includes(msg.toLowerCase())
+    );
+    
+    return !hasErrorMessage && trimmed.length > 50;
   }
 
   // New method to fetch video title from HTML as fallback

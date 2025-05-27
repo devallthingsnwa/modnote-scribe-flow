@@ -1,191 +1,174 @@
 
+import { ContentParser } from "./contentParser.ts";
 import { YouTubeAPI } from "./youtubeApi.ts";
-import { FallbackMethods } from "./fallbackMethods.ts";
 import { corsHeaders } from "./utils.ts";
 
-export interface TranscriptOptions {
-  includeTimestamps?: boolean;
-  language?: string;
-  format?: 'text' | 'json' | 'srt';
-  maxRetries?: number;
-}
-
-export interface TranscriptSegment {
-  start: number;
-  duration: number;
-  text: string;
-  speaker?: string;
-}
-
-export interface TranscriptResponse {
-  success: boolean;
-  transcript?: string;
-  segments?: TranscriptSegment[];
-  metadata?: {
-    videoId: string;
-    language: string;
-    duration: number;
-    segmentCount: number;
-    extractionMethod: string;
-  };
-  error?: string;
-}
-
 export class TranscriptExtractor {
-  private youtubeApi: YouTubeAPI;
-  private fallbackMethods: FallbackMethods;
+  private contentParser: ContentParser;
+  private youtubeAPI: YouTubeAPI;
 
   constructor() {
-    this.youtubeApi = new YouTubeAPI();
-    this.fallbackMethods = new FallbackMethods();
+    this.contentParser = new ContentParser();
+    this.youtubeAPI = new YouTubeAPI();
   }
 
-  async extractTranscript(videoId: string, options: TranscriptOptions = {}): Promise<Response> {
-    const defaultOptions: TranscriptOptions = {
-      includeTimestamps: true,
-      language: 'en',
-      format: 'json',
-      maxRetries: 3,
-      ...options
-    };
+  async extractTranscript(videoId: string, options: any = {}): Promise<Response> {
+    console.log(`Starting transcript extraction for video: ${videoId}`);
 
-    console.log(`Starting transcript extraction for ${videoId} with options:`, defaultOptions);
+    // Try multiple extraction methods in order of preference
+    const extractionMethods = [
+      () => this.extractFromYouTubeAPI(videoId),
+      () => this.extractFromVideoPage(videoId),
+      () => this.extractFromAlternativeAPI(videoId)
+    ];
 
-    // Method 1: Try YouTube Transcript API first
-    const apiKey = Deno.env.get('YOUTUBE_TRANSCRIPT_API_KEY');
-    
-    if (apiKey) {
-      console.log("Attempting YouTube Transcript API...");
+    for (let i = 0; i < extractionMethods.length; i++) {
       try {
-        const apiResult = await this.youtubeApi.fetchWithAPI(videoId, apiKey, defaultOptions);
-        if (apiResult && await this.isValidResponse(apiResult)) {
-          console.log("YouTube Transcript API successful");
-          return apiResult;
+        console.log(`Attempting extraction method ${i + 1}`);
+        const result = await extractionMethods[i]();
+        
+        if (result) {
+          console.log(`Successfully extracted transcript using method ${i + 1}`);
+          return result;
         }
       } catch (error) {
-        console.log("YouTube Transcript API failed:", error.message);
-      }
-    } else {
-      console.log("No YouTube Transcript API key found, skipping API method");
-    }
-    
-    // Method 2: Enhanced fallback methods with retry logic
-    console.log("Trying enhanced fallback transcript extraction methods...");
-    
-    for (let attempt = 1; attempt <= defaultOptions.maxRetries!; attempt++) {
-      try {
-        console.log(`Fallback attempt ${attempt}/${defaultOptions.maxRetries}`);
-        const fallbackResult = await this.fallbackMethods.tryAllMethods(videoId, defaultOptions);
-        
-        if (fallbackResult && await this.isValidResponse(fallbackResult)) {
-          console.log(`Fallback method successful on attempt ${attempt}`);
-          return fallbackResult;
-        }
-      } catch (error) {
-        console.log(`Fallback attempt ${attempt} failed:`, error.message);
-        
-        if (attempt === defaultOptions.maxRetries) {
-          console.log("All fallback attempts exhausted");
-        } else {
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
+        console.warn(`Method ${i + 1} failed:`, error.message);
+        continue;
       }
     }
 
-    // Method 3: Final fallback - return structured error
-    console.log("All transcript extraction methods failed");
-    
-    const errorResponse: TranscriptResponse = {
-      success: false,
-      error: "Transcript not available for this video. The video may not have captions available, may be private, or may have restricted access.",
-      metadata: {
-        videoId,
-        language: defaultOptions.language!,
-        duration: 0,
-        segmentCount: 0,
-        extractionMethod: 'none'
-      }
-    };
-
+    // If all methods fail, return a structured error response
+    console.error("All transcript extraction methods failed");
     return new Response(
-      JSON.stringify(errorResponse),
+      JSON.stringify({
+        success: false,
+        transcript: "No transcript available for this video. The video may not have captions enabled or may be restricted.",
+        error: "All extraction methods failed",
+        metadata: {
+          videoId,
+          segments: 0,
+          duration: 0,
+          extractionMethod: 'failed'
+        }
+      }),
       {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
 
-  private async isValidResponse(response: Response): Promise<boolean> {
+  private async extractFromYouTubeAPI(videoId: string): Promise<Response | null> {
+    const apiKey = Deno.env.get('YOUTUBE_TRANSCRIPT_API_KEY');
+    if (apiKey) {
+      return await this.youtubeAPI.fetchWithAPI(videoId, apiKey);
+    }
+    return null;
+  }
+
+  private async extractFromVideoPage(videoId: string): Promise<Response | null> {
     try {
-      const clone = response.clone();
-      const data = await clone.json();
+      console.log("Attempting to extract from YouTube video page");
       
-      // Check if response has valid transcript data
-      return data && (
-        (data.transcript && data.transcript.length > 50) ||
-        (data.segments && Array.isArray(data.segments) && data.segments.length > 0)
-      );
-    } catch {
-      return false;
-    }
-  }
+      const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
 
-  private formatTranscriptResponse(
-    segments: TranscriptSegment[], 
-    videoId: string, 
-    method: string,
-    format: string = 'json'
-  ): TranscriptResponse {
-    const response: TranscriptResponse = {
-      success: true,
-      segments,
-      metadata: {
-        videoId,
-        language: 'en',
-        duration: segments.length > 0 ? segments[segments.length - 1].start + segments[segments.length - 1].duration : 0,
-        segmentCount: segments.length,
-        extractionMethod: method
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    };
 
-    // Format transcript text based on requested format
-    if (format === 'text' || format === 'srt') {
-      response.transcript = this.formatAsText(segments, format === 'srt');
+      const html = await response.text();
+      
+      // Extract captions data from the page
+      const captionsRegex = /"captions":(\{.*?\}),"videoDetails"/s;
+      const match = html.match(captionsRegex);
+      
+      if (!match) {
+        console.log("No captions data found in video page");
+        return null;
+      }
+
+      const captionsData = JSON.parse(match[1]);
+      const tracks = captionsData?.playerCaptionsTracklistRenderer?.captionTracks;
+      
+      if (!tracks || tracks.length === 0) {
+        console.log("No caption tracks found");
+        return null;
+      }
+
+      // Get the best available track (prefer auto-generated English)
+      const preferredTrack = tracks.find((track: any) => 
+        track.languageCode === 'en' || track.languageCode.startsWith('en')
+      ) || tracks[0];
+
+      if (!preferredTrack?.baseUrl) {
+        console.log("No suitable caption track found");
+        return null;
+      }
+
+      // Fetch the actual transcript content
+      const transcriptResponse = await fetch(preferredTrack.baseUrl);
+      const transcriptContent = await transcriptResponse.text();
+      
+      return await this.contentParser.processTranscriptContent(
+        transcriptContent, 
+        'youtube-page-extraction'
+      );
+
+    } catch (error) {
+      console.error("Video page extraction failed:", error);
+      return null;
     }
-
-    return response;
   }
 
-  private formatAsText(segments: TranscriptSegment[], includeSRT: boolean = false): string {
-    if (includeSRT) {
-      return segments.map((segment, index) => {
-        const startTime = this.formatSRTTime(segment.start);
-        const endTime = this.formatSRTTime(segment.start + segment.duration);
-        return `${index + 1}\n${startTime} --> ${endTime}\n${segment.text}\n`;
-      }).join('\n');
+  private async extractFromAlternativeAPI(videoId: string): Promise<Response | null> {
+    try {
+      console.log("Attempting alternative API extraction");
+      
+      // Try alternative transcript API
+      const response = await fetch(`https://youtube-transcript-api.herokuapp.com/transcript/${videoId}`);
+      
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Format the transcript
+        const formattedTranscript = data
+          .map((item: any) => {
+            const startTime = this.contentParser.formatTime(item.start || 0);
+            const endTime = this.contentParser.formatTime((item.start || 0) + (item.duration || 0));
+            return `[${startTime} - ${endTime}] ${item.text || ''}`;
+          })
+          .join('\n');
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            transcript: formattedTranscript,
+            metadata: {
+              videoId,
+              segments: data.length,
+              duration: data[data.length - 1]?.start + data[data.length - 1]?.duration || 0,
+              extractionMethod: 'alternative-api'
+            }
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          }
+        );
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Alternative API extraction failed:", error);
+      return null;
     }
-    
-    return segments.map(segment => {
-      const timestamp = this.formatTimestamp(segment.start);
-      const speaker = segment.speaker ? `${segment.speaker}: ` : '';
-      return `[${timestamp}] ${speaker}${segment.text}`;
-    }).join('\n');
-  }
-
-  private formatTimestamp(seconds: number): string {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  }
-
-  private formatSRTTime(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const milliseconds = Math.floor((seconds % 1) * 1000);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
   }
 }
