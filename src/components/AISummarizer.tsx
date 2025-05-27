@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, Loader2, Video, ExternalLink } from "lucide-react";
+import { Brain, Loader2, Video, ExternalLink, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 export function AISummarizer() {
   const [url, setUrl] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
   const createNoteMutation = useCreateNote();
@@ -48,10 +49,13 @@ export function AISummarizer() {
     }
 
     setIsProcessing(true);
+    setProcessingStage("Initializing...");
 
     try {
       console.log("Starting AI summarization for video:", videoId);
 
+      setProcessingStage("Extracting transcript...");
+      
       // Process the video with transcript, metadata, and AI summary
       const result = await VideoNoteProcessor.processVideo(videoId, {
         fetchMetadata: true,
@@ -68,6 +72,8 @@ export function AISummarizer() {
         throw new Error(result.error || 'Failed to process video');
       }
 
+      setProcessingStage("Generating AI summary...");
+
       // Create the enhanced note content
       let noteContent = `# 🎥 ${result.metadata?.title || 'YouTube Video'}\n\n`;
       noteContent += `**Source:** ${url}\n`;
@@ -83,6 +89,8 @@ export function AISummarizer() {
       noteContent += `---\n\n## 📝 Full Transcript\n\n`;
       noteContent += result.transcript || 'Transcript not available';
       noteContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+
+      setProcessingStage("Saving note...");
 
       // Create the note
       const noteData = {
@@ -129,6 +137,7 @@ export function AISummarizer() {
       });
     } finally {
       setIsProcessing(false);
+      setProcessingStage("");
     }
   };
 
@@ -143,7 +152,7 @@ export function AISummarizer() {
             AI Video Summarizer
           </CardTitle>
           <p className="text-muted-foreground">
-            Generate intelligent summaries from YouTube videos with timestamps and transcripts
+            Generate intelligent summaries from YouTube videos with AI-powered transcription
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -178,7 +187,7 @@ export function AISummarizer() {
           </div>
 
           {isProcessing && (
-            <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+            <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
               <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
                   <div className="relative">
@@ -187,10 +196,13 @@ export function AISummarizer() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      Generating AI Summary...
+                      {processingStage || "Processing..."}
                     </p>
                     <p className="text-xs text-blue-600 dark:text-blue-400">
-                      Fetching transcript, analyzing content, and creating your note
+                      {processingStage.includes("transcript") ? 
+                        "Using AI transcription if captions aren't available" : 
+                        "This may take a few moments for longer videos"
+                      }
                     </p>
                   </div>
                 </div>
@@ -201,14 +213,18 @@ export function AISummarizer() {
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
             <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
               <Video className="h-4 w-4" />
-              What you'll get:
+              Advanced AI Features:
             </h4>
             <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 ml-6">
-              <li className="list-disc">Complete AI-generated summary</li>
-              <li className="list-disc">Full transcript with timestamps</li>
-              <li className="list-disc">Video metadata and information</li>
+              <li className="list-disc">Works with videos that have captions</li>
+              <li className="list-disc flex items-center gap-1">
+                <Mic className="h-3 w-3" />
+                AI transcription for videos without captions
+              </li>
+              <li className="list-disc">Complete AI-generated summary with insights</li>
+              <li className="list-disc">Full transcript with clickable timestamps</li>
               <li className="list-disc">Narrative summary button for deeper analysis</li>
-              <li className="list-disc">Saved as a new note for future reference</li>
+              <li className="list-disc">Automatically saved as a searchable note</li>
             </ul>
           </div>
         </CardContent>
