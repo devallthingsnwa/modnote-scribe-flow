@@ -104,6 +104,10 @@ export default function NotePage() {
       try {
         playerRef.current.seekTo(timestamp);
         console.log(`Seeking to timestamp: ${timestamp}`);
+        toast({
+          title: "Jumped to timestamp",
+          description: `Now playing at ${Math.floor(timestamp / 60)}:${String(Math.floor(timestamp % 60)).padStart(2, '0')}`,
+        });
       } catch (error) {
         console.error("Error seeking to timestamp:", error);
         toast({
@@ -112,6 +116,12 @@ export default function NotePage() {
           variant: "destructive",
         });
       }
+    } else {
+      toast({
+        title: "Video not ready",
+        description: "Please wait for the video to load before seeking.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -308,8 +318,8 @@ export default function NotePage() {
                             onReady={() => {
                               setIsVideoReady(true);
                               toast({
-                                title: "Video ready!",
-                                description: "You can now interact with timestamps in the transcript.",
+                                title: "Video player ready!",
+                                description: "You can now watch the video and interact with timestamps.",
                               });
                             }}
                           />
@@ -324,7 +334,8 @@ export default function NotePage() {
                             <div className="flex items-center gap-2">
                               {isVideoReady && (
                                 <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
-                                  Click timestamps to jump
+                                  <Play className="h-3 w-3 mr-1" />
+                                  Click to jump
                                 </Badge>
                               )}
                               <Button 

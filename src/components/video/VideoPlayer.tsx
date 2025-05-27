@@ -76,12 +76,30 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: Video
   };
 
   const onPlayerStateChange = (event: any) => {
+    const playerStates = {
+      '-1': 'unstarted',
+      '0': 'ended',
+      '1': 'playing',
+      '2': 'paused',
+      '3': 'buffering',
+      '5': 'cued'
+    };
+    
     setIsPlaying(event.data === 1);
-    console.log("Player state changed:", event.data);
+    console.log(`Player state changed to: ${playerStates[event.data] || event.data}`);
   };
 
   const onPlayerError = (event: any) => {
-    console.error("YouTube player error:", event.data);
+    const errorMessages = {
+      2: 'Invalid video ID',
+      5: 'HTML5 player error',
+      100: 'Video not found or private',
+      101: 'Video not allowed in embedded players',
+      150: 'Video not allowed in embedded players'
+    };
+    
+    const errorMessage = errorMessages[event.data] || `Unknown error (${event.data})`;
+    console.error("YouTube player error:", errorMessage);
     setHasError(true);
     setIsReady(false);
   };
@@ -94,6 +112,18 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: Video
 
   const openInYouTube = () => {
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+  };
+
+  // Handle timestamp jumping
+  const seekTo = (timestamp: number) => {
+    if (playerRef.current && isReady) {
+      try {
+        playerRef.current.seekTo(timestamp);
+        console.log(`Seeking to timestamp: ${timestamp}s`);
+      } catch (error) {
+        console.error("Error seeking to timestamp:", error);
+      }
+    }
   };
 
   useEffect(() => {
@@ -193,12 +223,12 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: Video
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="text-center space-y-3">
                 <div className="h-8 w-8 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                <p className="text-white text-sm">Loading video...</p>
+                <p className="text-white text-sm">Loading video player...</p>
               </div>
             </div>
           )}
           
-          {/* Status Indicator */}
+          {/* Play Status Indicator */}
           {isReady && (
             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
               <Badge 
@@ -212,7 +242,7 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: Video
         </div>
       </div>
       
-      {/* Enhanced Video Info */}
+      {/* Video Info */}
       {videoData && (
         <div className="space-y-3">
           <div>
@@ -246,14 +276,14 @@ export function VideoPlayer({ videoId, playerRef, onTimeUpdate, onReady }: Video
             </div>
           </div>
           
-          {/* Video Controls Info */}
+          {/* Player Status Info */}
           <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/50">
             <div className="text-xs text-muted-foreground">
-              Click on transcript timestamps to jump to specific moments
+              {isReady ? "Click transcript timestamps to jump to specific moments" : "Video player loading..."}
             </div>
             <div className="flex gap-2">
               <Badge variant="outline" className="text-xs">
-                Interactive
+                Interactive Player
               </Badge>
               {isReady && (
                 <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
