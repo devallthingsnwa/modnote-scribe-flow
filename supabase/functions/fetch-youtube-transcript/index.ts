@@ -10,7 +10,7 @@ serve(async (req) => {
   }
 
   try {
-    const { videoId } = await req.json();
+    const { videoId, options = {} } = await req.json();
     
     if (!videoId) {
       return new Response(
@@ -22,10 +22,10 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Fetching transcript for video: ${videoId}`);
+    console.log(`Fetching transcript for video: ${videoId} with options:`, options);
     
     const extractor = new TranscriptExtractor();
-    const result = await extractor.extractTranscript(videoId);
+    const result = await extractor.extractTranscript(videoId, options);
     
     return result;
     
@@ -35,7 +35,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         transcript: "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.",
-        error: error.message
+        error: error.message,
+        success: false
       }),
       {
         status: 200,

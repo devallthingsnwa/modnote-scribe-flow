@@ -5,6 +5,19 @@ export interface VideoProcessingOptions {
   fetchTranscript?: boolean;
   generateSummary?: boolean;
   summaryType?: 'full' | 'keypoints' | 'chapters' | 'concepts';
+  transcriptOptions?: {
+    includeTimestamps?: boolean;
+    language?: string;
+    format?: 'text' | 'json' | 'srt';
+    maxRetries?: number;
+  };
+}
+
+export interface TranscriptSegment {
+  start: number;
+  duration: number;
+  text: string;
+  speaker?: string;
 }
 
 export interface VideoProcessingResult {
@@ -18,6 +31,7 @@ export interface VideoProcessingResult {
     thumbnail?: string;
   };
   transcript?: string;
+  segments?: TranscriptSegment[];
   summary?: string;
   error?: string;
 }
@@ -32,12 +46,13 @@ export class VideoNoteProcessor {
         fetchMetadata = true,
         fetchTranscript = true,
         generateSummary = false,
-        summaryType = 'full'
+        summaryType = 'full',
+        transcriptOptions = {}
       } = options;
 
       let result: VideoProcessingResult = { success: true };
 
-      // Fetch metadata if requested - this should now work with the API key
+      // Fetch metadata if requested
       if (fetchMetadata) {
         try {
           console.log(`Fetching metadata for video: ${videoId}`);
@@ -47,7 +62,6 @@ export class VideoNoteProcessor {
           
           if (metadataError) {
             console.warn('Metadata fetch error:', metadataError);
-            // Provide enhanced fallback metadata
             result.metadata = {
               title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
               author: 'Unknown',
@@ -65,8 +79,6 @@ export class VideoNoteProcessor {
             };
             console.log('Metadata fetched successfully:', result.metadata);
           } else {
-            // API returned an error
-            console.warn('API returned error:', metadataResult?.error);
             result.metadata = {
               title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
               author: 'Unknown',
@@ -76,7 +88,6 @@ export class VideoNoteProcessor {
           }
         } catch (error) {
           console.warn('Failed to fetch metadata:', error);
-          // Enhanced fallback with HTML scraping attempt
           result.metadata = {
             title: await this.fetchVideoTitleFromHTML(videoId) || `YouTube Video ${videoId}`,
             author: 'Unknown',
@@ -86,32 +97,43 @@ export class VideoNoteProcessor {
         }
       }
 
-      // Fetch transcript if requested
+      // Fetch transcript with enhanced options
       if (fetchTranscript) {
         try {
-          console.log(`Fetching transcript for video: ${videoId}`);
+          console.log(`Fetching transcript for video: ${videoId} with options:`, transcriptOptions);
+          
           const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
-            body: { videoId }
+            body: { 
+              videoId,
+              options: {
+                includeTimestamps: true,
+                language: 'en',
+                format: 'json',
+                maxRetries: 3,
+                ...transcriptOptions
+              }
+            }
           });
           
           if (transcriptError) {
             console.error('Error fetching transcript:', transcriptError);
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
-          } else if (transcriptResult?.transcript) {
+          } else if (transcriptResult?.success && transcriptResult?.transcript) {
             const transcriptContent = transcriptResult.transcript.trim();
-            if (transcriptContent && transcriptContent.length > 50 && !transcriptContent.includes('Transcript not available')) {
+            if (transcriptContent && transcriptContent.length > 50) {
               result.transcript = transcriptContent;
-              console.log(`Transcript fetched successfully: ${transcriptContent.length} characters`);
+              result.segments = transcriptResult.segments || [];
+              console.log(`Enhanced transcript fetched successfully: ${transcriptContent.length} characters, ${result.segments.length} segments`);
             } else {
               console.warn('Transcript appears to be empty or invalid');
               result.transcript = "Transcript not available for this video. You can add your own notes here.";
             }
           } else {
-            console.warn('No transcript returned from function');
+            console.warn('No transcript returned from enhanced function');
             result.transcript = "Transcript not available for this video. You can add your own notes here.";
           }
         } catch (error) {
-          console.error('Error fetching transcript:', error);
+          console.error('Error fetching enhanced transcript:', error);
           result.transcript = "Transcript not available for this video. You can add your own notes here.";
         }
       }

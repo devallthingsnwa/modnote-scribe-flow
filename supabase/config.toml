@@ -9,3 +9,6 @@ verify_jwt = true
 
 [functions.enhanced-youtube-processor]
 verify_jwt = true
+
+[functions.youtube-metadata]
+verify_jwt = true
