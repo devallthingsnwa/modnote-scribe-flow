@@ -131,7 +131,7 @@ export function NotesListPanel({
             {onToggleCollapse && <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="h-8 w-8 hover:bg-primary/10 flex-shrink-0">
                 <ChevronLeft className="h-4 w-4" />
               </Button>}
-            <h2 className="text-lg font-semibold text-foreground truncate">Notes</h2>
+            <h2 className="font-semibold text-foreground truncate text-sm">Notes</h2>
           </div>
           
           {/* Enhanced Action Buttons */}
