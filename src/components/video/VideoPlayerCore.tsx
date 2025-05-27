@@ -5,9 +5,9 @@ import YouTube from "react-youtube";
 interface VideoPlayerCoreProps {
   videoId: string;
   playerRef: React.MutableRefObject<any>;
-  onReady?: () => void;
-  onError?: (error: any) => void;
-  onStateChange?: (state: any) => void;
+  onReady?: (event: any) => void;
+  onError?: (event: any) => void;
+  onStateChange?: (event: any) => void;
   onTimeUpdate?: (time: number) => void;
   isReady: boolean;
   hasError: boolean;
