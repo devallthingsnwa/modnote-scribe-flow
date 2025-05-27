@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +7,6 @@ import { Bold, Italic, List, ListChecks, Save, Video } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
 import { YouTubeTranscriptIntegration } from "@/components/YouTubeTranscriptIntegration";
 import { useIsMobile } from "@/hooks/use-mobile";
-
 interface NoteEditorProps {
   initialNote?: {
     id?: string;
@@ -22,7 +20,6 @@ interface NoteEditorProps {
     tags: string[];
   }) => void;
 }
-
 export function NoteEditor({
   initialNote,
   onSave
@@ -35,7 +32,6 @@ export function NoteEditor({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [showYouTubeExtractor, setShowYouTubeExtractor] = useState(false);
-
   useEffect(() => {
     if (initialNote) {
       setNote({
@@ -51,7 +47,6 @@ export function NoteEditor({
     const hasYouTubeUrl = note.content.includes('youtube.com') || note.content.includes('youtu.be');
     setShowYouTubeExtractor(hasYouTubeUrl);
   }, [note.content]);
-
   const handleSave = () => {
     if (onSave) {
       setIsSaving(true);
@@ -62,11 +57,12 @@ export function NoteEditor({
       }
     }
   };
-
   const handleTagChange = (selectedTags: string[]) => {
-    setNote(prev => ({ ...prev, tags: selectedTags }));
+    setNote(prev => ({
+      ...prev,
+      tags: selectedTags
+    }));
   };
-
   const handleTranscriptExtracted = (extractedContent: string) => {
     setNote(prev => ({
       ...prev,
@@ -75,15 +71,12 @@ export function NoteEditor({
       title: prev.title || extractedContent.split('\n')[0].replace('# 🎥 ', '') || "YouTube Video Transcript"
     }));
   };
-
   const insertFormatting = (format: string) => {
     const textarea = document.querySelector('textarea');
     if (!textarea) return;
-
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = note.content.substring(start, end);
-    
     let replacement = "";
     switch (format) {
       case "bold":
@@ -99,60 +92,38 @@ export function NoteEditor({
         replacement = selectedText.split('\n').map(line => line.trim() ? `- [ ] ${line}` : line).join('\n');
         break;
     }
-
     const newContent = note.content.substring(0, start) + replacement + note.content.substring(end);
-    setNote(prev => ({ ...prev, content: newContent }));
+    setNote(prev => ({
+      ...prev,
+      content: newContent
+    }));
   };
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col space-y-4">
-        <Input
-          placeholder="Note title..."
-          value={note.title}
-          onChange={(e) => setNote(prev => ({ ...prev, title: e.target.value }))}
-          className="text-lg font-medium"
-        />
+        <Input placeholder="Note title..." value={note.title} onChange={e => setNote(prev => ({
+        ...prev,
+        title: e.target.value
+      }))} className="text-lg font-medium" />
         
         {/* YouTube Transcript Integration */}
-        {showYouTubeExtractor && (
-          <YouTubeTranscriptIntegration
-            onTranscriptExtracted={handleTranscriptExtracted}
-          />
-        )}
+        {showYouTubeExtractor && <YouTubeTranscriptIntegration onTranscriptExtracted={handleTranscriptExtracted} />}
       </div>
 
       {/* Formatting Toolbar */}
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => insertFormatting("bold")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => insertFormatting("bold")}>
               <Bold className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => insertFormatting("italic")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => insertFormatting("italic")}>
               <Italic className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => insertFormatting("list")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => insertFormatting("list")}>
               <List className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => insertFormatting("checklist")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => insertFormatting("checklist")}>
               <ListChecks className="h-4 w-4" />
             </Button>
           </div>
@@ -161,41 +132,18 @@ export function NoteEditor({
 
       {/* Content Editor */}
       <div className="space-y-4">
-        <Textarea
-          placeholder="Start writing your note... (Paste YouTube URLs to auto-detect transcript extraction)"
-          value={note.content}
-          onChange={(e) => setNote(prev => ({ ...prev, content: e.target.value }))}
-          className="min-h-[300px] resize-none"
-          rows={isMobile ? 12 : 15}
-        />
+        <Textarea placeholder="Start writing your note... (Paste YouTube URLs to auto-detect transcript extraction)" value={note.content} onChange={e => setNote(prev => ({
+        ...prev,
+        content: e.target.value
+      }))} className="min-h-[300px] resize-none" rows={isMobile ? 12 : 15} />
       </div>
 
       {/* Tags */}
-      <TagSelector
-        selectedTags={note.tags}
-        onChange={handleTagChange}
-      />
+      <TagSelector selectedTags={note.tags} onChange={handleTagChange} />
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button
-          onClick={handleSave}
-          disabled={isSaving || !note.title.trim()}
-          className="min-w-[100px]"
-        >
-          {isSaving ? (
-            <>
-              <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Save Note
-            </>
-          )}
-        </Button>
+        
       </div>
-    </div>
-  );
+    </div>;
 }
