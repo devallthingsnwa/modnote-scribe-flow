@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,6 @@ import { TagSelector } from "@/components/TagSelector";
 import { AIProcessingButton } from "@/components/AIProcessingButton";
 import { AIChatModal } from "@/components/AIChatModal";
 import { useIsMobile } from "@/hooks/use-mobile";
-
 interface NoteEditorProps {
   initialNote?: {
     id?: string;
@@ -23,27 +21,26 @@ interface NoteEditorProps {
     tags: string[];
   }) => void;
 }
-
-export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
+export function NoteEditor({
+  initialNote,
+  onSave
+}: NoteEditorProps) {
   const isMobile = useIsMobile();
   const [note, setNote] = useState({
     title: initialNote?.title || "",
     content: initialNote?.content || "",
-    tags: initialNote?.tags || [],
+    tags: initialNote?.tags || []
   });
-
   const [isSaving, setIsSaving] = useState(false);
-
   useEffect(() => {
     if (initialNote) {
       setNote({
         title: initialNote.title,
         content: initialNote.content || "",
-        tags: initialNote.tags,
+        tags: initialNote.tags
       });
     }
   }, [initialNote]);
-
   const handleSave = () => {
     if (onSave) {
       setIsSaving(true);
@@ -54,36 +51,37 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
       }
     }
   };
-
   const handleTagChange = (selectedTags: string[]) => {
-    setNote({ ...note, tags: selectedTags });
+    setNote({
+      ...note,
+      tags: selectedTags
+    });
   };
-
   const handleContentUpdate = (newContent: string) => {
-    setNote({ ...note, content: newContent });
+    setNote({
+      ...note,
+      content: newContent
+    });
     // Auto-save after AI processing
     if (onSave) {
-      onSave({ ...note, content: newContent });
+      onSave({
+        ...note,
+        content: newContent
+      });
     }
   };
-
   if (isMobile) {
-    return (
-      <div className="flex flex-col h-full">
+    return <div className="flex flex-col h-full">
         <div className="flex-1 overflow-y-auto p-3">
-          <Input
-            value={note.title}
-            onChange={(e) => setNote({ ...note, title: e.target.value })}
-            placeholder="Untitled Note"
-            className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4 bg-transparent"
-          />
+          <Input value={note.title} onChange={e => setNote({
+          ...note,
+          title: e.target.value
+        })} placeholder="Untitled Note" className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4 bg-transparent" />
 
-          <Textarea
-            value={note.content || ""}
-            onChange={(e) => setNote({ ...note, content: e.target.value })}
-            placeholder="Start writing..."
-            className="min-h-[300px] resize-none border-none focus-visible:ring-0 px-0 bg-transparent"
-          />
+          <Textarea value={note.content || ""} onChange={e => setNote({
+          ...note,
+          content: e.target.value
+        })} placeholder="Start writing..." className="min-h-[300px] resize-none border-none focus-visible:ring-0 px-0 bg-transparent" />
         </div>
 
         <div className="p-3 border-t border-border">
@@ -102,31 +100,16 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
             </Button>
           </div>
 
-          {initialNote?.id && (
-            <div className="mb-3 flex gap-2">
-              <AIProcessingButton
-                noteId={initialNote.id}
-                content={note.content}
-                onContentUpdated={handleContentUpdate}
-              />
-              <AIChatModal
-                noteId={initialNote.id}
-                content={note.content || ""}
-              />
-            </div>
-          )}
+          {initialNote?.id && <div className="mb-3 flex gap-2">
+              <AIProcessingButton noteId={initialNote.id} content={note.content} onContentUpdated={handleContentUpdate} />
+              <AIChatModal noteId={initialNote.id} content={note.content || ""} />
+            </div>}
 
-          <TagSelector
-            selectedTags={note.tags}
-            onChange={handleTagChange}
-          />
+          <TagSelector selectedTags={note.tags} onChange={handleTagChange} />
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="flex flex-col h-full">
+  return <div className="flex flex-col h-full">
       <div className="border-b border-border p-4 flex justify-between items-center">
         <div className="flex space-x-2">
           <Button variant="ghost" size="icon">
@@ -144,55 +127,31 @@ export function NoteEditor({ initialNote, onSave }: NoteEditorProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          {initialNote?.id && (
-            <>
-              <AIProcessingButton
-                noteId={initialNote.id}
-                content={note.content}
-                onContentUpdated={handleContentUpdate}
-              />
-              <AIChatModal
-                noteId={initialNote.id}
-                content={note.content || ""}
-              />
-            </>
-          )}
+          {initialNote?.id && <>
+              <AIProcessingButton noteId={initialNote.id} content={note.content} onContentUpdated={handleContentUpdate} />
+              <AIChatModal noteId={initialNote.id} content={note.content || ""} />
+            </>}
           
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving} 
-            className="space-x-2"
-          >
-            <Save className="h-4 w-4" />
-            <span>{isSaving ? "Saving..." : "Save"}</span>
-          </Button>
+          
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <Input
-          value={note.title}
-          onChange={(e) => setNote({ ...note, title: e.target.value })}
-          placeholder="Untitled Note"
-          className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4"
-        />
+        <Input value={note.title} onChange={e => setNote({
+        ...note,
+        title: e.target.value
+      })} placeholder="Untitled Note" className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4" />
 
-        <Textarea
-          value={note.content || ""}
-          onChange={(e) => setNote({ ...note, content: e.target.value })}
-          placeholder="Start writing..."
-          className="min-h-[500px] resize-none border-none focus-visible:ring-0 px-0"
-        />
+        <Textarea value={note.content || ""} onChange={e => setNote({
+        ...note,
+        content: e.target.value
+      })} placeholder="Start writing..." className="min-h-[500px] resize-none border-none focus-visible:ring-0 px-0" />
       </div>
 
       <Card className="border-t rounded-none">
         <CardContent className="p-4">
-          <TagSelector
-            selectedTags={note.tags}
-            onChange={handleTagChange}
-          />
+          <TagSelector selectedTags={note.tags} onChange={handleTagChange} />
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 }
