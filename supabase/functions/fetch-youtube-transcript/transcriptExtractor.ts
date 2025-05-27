@@ -3,6 +3,33 @@ import { ContentParser } from "./contentParser.ts";
 import { YouTubeAPI } from "./youtubeApi.ts";
 import { corsHeaders } from "./utils.ts";
 
+export interface TranscriptOptions {
+  language?: string;
+  includeTimestamps?: boolean;
+  format?: 'text' | 'json' | 'srt';
+  maxRetries?: number;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  duration: number;
+  text: string;
+}
+
+export interface TranscriptResponse {
+  success: boolean;
+  transcript?: string;
+  segments?: TranscriptSegment[];
+  error?: string;
+  metadata?: {
+    videoId: string;
+    language?: string;
+    duration?: number;
+    segmentCount?: number;
+    extractionMethod: string;
+  };
+}
+
 export class TranscriptExtractor {
   private contentParser: ContentParser;
   private youtubeAPI: YouTubeAPI;
@@ -12,14 +39,16 @@ export class TranscriptExtractor {
     this.youtubeAPI = new YouTubeAPI();
   }
 
-  async extractTranscript(videoId: string, options: any = {}): Promise<Response> {
+  async extractTranscript(videoId: string, options: TranscriptOptions = {}): Promise<Response> {
     console.log(`Starting transcript extraction for video: ${videoId}`);
 
     // Try multiple extraction methods in order of preference
     const extractionMethods = [
       () => this.extractFromYouTubeAPI(videoId),
       () => this.extractFromVideoPage(videoId),
-      () => this.extractFromAlternativeAPI(videoId)
+      () => this.extractFromCaptionTracks(videoId, options),
+      () => this.extractFromAlternativeAPI(videoId),
+      () => this.extractFromThirdPartyService(videoId)
     ];
 
     for (let i = 0; i < extractionMethods.length; i++) {
@@ -124,6 +153,48 @@ export class TranscriptExtractor {
     }
   }
 
+  private async extractFromCaptionTracks(videoId: string, options: TranscriptOptions = {}): Promise<Response | null> {
+    try {
+      console.log("Attempting to extract from caption tracks API");
+      
+      // Try various caption API endpoints
+      const apiEndpoints = [
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${options.language || 'en'}&fmt=srv3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`
+      ];
+      
+      for (const endpoint of apiEndpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          
+          if (response.ok) {
+            const content = await response.text();
+            
+            if (content.includes('<text')) {
+              return await this.contentParser.processTranscriptContent(
+                content, 
+                'caption-tracks-api'
+              );
+            }
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Caption tracks extraction failed:", error);
+      return null;
+    }
+  }
+
   private async extractFromAlternativeAPI(videoId: string): Promise<Response | null> {
     try {
       console.log("Attempting alternative API extraction");
@@ -168,6 +239,46 @@ export class TranscriptExtractor {
       return null;
     } catch (error) {
       console.error("Alternative API extraction failed:", error);
+      return null;
+    }
+  }
+
+  private async extractFromThirdPartyService(videoId: string): Promise<Response | null> {
+    try {
+      console.log("Attempting third-party service extraction");
+      
+      // Try a different approach using embed page
+      const response = await fetch(`https://www.youtube.com/embed/${videoId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const html = await response.text();
+      
+      // Extract any available transcript data from embed page
+      // This is a fallback method and may not always work
+      const captionRegex = /"captionTracks":\[\{"baseUrl":"([^"]+)"/;
+      const match = html.match(captionRegex);
+      
+      if (match && match[1]) {
+        const captionUrl = match[1].replace(/\\u0026/g, '&');
+        const transcriptResponse = await fetch(captionUrl);
+        const transcriptContent = await transcriptResponse.text();
+        
+        return await this.contentParser.processTranscriptContent(
+          transcriptContent,
+          'embed-extraction'
+        );
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Third-party service extraction failed:", error);
       return null;
     }
   }

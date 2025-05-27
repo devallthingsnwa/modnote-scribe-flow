@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { TranscriptExtractor } from "./transcriptExtractor.ts";
-import { corsHeaders } from "./utils.ts";
+import { validateVideoId, extractVideoId, corsHeaders } from "./utils.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -10,13 +10,38 @@ serve(async (req) => {
   }
 
   try {
-    const { videoId, options = {} } = await req.json();
+    let videoId: string;
+    let options = {};
     
-    if (!videoId) {
+    // Parse request body
+    try {
+      const body = await req.json();
+      videoId = body.videoId;
+      options = body.options || {};
+      
+      if (!videoId && body.url) {
+        // Support both direct videoId and URL parameters
+        videoId = extractVideoId(body.url) || '';
+      }
+    } catch (e) {
+      // Fallback to query parameters for GET requests
+      const url = new URL(req.url);
+      videoId = url.searchParams.get('videoId') || '';
+      
+      if (!videoId) {
+        const urlParam = url.searchParams.get('url');
+        if (urlParam) {
+          videoId = extractVideoId(urlParam) || '';
+        }
+      }
+    }
+    
+    if (!videoId || !validateVideoId(videoId)) {
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "Video ID is required" 
+          error: "Valid YouTube video ID is required",
+          transcript: "Unable to fetch transcript: Invalid or missing YouTube video ID."
         }),
         {
           status: 400,
@@ -27,50 +52,9 @@ serve(async (req) => {
 
     console.log(`Starting transcript fetch for video: ${videoId}`);
     
+    // Process with expanded extraction methods
     const extractor = new TranscriptExtractor();
-    const result = await extractor.extractTranscript(videoId, options);
-    
-    // Check if we got a valid response
-    const responseData = await result.json();
-    
-    if (responseData.success && responseData.transcript) {
-      console.log(`Transcript successfully extracted: ${responseData.transcript.length} characters`);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          transcript: responseData.transcript,
-          metadata: responseData.metadata || {
-            videoId,
-            segments: 0,
-            duration: 0,
-            extractionMethod: 'unknown'
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    } else {
-      console.warn(`Transcript extraction failed for ${videoId}: ${responseData.error || 'Unknown error'}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          transcript: "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.",
-          error: responseData.error || "Transcript extraction failed",
-          metadata: {
-            videoId,
-            segments: 0,
-            duration: 0,
-            extractionMethod: 'failed'
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    return await extractor.extractTranscript(videoId, options);
     
   } catch (error) {
     console.error("Error in fetch-youtube-transcript function:", error);
@@ -88,7 +72,7 @@ serve(async (req) => {
         }
       }),
       {
-        status: 200,
+        status: 200, // Return 200 even on error for consistent client handling
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

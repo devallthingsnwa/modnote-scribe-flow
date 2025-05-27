@@ -143,6 +143,7 @@ export class VideoNoteProcessor {
   ): Promise<string> {
     const maxRetries = options.maxRetries || 3;
     let lastError: string = '';
+    const delays = [1000, 2000, 4000]; // Exponential backoff
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -167,8 +168,8 @@ export class VideoNoteProcessor {
           // If it's the last attempt, continue to return fallback
           if (attempt === maxRetries) break;
           
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          // Wait before retry with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, delays[attempt - 1] || 5000));
           continue;
         }
 
@@ -187,7 +188,7 @@ export class VideoNoteProcessor {
             }
           }
           
-          // If we got a response but it indicates failure, log it and continue
+          // If we got a response but it indicates failure, log it and save it
           if (transcriptResult.transcript) {
             lastError = transcriptResult.error || 'Invalid transcript content';
             console.warn('Transcript fetch indicated failure:', lastError);
@@ -200,23 +201,25 @@ export class VideoNoteProcessor {
         
         // Wait before retry (exponential backoff)
         if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+          await new Promise(resolve => setTimeout(resolve, delays[attempt - 1] || 5000));
         }
         
       } catch (error: any) {
         lastError = error.message || 'Unknown error';
         console.error(`Error during transcript fetch attempt ${attempt}:`, error);
         
-        // Wait before retry
+        // Wait before retry with exponential backoff
         if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          await new Promise(resolve => setTimeout(resolve, delays[attempt - 1] || 5000));
         }
       }
     }
 
-    // All attempts failed, return user-friendly message
+    // All attempts failed, return user-friendly message with more detail
     console.error(`All ${maxRetries} transcript fetch attempts failed. Last error:`, lastError);
-    return `Transcript could not be fetched after ${maxRetries} attempts. ${lastError.includes('captions') ? 'This video may not have captions available.' : 'Please try again later.'} You can add your own notes here.`;
+    return lastError.includes('captions') || lastError.includes('transcript') ?
+      `Transcript could not be fetched. This video may not have captions available. Error: ${lastError}` :
+      `Transcript could not be fetched after ${maxRetries} attempts. Please try again later. Error: ${lastError}`;
   }
 
   private static isValidTranscript(transcript: string): boolean {
@@ -239,7 +242,12 @@ export class VideoNoteProcessor {
       trimmed.toLowerCase().includes(msg.toLowerCase())
     );
     
-    return !hasErrorMessage && trimmed.length > 50;
+    // Require minimum length and proper formatting
+    const hasTimestamps = trimmed.includes('[') && trimmed.includes(']');
+    const hasMultipleLines = trimmed.split('\n').length > 3;
+    const hasMinimumLength = trimmed.length > 100;
+    
+    return !hasErrorMessage && (hasTimestamps || hasMultipleLines) && hasMinimumLength;
   }
 
   // New method to fetch video title from HTML as fallback

@@ -16,6 +16,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { getYoutubeVideoId } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExportPanel } from "@/components/ExportPanel";
+import { supabase } from "@/lib/supabase";
 
 export default function NotePage() {
   const { id } = useParams<{ id: string }>();
@@ -133,25 +134,26 @@ export default function NotePage() {
     try {
       console.log("Refreshing transcript for video:", videoId);
       
-      const response = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ videoId }),
+      // First try with our edge function
+      const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
+        body: { 
+          videoId,
+          options: {
+            includeTimestamps: true,
+            language: 'en',
+            maxRetries: 2
+          }
+        }
       });
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
+      
+      if (transcriptError) {
+        throw new Error(`Function error: ${transcriptError.message}`);
       }
-
-      if (data.transcript) {
+      
+      if (transcriptResult?.transcript) {
         // Update the note content with the new transcript
         const currentTitle = note?.title || `YouTube Video ${videoId}`;
-        const newContent = `# 🎥 ${currentTitle}\n\n**Source:** ${note?.source_url}\n**Type:** Video Transcript\n**Last Updated:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${data.transcript}`;
+        const newContent = `# 🎥 ${currentTitle}\n\n**Source:** ${note?.source_url}\n**Type:** Video Transcript\n**Last Updated:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${transcriptResult.transcript}`;
         
         updateNoteMutation.mutate({
           id,
@@ -163,18 +165,59 @@ export default function NotePage() {
         
         toast({
           title: "Transcript updated!",
-          description: `Successfully fetched transcript with ${data.metadata?.segments || 'unknown'} segments.`,
+          description: `Successfully fetched transcript with ${transcriptResult.metadata?.segments || 'unknown'} segments.`,
         });
       } else {
         throw new Error('No transcript data received');
       }
     } catch (error) {
       console.error("Error fetching transcript:", error);
-      toast({
-        title: "Transcript fetch failed",
-        description: `Could not fetch the transcript: ${error.message}`,
-        variant: "destructive",
-      });
+      
+      // Try direct API call as fallback
+      try {
+        const response = await fetch(`https://rqxhgeujepdhhzoaeomu.supabase.co/functions/v1/fetch-youtube-transcript`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ videoId }),
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        if (data.transcript) {
+          // Update the note content with the new transcript
+          const currentTitle = note?.title || `YouTube Video ${videoId}`;
+          const newContent = `# 🎥 ${currentTitle}\n\n**Source:** ${note?.source_url}\n**Type:** Video Transcript\n**Last Updated:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${data.transcript}`;
+          
+          updateNoteMutation.mutate({
+            id,
+            updates: {
+              content: newContent,
+              updated_at: new Date().toISOString(),
+            },
+          });
+          
+          toast({
+            title: "Transcript updated!",
+            description: `Successfully fetched transcript with ${data.metadata?.segments || 'unknown'} segments.`,
+          });
+        } else {
+          throw new Error('No transcript data received from direct API call');
+        }
+      } catch (fallbackError) {
+        console.error("Fallback transcript fetch failed:", fallbackError);
+        toast({
+          title: "Transcript fetch failed",
+          description: `Could not fetch the transcript: ${error.message}`,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsRefreshingTranscript(false);
     }
