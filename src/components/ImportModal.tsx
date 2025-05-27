@@ -1,328 +1,271 @@
 
 import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, FileText, Video, Upload } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useQueryClient } from "@tanstack/react-query";
-
-// Import refactored components
-import { ImportSteps } from "./import/ImportSteps";
-import { ContentTypeSelector } from "./import/ContentTypeSelector";
-import { UrlInput } from "./import/UrlInput";
-import { EnhancedVideoPreview } from "./import/EnhancedVideoPreview";
-import { ProcessingStatus } from "./import/ProcessingStatus";
 import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
+import { TranscriptionService } from "@/lib/transcriptionService";
 
 interface ImportModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onImport: (url: string, type: string) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onImport: (note: {
+    title: string;
+    content: string;
+    source_url?: string;
+    thumbnail?: string;
+    is_transcription?: boolean;
+  }) => void;
 }
 
-export function ImportModal({ open, onOpenChange, onImport }: ImportModalProps) {
+export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   const [url, setUrl] = useState("");
-  const [type, setType] = useState<"video" | "audio" | "text">("video");
-  const [isLoading, setIsLoading] = useState(false);
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<"url" | "preview" | "processing" | "complete">("url");
-  const [progress, setProgress] = useState(0);
-  const [transcript, setTranscript] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<any>(null);
-  const [enableSummary, setEnableSummary] = useState(false);
-  const [enableHighlights, setEnableHighlights] = useState(false);
-  const [enableKeyPoints, setEnableKeyPoints] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [customTitle, setCustomTitle] = useState("");
+  const [customContent, setCustomContent] = useState("");
+  const { toast } = useToast();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUrl(e.target.value);
-    // Reset states when URL changes
-    setThumbnail(null);
-    setTranscript(null);
-    setMetadata(null);
-    setCurrentStep("url");
+  const isYouTubeUrl = (url: string) => {
+    return url.includes('youtube.com') || url.includes('youtu.be');
   };
 
-  const handleFetchPreview = async () => {
-    if (!url) return;
-    
-    setIsLoading(true);
-    setCurrentStep("preview");
-    
+  const extractYouTubeId = (url: string) => {
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
+
+  const handleUrlImport = async () => {
+    if (!url.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to import content",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
     try {
-      // Check if it's a YouTube URL
-      const videoId = VideoNoteProcessor.extractVideoId(url);
-      
-      if (videoId) {
-        console.log("Processing YouTube video for preview:", videoId);
-        
-        // Process the video to get metadata and thumbnail
+      if (isYouTubeUrl(url)) {
+        // Process YouTube video
+        const videoId = extractYouTubeId(url);
+        if (!videoId) {
+          throw new Error("Invalid YouTube URL");
+        }
+
+        console.log("Processing YouTube video:", videoId);
+
+        // Fetch video metadata and transcript
         const result = await VideoNoteProcessor.processVideo(videoId, {
           fetchMetadata: true,
-          fetchTranscript: false // Don't fetch transcript yet, just preview
+          fetchTranscript: true,
+          generateSummary: false,
         });
-        
-        if (result.success && result.metadata) {
-          setMetadata(result.metadata);
-          setThumbnail(result.metadata.thumbnail || VideoNoteProcessor.generateThumbnailUrl(videoId));
-          toast.success("Preview loaded successfully!");
-        } else {
-          // Fallback if metadata fetch fails
-          setThumbnail(VideoNoteProcessor.generateThumbnailUrl(videoId));
-          setMetadata({ 
-            title: `YouTube Video ${videoId}`,
-            author: 'Unknown',
-            duration: 'Unknown'
-          });
-          toast.info("Preview loaded with limited metadata.");
+
+        if (!result.success) {
+          throw new Error(result.error || "Failed to process video");
         }
+
+        // Format the content with metadata and transcript
+        const title = result.metadata?.title || `YouTube Video ${videoId}`;
+        const author = result.metadata?.author || 'Unknown';
+        const duration = result.metadata?.duration || 'Unknown';
+        
+        let content = `# 🎥 ${title}\n\n`;
+        content += `**Source:** ${url}\n`;
+        content += `**Author:** ${author}\n`;
+        content += `**Duration:** ${duration}\n`;
+        content += `**Type:** Video Transcript\n\n`;
+        content += `---\n\n`;
+        content += `## 📝 Transcript\n\n`;
+        
+        if (result.transcript && result.transcript.length > 100) {
+          content += result.transcript;
+        } else {
+          content += "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.";
+        }
+
+        onImport({
+          title,
+          content,
+          source_url: url,
+          thumbnail: result.metadata?.thumbnail,
+          is_transcription: true,
+        });
+
+        toast({
+          title: "Video imported successfully!",
+          description: `Imported "${title}" with transcript`,
+        });
       } else {
-        // For non-YouTube URLs, show a placeholder
-        setThumbnail("https://placehold.co/600x400/eee/999?text=Media+Preview");
-        setMetadata({ title: "Media Content" });
-        toast.info("Media content detected. Ready for transcription.");
+        // Handle other URL types (web pages, etc.)
+        const title = customTitle || `Imported from ${new URL(url).hostname}`;
+        const content = customContent || `# ${title}\n\n**Source:** ${url}\n\n## Content\n\nAdd your notes here...`;
+        
+        onImport({
+          title,
+          content,
+          source_url: url,
+          is_transcription: false,
+        });
+
+        toast({
+          title: "Content imported successfully!",
+          description: `Imported "${title}"`,
+        });
       }
+
+      // Reset form
+      setUrl("");
+      setCustomTitle("");
+      setCustomContent("");
+      onClose();
+
     } catch (error) {
-      console.error("Error fetching preview:", error);
-      toast.error("Failed to fetch preview. Please check your URL and try again.");
+      console.error("Import error:", error);
+      toast({
+        title: "Import failed",
+        description: error.message || "Failed to import content. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleImport = async () => {
-    if (!url || !user) return;
+  const handleManualNote = () => {
+    const title = customTitle || "New Note";
+    const content = customContent || "Start writing your note here...";
     
-    setCurrentStep("processing");
-    setProgress(20);
-    
-    try {
-      const videoId = VideoNoteProcessor.extractVideoId(url);
-      
-      if (!videoId) {
-        throw new Error('Invalid YouTube URL. Could not extract video ID.');
-      }
-      
-      setProgress(40);
-      
-      // Process the video to get transcript and metadata
-      console.log("Processing video for import:", videoId);
-      const result = await VideoNoteProcessor.processVideo(videoId, {
-        fetchMetadata: true,
-        fetchTranscript: true,
-        generateSummary: false // We'll handle AI processing separately
-      });
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to process video');
-      }
-      
-      let noteTitle = result.metadata?.title || `YouTube Video ${videoId}`;
-      let finalThumbnail = result.metadata?.thumbnail || thumbnail || VideoNoteProcessor.generateThumbnailUrl(videoId);
-      
-      setProgress(70);
-      
-      // Ensure we have valid transcript content
-      let finalContent = "";
-      const hasValidTranscript = result.transcript && 
-        result.transcript !== "Transcript not available for this video. You can add your own notes here." &&
-        result.transcript.trim().length > 50;
-      
-      // Process with AI if options are enabled and we have valid transcript
-      const needsAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-      
-      if (needsAIProcessing && hasValidTranscript) {
-        try {
-          console.log("Processing content with DeepSeek AI...");
-          const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-deepseek', {
-            body: { 
-              content: result.transcript, 
-              type: 'video',
-              options: {
-                summary: enableSummary,
-                highlights: enableHighlights,
-                keyPoints: enableKeyPoints
-              }
-            }
-          });
+    onImport({
+      title,
+      content,
+      is_transcription: false,
+    });
 
-          if (aiData?.processedContent) {
-            finalContent = `# 🎥 ${noteTitle}\n\n` +
-              `**Source:** ${url}\n` +
-              `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
-              `**Duration:** ${result.metadata?.duration || 'Unknown'}\n\n` +
-              `${aiData.processedContent}\n\n` +
-              `## 📝 Original Transcript\n\n${result.transcript}`;
-          }
-        } catch (error) {
-          console.error("DeepSeek AI processing failed:", error);
-          toast.warning("AI processing failed, importing raw transcript instead.");
-        }
-      }
-      
-      // Fallback to formatted transcript
-      if (!finalContent) {
-        if (hasValidTranscript) {
-          finalContent = `# 🎥 ${noteTitle}\n\n` +
-            `**Source:** ${url}\n` +
-            `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
-            `**Duration:** ${result.metadata?.duration || 'Unknown'}\n` +
-            `**Type:** Video Transcript\n\n` +
-            `---\n\n` +
-            `## 📝 Transcript\n\n${result.transcript}`;
-        } else {
-          finalContent = `# 🎥 ${noteTitle}\n\n` +
-            `**Source:** ${url}\n` +
-            `**Author:** ${result.metadata?.author || 'Unknown'}\n` +
-            `**Duration:** ${result.metadata?.duration || 'Unknown'}\n` +
-            `**Type:** Video Note\n\n` +
-            `---\n\n` +
-            `## 📝 Notes\n\nTranscript not available for this video. You can add your own notes here.`;
-        }
-      }
-      
-      setProgress(90);
-      
-      // Create the note in the database
-      const { data: noteData, error: noteError } = await supabase
-        .from('notes')
-        .insert({
-          title: noteTitle,
-          content: finalContent,
-          user_id: user.id,
-          source_url: url,
-          thumbnail: finalThumbnail,
-          is_transcription: true,
-        })
-        .select()
-        .single();
-      
-      if (noteError) {
-        throw noteError;
-      }
-      
-      setProgress(100);
-      setCurrentStep("complete");
-      
-      // Invalidate queries to refresh notes list
-      queryClient.invalidateQueries({ queryKey: ['notes'] });
-      
-      // Call the onImport handler
-      onImport(url, 'video');
-      
-      const hasAIProcessing = enableSummary || enableHighlights || enableKeyPoints;
-      if (hasValidTranscript) {
-        if (hasAIProcessing) {
-          toast.success("Video imported with transcript and AI analysis!");
-        } else {
-          toast.success("Video imported with transcript!");
-        }
-      } else {
-        toast.success("Video imported (transcript not available - you can add your own notes)!");
-      }
-      
-      // Close modal after completion
-      setTimeout(() => {
-        onOpenChange(false);
-        // Reset state
-        setUrl("");
-        setThumbnail(null);
-        setTranscript(null);
-        setMetadata(null);
-        setCurrentStep("url");
-        setProgress(0);
-        setEnableSummary(false);
-        setEnableHighlights(false);
-        setEnableKeyPoints(false);
-      }, 1500);
-      
-    } catch (error: any) {
-      console.error("Error importing content:", error);
-      toast.error(`Error importing content: ${error.message}`);
-      setCurrentStep("url");
-      setProgress(0);
-    }
+    toast({
+      title: "Note created!",
+      description: `Created "${title}"`,
+    });
+
+    // Reset form
+    setCustomTitle("");
+    setCustomContent("");
+    onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
-            <span>Import YouTube Content</span>
-            <Badge variant="secondary" className="text-xs">
-              Auto-Transcription
-            </Badge>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Import Content or Create Note
           </DialogTitle>
-          <DialogDescription>
-            Import from YouTube with automatic transcription and thumbnail extraction.
-          </DialogDescription>
         </DialogHeader>
-        
-        <ImportSteps currentStep={currentStep} />
-        
-        <div className="grid gap-6 py-4">
-          <div className="grid gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="url">YouTube URL</Label>
-              <UrlInput 
-                url={url}
-                onChange={handleUrlChange}
-                onFetchPreview={handleFetchPreview}
-                isLoading={isLoading}
-                disabled={!user}
-              />
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              <Label>Content Type</Label>
-              <ContentTypeSelector type={type} setType={setType} />
+
+        <div className="space-y-6">
+          {/* URL Import Section */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Import from URL (YouTube videos will auto-extract transcripts)
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://youtube.com/watch?v=... or any URL"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleUrlImport}
+                  disabled={isProcessing || !url.trim()}
+                  className="whitespace-nowrap"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {isYouTubeUrl(url) ? "Extracting..." : "Importing..."}
+                    </>
+                  ) : (
+                    <>
+                      {isYouTubeUrl(url) ? (
+                        <Video className="h-4 w-4 mr-2" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
+                      Import
+                    </>
+                  )}
+                </Button>
+              </div>
+              {isYouTubeUrl(url) && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  📹 YouTube video detected - will extract title, metadata, and transcript automatically
+                </p>
+              )}
             </div>
           </div>
-          
-          {/* Enhanced Preview */}
-          {(thumbnail || metadata) && (
-            <EnhancedVideoPreview
-              thumbnail={thumbnail}
-              transcript={transcript}
-              url={url}
-              enableSummary={enableSummary}
-              enableHighlights={enableHighlights}
-              enableKeyPoints={enableKeyPoints}
-              onSummaryChange={setEnableSummary}
-              onHighlightsChange={setEnableHighlights}
-              onKeyPointsChange={setEnableKeyPoints}
-              metadata={metadata}
-            />
-          )}
-          
-          <ProcessingStatus currentStep={currentStep} progress={progress} />
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or create manually
+              </span>
+            </div>
+          </div>
+
+          {/* Manual Note Creation */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Title</label>
+              <Input
+                placeholder="Enter note title..."
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Content</label>
+              <Textarea
+                placeholder="Start writing your note content..."
+                value={customContent}
+                onChange={(e) => setCustomContent(e.target.value)}
+                rows={6}
+              />
+            </div>
+
+            <Button
+              onClick={handleManualNote}
+              className="w-full"
+              variant="outline"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Create Note
+            </Button>
+          </div>
         </div>
-        
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button 
-            type="button" 
-            onClick={handleImport}
-            disabled={!url || currentStep === "processing" || currentStep === "complete" || !user}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-          >
-            {currentStep === "processing" ? "Importing..." : "Import & Transcribe"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

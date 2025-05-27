@@ -1,13 +1,16 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Bold, Italic, List, ListChecks, Save } from "lucide-react";
+import { Bold, Italic, List, ListChecks, Save, Video } from "lucide-react";
 import { TagSelector } from "@/components/TagSelector";
 import { AIProcessingButton } from "@/components/AIProcessingButton";
 import { AIChatModal } from "@/components/AIChatModal";
+import { YouTubeTranscriptIntegration } from "@/components/YouTubeTranscriptIntegration";
 import { useIsMobile } from "@/hooks/use-mobile";
+
 interface NoteEditorProps {
   initialNote?: {
     id?: string;
@@ -21,6 +24,7 @@ interface NoteEditorProps {
     tags: string[];
   }) => void;
 }
+
 export function NoteEditor({
   initialNote,
   onSave
@@ -32,6 +36,8 @@ export function NoteEditor({
     tags: initialNote?.tags || []
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [showYouTubeExtractor, setShowYouTubeExtractor] = useState(false);
+
   useEffect(() => {
     if (initialNote) {
       setNote({
@@ -41,6 +47,13 @@ export function NoteEditor({
       });
     }
   }, [initialNote]);
+
+  // Check if content contains YouTube URLs
+  useEffect(() => {
+    const hasYouTubeUrl = note.content.includes('youtube.com') || note.content.includes('youtu.be');
+    setShowYouTubeExtractor(hasYouTubeUrl);
+  }, [note.content]);
+
   const handleSave = () => {
     if (onSave) {
       setIsSaving(true);
@@ -51,107 +64,154 @@ export function NoteEditor({
       }
     }
   };
+
   const handleTagChange = (selectedTags: string[]) => {
-    setNote({
-      ...note,
-      tags: selectedTags
-    });
+    setNote(prev => ({ ...prev, tags: selectedTags }));
   };
-  const handleContentUpdate = (newContent: string) => {
-    setNote({
-      ...note,
-      content: newContent
-    });
-    // Auto-save after AI processing
-    if (onSave) {
-      onSave({
-        ...note,
-        content: newContent
-      });
+
+  const handleTranscriptExtracted = (extractedContent: string) => {
+    setNote(prev => ({
+      ...prev,
+      content: extractedContent,
+      // Extract title from the extracted content if current title is empty
+      title: prev.title || extractedContent.split('\n')[0].replace('# 🎥 ', '') || "YouTube Video Transcript"
+    }));
+  };
+
+  const insertFormatting = (format: string) => {
+    const textarea = document.querySelector('textarea');
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = note.content.substring(start, end);
+    
+    let replacement = "";
+    switch (format) {
+      case "bold":
+        replacement = `**${selectedText}**`;
+        break;
+      case "italic":
+        replacement = `*${selectedText}*`;
+        break;
+      case "list":
+        replacement = selectedText.split('\n').map(line => line.trim() ? `- ${line}` : line).join('\n');
+        break;
+      case "checklist":
+        replacement = selectedText.split('\n').map(line => line.trim() ? `- [ ] ${line}` : line).join('\n');
+        break;
     }
+
+    const newContent = note.content.substring(0, start) + replacement + note.content.substring(end);
+    setNote(prev => ({ ...prev, content: newContent }));
   };
-  if (isMobile) {
-    return <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto p-3">
-          <Input value={note.title} onChange={e => setNote({
-          ...note,
-          title: e.target.value
-        })} placeholder="Untitled Note" className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4 bg-transparent" />
 
-          <Textarea value={note.content || ""} onChange={e => setNote({
-          ...note,
-          content: e.target.value
-        })} placeholder="Start writing..." className="min-h-[300px] resize-none border-none focus-visible:ring-0 px-0 bg-transparent" />
-        </div>
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col space-y-4">
+        <Input
+          placeholder="Note title..."
+          value={note.title}
+          onChange={(e) => setNote(prev => ({ ...prev, title: e.target.value }))}
+          className="text-lg font-medium"
+        />
+        
+        {/* YouTube Transcript Integration */}
+        {showYouTubeExtractor && (
+          <YouTubeTranscriptIntegration
+            onTranscriptExtracted={handleTranscriptExtracted}
+          />
+        )}
+      </div>
 
-        <div className="p-3 border-t border-border">
-          <div className="flex space-x-2 mb-3">
-            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+      {/* Formatting Toolbar */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => insertFormatting("bold")}
+            >
               <Bold className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => insertFormatting("italic")}
+            >
               <Italic className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => insertFormatting("list")}
+            >
               <List className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="rounded-full w-9 h-9">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => insertFormatting("checklist")}
+            >
               <ListChecks className="h-4 w-4" />
             </Button>
+            
+            <div className="h-4 w-px bg-border mx-2" />
+            
+            <AIProcessingButton
+              content={note.content}
+              onProcessed={(processedContent) => 
+                setNote(prev => ({ ...prev, content: processedContent }))
+              }
+            />
+            
+            <AIChatModal
+              noteContent={note.content}
+              noteTitle={note.title}
+            />
           </div>
-
-          {initialNote?.id && <div className="mb-3 flex gap-2">
-              <AIProcessingButton noteId={initialNote.id} content={note.content} onContentUpdated={handleContentUpdate} />
-              <AIChatModal noteId={initialNote.id} content={note.content || ""} />
-            </div>}
-
-          <TagSelector selectedTags={note.tags} onChange={handleTagChange} />
-        </div>
-      </div>;
-  }
-  return <div className="flex flex-col h-full">
-      <div className="border-b border-border p-4 flex justify-between items-center">
-        <div className="flex space-x-2">
-          <Button variant="ghost" size="icon">
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <Italic className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <List className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <ListChecks className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {initialNote?.id && <>
-              <AIProcessingButton noteId={initialNote.id} content={note.content} onContentUpdated={handleContentUpdate} />
-              <AIChatModal noteId={initialNote.id} content={note.content || ""} />
-            </>}
-          
-          
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        <Input value={note.title} onChange={e => setNote({
-        ...note,
-        title: e.target.value
-      })} placeholder="Untitled Note" className="text-xl font-medium border-none focus-visible:ring-0 px-0 mb-4" />
-
-        <Textarea value={note.content || ""} onChange={e => setNote({
-        ...note,
-        content: e.target.value
-      })} placeholder="Start writing..." className="min-h-[500px] resize-none border-none focus-visible:ring-0 px-0" />
-      </div>
-
-      <Card className="border-t rounded-none">
-        <CardContent className="p-4">
-          <TagSelector selectedTags={note.tags} onChange={handleTagChange} />
         </CardContent>
       </Card>
-    </div>;
+
+      {/* Content Editor */}
+      <div className="space-y-4">
+        <Textarea
+          placeholder="Start writing your note... (Paste YouTube URLs to auto-detect transcript extraction)"
+          value={note.content}
+          onChange={(e) => setNote(prev => ({ ...prev, content: e.target.value }))}
+          className="min-h-[300px] resize-none"
+          rows={isMobile ? 12 : 15}
+        />
+      </div>
+
+      {/* Tags */}
+      <TagSelector
+        selectedTags={note.tags}
+        onTagsChange={handleTagChange}
+      />
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving || !note.title.trim()}
+          className="min-w-[100px]"
+        >
+          {isSaving ? (
+            <>
+              <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Save Note
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 }
