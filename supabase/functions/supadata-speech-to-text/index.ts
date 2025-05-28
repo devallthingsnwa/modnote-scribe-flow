@@ -6,34 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Process base64 audio in chunks to prevent memory issues
-function processBase64Chunks(base64String: string, chunkSize = 32768) {
+// Enhanced base64 processing with better memory management
+function processBase64Chunks(base64String: string, chunkSize = 16384) {
   const chunks: Uint8Array[] = [];
   let position = 0;
   
-  while (position < base64String.length) {
-    const chunk = base64String.slice(position, position + chunkSize);
-    const binaryChunk = atob(chunk);
-    const bytes = new Uint8Array(binaryChunk.length);
-    
-    for (let i = 0; i < binaryChunk.length; i++) {
-      bytes[i] = binaryChunk.charCodeAt(i);
+  try {
+    while (position < base64String.length) {
+      const chunk = base64String.slice(position, position + chunkSize);
+      
+      // Validate base64 chunk
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(chunk)) {
+        throw new Error('Invalid base64 format');
+      }
+      
+      const binaryChunk = atob(chunk);
+      const bytes = new Uint8Array(binaryChunk.length);
+      
+      for (let i = 0; i < binaryChunk.length; i++) {
+        bytes[i] = binaryChunk.charCodeAt(i);
+      }
+      
+      chunks.push(bytes);
+      position += chunkSize;
     }
-    
-    chunks.push(bytes);
-    position += chunkSize;
+
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Error processing base64 chunks:", error);
+    throw new Error(`Base64 processing failed: ${error.message}`);
   }
-
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
 }
 
 serve(async (req) => {
@@ -49,7 +60,7 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
-    console.log("Processing Supadata speech-to-text request, audio format:", format);
+    console.log("Processing enhanced Supadata speech-to-text request, audio format:", format);
 
     // Get Supadata API key
     const supadataApiKey = Deno.env.get('SUPADATA_API_KEY');
@@ -57,22 +68,27 @@ serve(async (req) => {
       throw new Error('Supadata API key not configured');
     }
 
-    // Process audio in chunks to prevent memory issues
-    console.log("Converting base64 audio to binary...");
+    // Enhanced audio processing with validation
+    console.log("Converting and validating base64 audio...");
     const binaryAudio = processBase64Chunks(audio);
-    console.log("Audio size:", binaryAudio.length, "bytes");
+    console.log("Audio processing successful, size:", binaryAudio.length, "bytes");
+    
+    if (binaryAudio.length === 0) {
+      throw new Error('Processed audio data is empty');
+    }
 
     const startTime = Date.now();
 
-    // Prepare form data for Supadata API
+    // Enhanced form data preparation
     const formData = new FormData();
     const blob = new Blob([binaryAudio], { type: format || 'audio/webm' });
     formData.append('audio', blob, 'audio.webm');
     
-    // Add options
-    if (options.language) {
-      formData.append('language', options.language);
-    }
+    // Enhanced options
+    formData.append('language', options.language || 'en');
+    formData.append('model', 'whisper-1'); // Specify model
+    formData.append('response_format', 'verbose_json'); // Get detailed response
+    
     if (options.include_confidence) {
       formData.append('include_confidence', 'true');
     }
@@ -80,49 +96,65 @@ serve(async (req) => {
       formData.append('include_timestamps', 'true');
     }
 
-    console.log("Sending request to Supadata Speech-to-Text API...");
+    console.log("Sending enhanced request to Supadata Speech-to-Text API...");
 
-    // Multiple API endpoints to try for better success rate
+    // Multiple API endpoints with better error handling
     const apiEndpoints = [
       'https://api.supadata.ai/v1/audio/transcribe',
-      'https://api.supadata.ai/v1/speech-to-text',
-      'https://api.supadata.ai/v1/audio/transcriptions'
+      'https://api.supadata.ai/v1/speech-to-text', 
+      'https://api.supadata.ai/v1/audio/transcriptions',
+      'https://api.supadata.ai/transcribe' // Additional endpoint
     ];
 
     let lastError = null;
+    let successfulEndpoint = null;
 
     for (const endpoint of apiEndpoints) {
       try {
-        console.log(`Trying Supadata endpoint: ${endpoint}`);
+        console.log(`Trying enhanced Supadata endpoint: ${endpoint}`);
         
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'x-api-key': supadataApiKey,
             'Authorization': `Bearer ${supadataApiKey}`,
+            'Accept': 'application/json',
           },
           body: formData,
         });
 
+        const responseText = await response.text();
+        console.log(`Response from ${endpoint}:`, response.status, responseText.substring(0, 200));
+
         if (!response.ok) {
-          const errorText = await response.text();
-          console.warn(`Supadata API error at ${endpoint}:`, response.status, errorText);
-          lastError = new Error(`Supadata API error: ${response.status} - ${errorText}`);
-          continue; // Try next endpoint
+          console.warn(`Supadata API error at ${endpoint}:`, response.status, responseText);
+          lastError = new Error(`Supadata API error: ${response.status} - ${responseText}`);
+          continue;
         }
 
-        const result = await response.json();
-        console.log("Supadata API response received:", JSON.stringify(result, null, 2));
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          // Try to extract text from non-JSON response
+          if (responseText && responseText.trim().length > 0) {
+            result = { text: responseText.trim() };
+          } else {
+            throw new Error('Invalid JSON response and no fallback text');
+          }
+        }
+
+        console.log("Enhanced Supadata API response:", JSON.stringify(result, null, 2));
 
         const processingTime = Date.now() - startTime;
 
-        // Handle various response formats from Supadata
+        // Enhanced response parsing
         let transcriptionText = '';
         let confidence = undefined;
         let duration = undefined;
         let language = options.language || 'en';
 
-        // Check different possible response structures
+        // Check various response structures
         if (result.transcription && typeof result.transcription === 'string') {
           transcriptionText = result.transcription.trim();
         } else if (result.text && typeof result.text === 'string') {
@@ -131,9 +163,11 @@ serve(async (req) => {
           transcriptionText = result.transcript.trim();
         } else if (result.content && typeof result.content === 'string') {
           transcriptionText = result.content.trim();
+        } else if (result.data && result.data.text) {
+          transcriptionText = result.data.text.trim();
         }
 
-        // Extract metadata
+        // Extract enhanced metadata
         if (result.confidence !== undefined) {
           confidence = result.confidence;
         }
@@ -143,10 +177,18 @@ serve(async (req) => {
         if (result.language) {
           language = result.language;
         }
+        
+        // Extract confidence from segments if available
+        if (!confidence && result.segments && result.segments.length > 0) {
+          const avgConfidence = result.segments.reduce((sum: number, seg: any) => 
+            sum + (seg.confidence || seg.avg_logprob || 0), 0) / result.segments.length;
+          confidence = avgConfidence;
+        }
 
-        // Validate transcription
+        // Enhanced validation
         if (transcriptionText && transcriptionText.length > 0) {
-          console.log(`Supadata transcription successful via ${endpoint}: ${transcriptionText.length} characters`);
+          console.log(`Enhanced Supadata transcription successful via ${endpoint}: ${transcriptionText.length} characters`);
+          successfulEndpoint = endpoint;
           
           return new Response(
             JSON.stringify({ 
@@ -156,7 +198,8 @@ serve(async (req) => {
               duration: duration,
               processing_time: processingTime,
               provider: 'supadata',
-              endpoint: endpoint
+              endpoint: endpoint,
+              success: true
             }),
             { 
               headers: { 
@@ -171,20 +214,22 @@ serve(async (req) => {
         }
 
       } catch (requestError) {
-        console.error(`Supadata request failed at ${endpoint}:`, requestError);
+        console.error(`Enhanced Supadata request failed at ${endpoint}:`, requestError);
         lastError = requestError;
-        continue; // Try next endpoint
+        continue;
       }
     }
 
     // If all endpoints failed
-    throw lastError || new Error('All Supadata endpoints failed');
+    throw lastError || new Error('All enhanced Supadata endpoints failed');
 
   } catch (error) {
-    console.error("Supadata speech-to-text error:", error);
+    console.error("Enhanced Supadata speech-to-text error:", error);
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Supadata speech-to-text processing failed'
+        error: error.message || 'Enhanced Supadata speech-to-text processing failed',
+        success: false,
+        provider: 'supadata'
       }),
       {
         status: 500,

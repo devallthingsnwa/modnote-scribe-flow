@@ -21,6 +21,7 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [transcriptionProvider, setTranscriptionProvider] = useState<string>("");
+  const [transcriptionAttempt, setTranscriptionAttempt] = useState(0);
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -116,21 +117,24 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
 
     setIsTranscribing(true);
     setTranscriptionProvider("");
+    setTranscriptionAttempt(0);
 
     try {
       toast({
-        title: "🔄 Transcribing Audio",
-        description: "Converting speech to text using AI..."
+        title: "🔄 Enhanced Transcription Starting",
+        description: "Using advanced AI with multiple fallbacks for best results..."
       });
 
-      const result = await SpeechToTextService.transcribeAudioWithFallback(audioBlob);
+      // Use enhanced retry mechanism
+      const result = await SpeechToTextService.transcribeWithRetry(audioBlob, 3);
       
       if (result.success && result.text) {
         setTranscriptionProvider(result.provider || "unknown");
         
         const providerNames = {
           'supadata': 'Supadata AI',
-          'openai-whisper': 'OpenAI Whisper',
+          'openai-whisper': 'OpenAI Whisper (Edge)',
+          'openai-direct': 'OpenAI Whisper (Direct)',
           'unknown': 'AI Provider'
         };
         
@@ -138,7 +142,7 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
         
         toast({
           title: "✅ Transcription Complete!",
-          description: `Successfully transcribed using ${providerName}`
+          description: `Successfully transcribed using ${providerName}${result.confidence ? ` (${Math.round(result.confidence * 100)}% confidence)` : ''}`
         });
 
         onTranscription(result.text);
@@ -147,13 +151,13 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
         clearRecording();
         
       } else {
-        throw new Error(result.error || 'Transcription failed');
+        throw new Error(result.error || 'All transcription methods failed');
       }
     } catch (error) {
-      console.error("Transcription error:", error);
+      console.error("Enhanced transcription error:", error);
       toast({
         title: "❌ Transcription Failed",
-        description: error.message || "Could not convert speech to text. Please try again.",
+        description: "All transcription methods failed. Please check your internet connection and try again.",
         variant: "destructive"
       });
     } finally {
@@ -261,7 +265,8 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
                 {transcriptionProvider && (
                   <Badge variant="secondary" className="text-xs">
                     {transcriptionProvider === 'supadata' ? 'Supadata AI' : 
-                     transcriptionProvider === 'openai-whisper' ? 'OpenAI Whisper' : 
+                     transcriptionProvider === 'openai-whisper' ? 'OpenAI Whisper (Edge)' : 
+                     transcriptionProvider === 'openai-direct' ? 'OpenAI Whisper (Direct)' :
                      transcriptionProvider}
                   </Badge>
                 )}
@@ -300,7 +305,7 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
               />
             )}
             
-            {/* Transcribe Button */}
+            {/* Enhanced Transcribe Button */}
             <Button
               onClick={transcribeAudio}
               disabled={isTranscribing || !audioBlob}
@@ -310,22 +315,23 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
               {isTranscribing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Transcribing with AI...
+                  Transcribing with Enhanced AI...
                 </>
               ) : (
                 <>
                   <Mic className="h-4 w-4 mr-2" />
-                  Transcribe to Text
+                  Transcribe to Text (Enhanced)
                 </>
               )}
             </Button>
           </div>
         )}
 
-        {/* Info */}
+        {/* Enhanced Info */}
         <div className="text-xs text-muted-foreground text-center space-y-1">
           <p>Click "Start Recording" to capture audio, then "Transcribe" to convert to text</p>
-          <p>Uses Supadata AI with OpenAI Whisper fallback for best results</p>
+          <p>Enhanced system: Supadata AI → OpenAI Whisper (Edge) → OpenAI Whisper (Direct)</p>
+          <p>Multiple fallbacks ensure maximum transcription success rate</p>
         </div>
       </CardContent>
     </Card>
