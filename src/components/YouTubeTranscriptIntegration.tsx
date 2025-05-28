@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, Loader2, Download, Play, AlertCircle, AlertTriangle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Video, Loader2, Download, Play, AlertCircle, AlertTriangle, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
+import { AudioRecorder } from "@/components/audio/AudioRecorder";
 
 interface YouTubeTranscriptIntegrationProps {
   onTranscriptExtracted: (content: string) => void;
@@ -160,85 +162,131 @@ ${extractedTranscript}
     });
   };
 
+  const handleSpeechToText = (transcribedText: string) => {
+    const enhancedContent = `# 🎤 Voice Note\n\n`;
+    const timestamp = new Date().toLocaleString();
+    
+    let content = enhancedContent;
+    content += `**Type:** Voice Transcription\n`;
+    content += `**Recorded:** ${timestamp}\n`;
+    content += `**Method:** Speech-to-Text (Whisper)\n\n`;
+    content += `---\n\n`;
+    content += `## 📝 Transcription\n\n`;
+    content += transcribedText;
+    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+
+    onTranscriptExtracted(content);
+  };
+
   return (
     <Card className={className}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Video className="h-5 w-5 text-primary" />
-          YouTube Transcript Extractor
+          Enhanced Transcript Extractor
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button
-          onClick={() => extractTranscriptFromContent(window.getSelection()?.toString() || document.body.innerText || "")}
-          disabled={isExtracting}
-          className="w-full"
-          size="lg"
-        >
-          {isExtracting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Extracting transcript...
-            </>
-          ) : (
-            <>
-              <Play className="h-4 w-4 mr-2" />
-              Extract Transcript from YouTube URL
-            </>
-          )}
-        </Button>
+        <Tabs defaultValue="youtube" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="youtube" className="flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              YouTube
+            </TabsTrigger>
+            <TabsTrigger value="speech" className="flex items-center gap-2">
+              <Mic className="h-4 w-4" />
+              Speech-to-Text
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="youtube" className="space-y-4 mt-4">
+            <Button
+              onClick={() => extractTranscriptFromContent(window.getSelection()?.toString() || document.body.innerText || "")}
+              disabled={isExtracting}
+              className="w-full"
+              size="lg"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Extracting transcript...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Extract Transcript from YouTube URL
+                </>
+              )}
+            </Button>
 
-        {extractedTranscript && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
-                Transcript Preview
-              </span>
-              <Button
-                onClick={downloadTranscript}
-                variant="outline"
-                size="sm"
-              >
-                <Download className="h-4 w-4 mr-1" />
-                Download
-              </Button>
-            </div>
-            
-            {videoInfo && (
-              <div className="p-3 bg-muted/50 rounded-lg border">
-                <h4 className="font-medium text-sm truncate">{videoInfo.title}</h4>
-                <p className="text-xs text-muted-foreground">
-                  by {videoInfo.author} • {videoInfo.duration}
-                </p>
+            {extractedTranscript && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Transcript Preview
+                  </span>
+                  <Button
+                    onClick={downloadTranscript}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Download
+                  </Button>
+                </div>
+                
+                {videoInfo && (
+                  <div className="p-3 bg-muted/50 rounded-lg border">
+                    <h4 className="font-medium text-sm truncate">{videoInfo.title}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      by {videoInfo.author} • {videoInfo.duration}
+                    </p>
+                  </div>
+                )}
+
+                <div className="max-h-32 overflow-y-auto p-3 bg-muted/20 rounded-lg border text-xs font-mono">
+                  {extractedTranscript.split('\n').slice(0, 10).map((line, index) => (
+                    <div key={index} className="mb-1">{line}</div>
+                  ))}
+                  {extractedTranscript.split('\n').length > 10 && (
+                    <div className="text-muted-foreground italic">
+                      ... and {extractedTranscript.split('\n').length - 10} more lines
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            <div className="max-h-32 overflow-y-auto p-3 bg-muted/20 rounded-lg border text-xs font-mono">
-              {extractedTranscript.split('\n').slice(0, 10).map((line, index) => (
-                <div key={index} className="mb-1">{line}</div>
-              ))}
-              {extractedTranscript.split('\n').length > 10 && (
-                <div className="text-muted-foreground italic">
-                  ... and {extractedTranscript.split('\n').length - 10} more lines
-                </div>
-              )}
+            <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-700 dark:text-blue-300">
+                <p className="font-medium mb-1">How to use:</p>
+                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note.</p>
+              </div>
             </div>
-          </div>
-        )}
+          </TabsContent>
+
+          <TabsContent value="speech" className="space-y-4 mt-4">
+            <AudioRecorder 
+              onTranscription={handleSpeechToText}
+              className="w-full"
+            />
+            
+            <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+              <Mic className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-green-700 dark:text-green-300">
+                <p className="font-medium mb-1">Speech-to-Text:</p>
+                <p>Click "Start Recording" to capture your voice, then "Transcribe" to convert it to text using AI.</p>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-amber-700 dark:text-amber-300">
-            <p className="font-medium mb-1">Note:</p>
-            <p>The system will try multiple methods to extract transcripts. If one method fails, it will automatically try alternative approaches.</p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">How to use:</p>
-            <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note.</p>
+            <p className="font-medium mb-1">Enhanced Fallback:</p>
+            <p>The system uses multiple methods including Supadata API for reliable transcript extraction with automatic fallbacks.</p>
           </div>
         </div>
       </CardContent>
