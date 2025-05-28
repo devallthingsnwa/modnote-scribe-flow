@@ -1,10 +1,12 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, MicOff, Square, Play, Pause } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Mic, MicOff, Play, Pause, Download, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SpeechToTextService } from "@/lib/speechToTextService";
+import { cn } from "@/lib/utils";
 
 interface AudioRecorderProps {
   onTranscription: (text: string) => void;
@@ -13,58 +15,58 @@ interface AudioRecorderProps {
 
 export function AudioRecorder({ onTranscription, className }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioChunks = useRef<Blob[]>([]);
-  const audioPlayer = useRef<HTMLAudioElement | null>(null);
-  
-  const { toast } = useToast();
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [transcriptionProvider, setTranscriptionProvider] = useState<string>("");
 
-  useEffect(() => {
-    return () => {
-      if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
-        mediaRecorder.current.stop();
-      }
-      if (audioPlayer.current) {
-        audioPlayer.current.pause();
-      }
-    };
-  }, []);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+  const { toast } = useToast();
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
-          sampleRate: 44100,
-          channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
-        }
+          sampleRate: 44100
+        } 
       });
-
-      audioChunks.current = [];
-      mediaRecorder.current = new MediaRecorder(stream, {
+      
+      const recorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
-
-      mediaRecorder.current.ondataavailable = (event) => {
+      
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioChunks.current.push(event.data);
+          chunks.push(event.data);
         }
       };
-
-      mediaRecorder.current.onstop = () => {
-        const blob = new Blob(audioChunks.current, { type: 'audio/webm' });
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
         setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+        
+        // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
       };
-
-      mediaRecorder.current.start(1000); // Collect data every second
+      
+      mediaRecorder.current = recorder;
+      recorder.start(1000); // Collect data every second
       setIsRecording(true);
+      setRecordingDuration(0);
+      
+      // Start timer
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
       
       toast({
         title: "🎤 Recording Started",
@@ -82,159 +84,249 @@ export function AudioRecorder({ onTranscription, className }: AudioRecorderProps
   };
 
   const stopRecording = () => {
-    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+    if (mediaRecorder.current && isRecording) {
       mediaRecorder.current.stop();
       setIsRecording(false);
       
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+      }
+      
       toast({
         title: "⏹️ Recording Stopped",
-        description: "Processing audio for transcription..."
+        description: `Recorded ${recordingDuration} seconds of audio`
       });
     }
   };
 
-  const playRecording = () => {
-    if (audioBlob && !isPlaying) {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      audioPlayer.current = new Audio(audioUrl);
-      
-      audioPlayer.current.onended = () => {
+  const playAudio = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
         setIsPlaying(false);
-        URL.revokeObjectURL(audioUrl);
-      };
-      
-      audioPlayer.current.play();
-      setIsPlaying(true);
-    } else if (audioPlayer.current && isPlaying) {
-      audioPlayer.current.pause();
-      setIsPlaying(false);
+      } else {
+        audioRef.current.play();
+        setIsPlaying(true);
+      }
     }
   };
 
   const transcribeAudio = async () => {
     if (!audioBlob) return;
 
-    setIsProcessing(true);
-    
+    setIsTranscribing(true);
+    setTranscriptionProvider("");
+
     try {
-      const result = await SpeechToTextService.transcribeAudio(audioBlob);
+      toast({
+        title: "🔄 Transcribing Audio",
+        description: "Converting speech to text using AI..."
+      });
+
+      const result = await SpeechToTextService.transcribeAudioWithFallback(audioBlob);
       
       if (result.success && result.text) {
-        onTranscription(result.text);
-        setAudioBlob(null); // Clear after successful transcription
+        setTranscriptionProvider(result.provider || "unknown");
+        
+        const providerNames = {
+          'supadata': 'Supadata AI',
+          'openai-whisper': 'OpenAI Whisper',
+          'unknown': 'AI Provider'
+        };
+        
+        const providerName = providerNames[result.provider as keyof typeof providerNames] || result.provider;
         
         toast({
-          title: "✅ Transcription Complete",
-          description: `Converted ${result.text.length} characters of text`
+          title: "✅ Transcription Complete!",
+          description: `Successfully transcribed using ${providerName}`
         });
+
+        onTranscription(result.text);
+        
+        // Clear the recording after successful transcription
+        clearRecording();
+        
       } else {
         throw new Error(result.error || 'Transcription failed');
       }
-      
     } catch (error) {
       console.error("Transcription error:", error);
       toast({
         title: "❌ Transcription Failed",
-        description: "Could not convert speech to text. Please try again.",
+        description: error.message || "Could not convert speech to text. Please try again.",
         variant: "destructive"
       });
     } finally {
-      setIsProcessing(false);
+      setIsTranscribing(false);
+    }
+  };
+
+  const downloadAudio = () => {
+    if (audioUrl) {
+      const a = document.createElement('a');
+      a.href = audioUrl;
+      a.download = `recording-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      toast({
+        title: "💾 Audio Downloaded",
+        description: "Your recording has been saved"
+      });
     }
   };
 
   const clearRecording = () => {
     setAudioBlob(null);
-    if (audioPlayer.current) {
-      audioPlayer.current.pause();
-      setIsPlaying(false);
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+    setIsPlaying(false);
+    setRecordingDuration(0);
+    setTranscriptionProvider("");
+    
+    if (recordingTimer.current) {
+      clearInterval(recordingTimer.current);
     }
   };
 
-  return (
-    <Card className={className}>
-      <CardContent className="p-4 space-y-4">
-        <div className="text-center">
-          <h3 className="font-medium mb-2">🎤 Speech to Text</h3>
-          <p className="text-sm text-muted-foreground">
-            Record your voice and convert it to text
-          </p>
-        </div>
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
-        <div className="flex justify-center space-x-2">
+  return (
+    <Card className={cn("p-4", className)}>
+      <CardContent className="space-y-4 p-0">
+        {/* Recording Controls */}
+        <div className="flex items-center justify-center space-x-3">
           {!isRecording ? (
-            <Button 
+            <Button
               onClick={startRecording}
-              disabled={isProcessing}
-              className="bg-red-500 hover:bg-red-600"
+              disabled={isTranscribing}
+              size="lg"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
-              <Mic className="h-4 w-4 mr-2" />
+              <Mic className="h-5 w-5 mr-2" />
               Start Recording
             </Button>
           ) : (
-            <Button 
+            <Button
               onClick={stopRecording}
+              size="lg"
               variant="destructive"
+              className="animate-pulse"
             >
-              <Square className="h-4 w-4 mr-2" />
-              Stop Recording
+              <MicOff className="h-5 w-5 mr-2" />
+              Stop Recording ({formatDuration(recordingDuration)})
             </Button>
           )}
         </div>
 
-        {audioBlob && !isRecording && (
-          <div className="space-y-3">
-            <div className="flex justify-center space-x-2">
-              <Button 
-                onClick={playRecording}
-                variant="outline"
-                size="sm"
-              >
-                {isPlaying ? <Pause className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                {isPlaying ? 'Pause' : 'Play'}
-              </Button>
-              
-              <Button 
-                onClick={transcribeAudio}
-                disabled={isProcessing}
-                size="sm"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <MicOff className="h-4 w-4 mr-1" />
-                    Transcribe
-                  </>
-                )}
-              </Button>
-              
-              <Button 
-                onClick={clearRecording}
-                variant="ghost"
-                size="sm"
-              >
-                Clear
-              </Button>
-            </div>
-            
-            <p className="text-xs text-muted-foreground text-center">
-              Audio recorded • Ready for transcription
-            </p>
+        {/* Recording Status */}
+        {isRecording && (
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-red-600">
+              Recording in progress...
+            </span>
           </div>
         )}
 
-        {isRecording && (
-          <div className="text-center">
-            <div className="inline-flex items-center space-x-2 text-red-500">
-              <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-sm font-medium">Recording...</span>
+        {/* Audio Playback & Controls */}
+        {audioBlob && (
+          <div className="space-y-3 p-3 bg-muted/20 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  onClick={playAudio}
+                  variant="outline"
+                  size="sm"
+                  disabled={isTranscribing}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+                
+                <span className="text-sm text-muted-foreground">
+                  Duration: {formatDuration(recordingDuration)}
+                </span>
+                
+                {transcriptionProvider && (
+                  <Badge variant="secondary" className="text-xs">
+                    {transcriptionProvider === 'supadata' ? 'Supadata AI' : 
+                     transcriptionProvider === 'openai-whisper' ? 'OpenAI Whisper' : 
+                     transcriptionProvider}
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Button
+                  onClick={downloadAudio}
+                  variant="outline"
+                  size="sm"
+                  disabled={isTranscribing}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                
+                <Button
+                  onClick={clearRecording}
+                  variant="outline"
+                  size="sm"
+                  disabled={isTranscribing}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            
+            {/* Hidden audio element for playback */}
+            {audioUrl && (
+              <audio
+                ref={audioRef}
+                src={audioUrl}
+                onEnded={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ display: 'none' }}
+              />
+            )}
+            
+            {/* Transcribe Button */}
+            <Button
+              onClick={transcribeAudio}
+              disabled={isTranscribing || !audioBlob}
+              className="w-full"
+              size="lg"
+            >
+              {isTranscribing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Transcribing with AI...
+                </>
+              ) : (
+                <>
+                  <Mic className="h-4 w-4 mr-2" />
+                  Transcribe to Text
+                </>
+              )}
+            </Button>
           </div>
         )}
+
+        {/* Info */}
+        <div className="text-xs text-muted-foreground text-center space-y-1">
+          <p>Click "Start Recording" to capture audio, then "Transcribe" to convert to text</p>
+          <p>Uses Supadata AI with OpenAI Whisper fallback for best results</p>
+        </div>
       </CardContent>
     </Card>
   );
