@@ -1,6 +1,7 @@
 
 import { corsHeaders } from "./utils.ts";
 import { ITranscriptStrategy, TranscriptOptions } from "./strategies/ITranscriptStrategy.ts";
+import { SupadataStrategy } from "./strategies/SupadataStrategy.ts";
 import { YouTubeApiStrategy } from "./strategies/YouTubeApiStrategy.ts";
 import { VideoPageStrategy } from "./strategies/VideoPageStrategy.ts";
 import { CaptionTracksStrategy } from "./strategies/CaptionTracksStrategy.ts";
@@ -34,12 +35,13 @@ export class TranscriptExtractor {
   constructor() {
     // Initialize extraction strategies in order of reliability and preference
     this.strategies = [
-      new CaptionTracksStrategy(),     // Most reliable - direct caption API
-      new VideoPageStrategy(),         // Second most reliable - page scraping
-      new YouTubeApiStrategy(),        // Third - requires API key
-      new EmbedExtractionStrategy(),   // Fourth - embed page extraction
-      new AlternativeApiStrategy(),    // Fifth - third-party APIs
-      new WhisperStrategy()            // Last resort - AI transcription (currently disabled)
+      new SupadataStrategy(),           // NEW: Most reliable - dedicated transcript API
+      new CaptionTracksStrategy(),      // Second most reliable - direct caption API
+      new VideoPageStrategy(),          // Third most reliable - page scraping
+      new YouTubeApiStrategy(),         // Fourth - requires API key
+      new EmbedExtractionStrategy(),    // Fifth - embed page extraction
+      new AlternativeApiStrategy(),     // Sixth - third-party APIs
+      new WhisperStrategy()             // Last resort - AI transcription (currently disabled)
     ];
   }
 

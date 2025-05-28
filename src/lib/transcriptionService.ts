@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TranscriptionConfig {
@@ -71,10 +70,17 @@ export class TranscriptionService {
         throw new Error('Invalid YouTube URL');
       }
 
-      console.log(`Fetching YouTube transcript for video ID: ${videoId}`);
+      console.log(`Fetching YouTube transcript for video ID: ${videoId} (using Supadata API)`);
       
       const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
-        body: { videoId }
+        body: { 
+          videoId,
+          options: {
+            includeTimestamps: true,
+            language: 'en',
+            format: 'text'
+          }
+        }
       });
 
       if (error) {
@@ -86,7 +92,7 @@ export class TranscriptionService {
           success: true,
           text: data.transcript,
           metadata: data.metadata,
-          provider: 'youtube-transcript'
+          provider: data.metadata?.extractionMethod || 'youtube-transcript'
         };
       } else {
         throw new Error('No transcript available');
@@ -104,13 +110,13 @@ export class TranscriptionService {
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = this.detectMediaType(url);
     
-    // For YouTube videos, try YouTube transcript first
+    // For YouTube videos, try YouTube transcript first (now with Supadata)
     if (mediaType === 'youtube') {
-      console.log('Attempting YouTube transcript extraction...');
+      console.log('Attempting YouTube transcript extraction with Supadata API...');
       const youtubeResult = await this.fetchYouTubeTranscript(url);
       
       if (youtubeResult.success) {
-        console.log('YouTube transcript extraction successful');
+        console.log('YouTube transcript extraction successful via Supadata');
         return youtubeResult;
       }
       
