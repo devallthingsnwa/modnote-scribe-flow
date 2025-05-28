@@ -1,8 +1,7 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Video, Loader2, Download, Play, AlertCircle } from "lucide-react";
+import { Video, Loader2, Download, Play, AlertCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -124,6 +123,13 @@ export function YouTubeTranscriptIntegration({
       const transcript = transcriptResult.data?.transcript;
 
       if (!transcript || !isValidTranscript(transcript)) {
+        // Show specific warning for unavailable transcript
+        toast({
+          title: "⚠️ Transcript Not Available",
+          description: "This video doesn't have captions or transcripts available. The video creator may not have enabled captions, or the video may be restricted.",
+          variant: "destructive"
+        });
+        
         throw new Error("No valid transcript available for this video. The video may not have captions enabled or may be restricted.");
       }
 
@@ -156,9 +162,24 @@ export function YouTubeTranscriptIntegration({
 
     } catch (error) {
       console.error("Transcript extraction error:", error);
+      
+      // Enhanced error handling with specific warnings
+      let errorTitle = "Extraction failed";
+      let errorDescription = error.message || "Failed to extract transcript.";
+      
+      if (error.message?.includes('no captions') || 
+          error.message?.includes('not available') || 
+          error.message?.includes('restricted')) {
+        errorTitle = "⚠️ Transcript Unavailable";
+        errorDescription = "This video doesn't have transcripts or captions available. Try a different video with captions enabled.";
+      } else if (error.message?.includes('private')) {
+        errorTitle = "🔒 Video Restricted";
+        errorDescription = "This video is private or restricted and cannot be processed.";
+      }
+      
       toast({
-        title: "Extraction failed",
-        description: error.message || "Failed to extract transcript. This video may not have captions available or may be restricted.",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive"
       });
     } finally {
@@ -259,6 +280,14 @@ ${extractedTranscript}
             </div>
           </div>
         )}
+
+        <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-amber-700 dark:text-amber-300">
+            <p className="font-medium mb-1">Note:</p>
+            <p>Not all YouTube videos have transcripts available. If extraction fails, the video creator may not have enabled captions or the video may be restricted.</p>
+          </div>
+        </div>
 
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />

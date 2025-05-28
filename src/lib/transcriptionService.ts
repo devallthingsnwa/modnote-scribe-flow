@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 export interface TranscriptionConfig {
   provider: 'podsqueeze' | 'whisper' | 'riverside';
@@ -95,10 +96,27 @@ export class TranscriptionService {
           provider: data.metadata?.extractionMethod || 'youtube-transcript'
         };
       } else {
-        throw new Error('No transcript available');
+        // Show warning for no transcript available
+        toast({
+          title: "⚠️ Transcript Not Available",
+          description: "This video doesn't have captions or transcripts available. The video creator may not have enabled captions.",
+          variant: "destructive",
+        });
+        
+        throw new Error('No transcript available - video may not have captions enabled');
       }
     } catch (error) {
       console.error('YouTube transcript fetch failed:', error);
+      
+      // Show specific warning for transcript unavailability
+      if (error.message?.includes('no captions') || error.message?.includes('not available')) {
+        toast({
+          title: "⚠️ Transcript Unavailable",
+          description: "This YouTube video doesn't have transcripts or captions available. Try a different video with captions enabled.",
+          variant: "destructive",
+        });
+      }
+      
       return {
         success: false,
         error: error.message || 'YouTube transcript fetch failed',
@@ -121,6 +139,13 @@ export class TranscriptionService {
       }
       
       console.warn('YouTube transcript failed, trying external providers...');
+      
+      // Show warning that transcript extraction failed
+      toast({
+        title: "⚠️ Transcript Extraction Failed",
+        description: "Unable to extract transcript from this YouTube video. Trying alternative transcription methods...",
+        variant: "destructive",
+      });
     }
     
     // Try external transcription providers in priority order
@@ -139,10 +164,16 @@ export class TranscriptionService {
       console.warn(`${provider} failed, trying next provider...`);
     }
 
-    // If all providers fail, return error
+    // If all providers fail, show final warning
+    toast({
+      title: "❌ Transcription Failed",
+      description: "All transcription methods failed. This content may not support automatic transcription or may be restricted.",
+      variant: "destructive",
+    });
+
     return {
       success: false,
-      error: 'All transcription providers failed. Please try again later.'
+      error: 'All transcription providers failed. Please try again later or use a different video.'
     };
   }
 
