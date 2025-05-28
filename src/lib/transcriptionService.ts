@@ -22,6 +22,8 @@ export interface TranscriptionResult {
     }>;
     credits?: number;
     availableLanguages?: string[];
+    extractionMethod?: string;
+    apiAttempt?: string;
   };
   error?: string;
   provider?: string;
@@ -66,14 +68,14 @@ export class TranscriptionService {
     }
   }
 
-  private static async fetchYouTubeTranscript(url: string): Promise<TranscriptionResult> {
+  private static async fetchYouTubeTranscript(url: string, retryCount: number = 0): Promise<TranscriptionResult> {
     try {
       const videoId = this.extractVideoId(url);
       if (!videoId) {
         throw new Error('Invalid YouTube URL');
       }
 
-      console.log(`Fetching YouTube transcript for video ID: ${videoId} (using enhanced fallback system)`);
+      console.log(`Fetching YouTube transcript for video ID: ${videoId} (attempt ${retryCount + 1}/3)`);
       
       const { data, error } = await supabase.functions.invoke('fetch-youtube-transcript', {
         body: { 
@@ -87,25 +89,57 @@ export class TranscriptionService {
       });
 
       if (error) {
+        console.error('Edge function error:', error);
         throw error;
       }
 
-      if (data?.transcript) {
+      // Enhanced response validation
+      if (data?.success && data?.transcript) {
+        const transcriptLength = data.transcript.length;
+        console.log(`Transcript extraction successful: ${transcriptLength} characters via ${data.metadata?.extractionMethod}`);
+        
+        // Validate transcript quality
+        if (transcriptLength < 10) {
+          throw new Error('Transcript too short - likely incomplete or invalid');
+        }
+
+        // Check for error indicators in transcript text
+        const transcript = data.transcript.toLowerCase();
+        if (transcript.includes('unable to fetch') || 
+            transcript.includes('technical error') || 
+            transcript.includes('no transcript available')) {
+          throw new Error('Transcript extraction indicated failure');
+        }
+
         return {
           success: true,
           text: data.transcript,
           metadata: {
             ...data.metadata,
             credits: data.metadata?.credits,
-            availableLanguages: data.metadata?.availableLanguages
+            availableLanguages: data.metadata?.availableLanguages,
+            extractionMethod: data.metadata?.extractionMethod,
+            apiAttempt: data.metadata?.apiAttempt
           },
           provider: data.metadata?.extractionMethod || 'youtube-transcript'
         };
+      } else if (data?.error) {
+        throw new Error(data.error);
       } else {
-        throw new Error('No transcript available - video may not have captions enabled');
+        throw new Error('No transcript data received from extraction service');
       }
     } catch (error) {
-      console.error('YouTube transcript fetch failed:', error);
+      console.error(`YouTube transcript fetch failed (attempt ${retryCount + 1}):`, error);
+      
+      // Retry logic for transient failures
+      if (retryCount < 2 && 
+          (error.message?.includes('network') || 
+           error.message?.includes('timeout') || 
+           error.message?.includes('rate limit'))) {
+        console.log(`Retrying transcript extraction in ${(retryCount + 1) * 2} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+        return this.fetchYouTubeTranscript(url, retryCount + 1);
+      }
       
       return {
         success: false,
@@ -118,24 +152,52 @@ export class TranscriptionService {
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = this.detectMediaType(url);
     
-    // For YouTube videos, use the enhanced extraction system with Supadata priority
+    // For YouTube videos, use enhanced extraction with Supadata priority
     if (mediaType === 'youtube') {
-      console.log('Attempting YouTube transcript extraction with Supadata priority...');
+      console.log('Starting enhanced YouTube transcript extraction with Supadata priority...');
+      
       const youtubeResult = await this.fetchYouTubeTranscript(url);
       
       if (youtubeResult.success) {
-        console.log('YouTube transcript extraction successful via:', youtubeResult.provider);
+        const extractionMethod = youtubeResult.metadata?.extractionMethod || youtubeResult.provider;
+        console.log('YouTube transcript extraction successful via:', extractionMethod);
         
-        // Show success toast with provider info
+        // Enhanced success notification
+        let successMessage = `Successfully extracted transcript`;
+        if (extractionMethod === 'supadata-api') {
+          successMessage += ' using Supadata API';
+          if (youtubeResult.metadata?.apiAttempt) {
+            successMessage += ` (${youtubeResult.metadata.apiAttempt})`;
+          }
+        } else {
+          successMessage += ` using ${extractionMethod}`;
+        }
+        
         toast({
           title: "✅ Transcript Extracted Successfully!",
-          description: `Successfully extracted transcript using ${youtubeResult.provider === 'supadata-api' ? 'Supadata API' : youtubeResult.provider}`
+          description: successMessage
         });
         
         return youtubeResult;
       }
       
-      console.warn('YouTube transcript failed, trying external providers...');
+      console.warn('Enhanced YouTube transcript extraction failed, trying external providers...');
+      
+      // Enhanced error handling
+      let errorDetails = youtubeResult.error || 'Unknown error';
+      if (errorDetails.includes('captions')) {
+        toast({
+          title: "⚠️ No Captions Available",
+          description: "This video doesn't have captions enabled. Trying alternative providers...",
+          variant: "destructive",
+        });
+      } else if (errorDetails.includes('private') || errorDetails.includes('restricted')) {
+        toast({
+          title: "🔒 Video Restricted",
+          description: "This video is private or restricted. Trying alternative providers...",
+          variant: "destructive",
+        });
+      }
     }
     
     // Try external transcription providers as final fallback

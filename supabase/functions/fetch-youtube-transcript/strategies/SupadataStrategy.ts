@@ -20,91 +20,147 @@ export class SupadataStrategy implements ITranscriptStrategy {
       const language = options.language || 'en';
       const includeTimestamps = options.includeTimestamps !== false;
       
-      // Build the API URL according to Supadata documentation
-      const apiUrl = new URL('https://api.supadata.ai/v1/youtube/transcript');
-      apiUrl.searchParams.append('videoId', videoId);
-      apiUrl.searchParams.append('text', 'true');
-      if (language && language !== 'auto') {
-        apiUrl.searchParams.append('lang', language);
-      }
-
-      console.log(`Calling Supadata API for video ${videoId} with language ${language}`);
-
-      const response = await fetch(apiUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'x-api-key': supadataApiKey,
-          'Accept': 'application/json',
-          'User-Agent': 'YouTube-Transcript-Extractor/1.0'
+      // Try multiple API approaches for better success rate
+      const apiAttempts = [
+        // Primary: video ID with text format
+        {
+          url: `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
+          description: 'video ID with text format'
+        },
+        // Fallback 1: video ID with segments
+        {
+          url: `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
+          description: 'video ID with segments'
+        },
+        // Fallback 2: with language specified
+        {
+          url: `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true&lang=${language}`,
+          description: 'video ID with language and text'
         }
-      });
+      ];
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Supadata API error: ${response.status} - ${errorText}`);
-        
-        if (response.status === 401) {
-          console.error("Supadata API authentication failed - check API key");
-        } else if (response.status === 404) {
-          console.warn("Video not found or no transcript available via Supadata");
-        } else if (response.status === 429) {
-          console.warn("Supadata API rate limit exceeded");
-        } else if (response.status === 400) {
-          console.warn("Invalid video ID or request parameters");
-        }
-        
-        return null;
-      }
+      for (const attempt of apiAttempts) {
+        console.log(`Calling Supadata API (${attempt.description}) for video ${videoId}`);
 
-      const data = await response.json();
-      
-      if (!data || (!data.content && !data.transcript)) {
-        console.warn("Supadata API returned empty or invalid response");
-        return null;
-      }
-
-      // Get the transcript content (Supadata uses 'content' field)
-      let transcriptText = data.content || data.transcript || '';
-      
-      // If we have segments and want timestamps, format accordingly
-      if (data.segments && includeTimestamps && Array.isArray(data.segments)) {
-        transcriptText = data.segments
-          .map((segment: any) => {
-            if (segment.start !== undefined && segment.text) {
-              const startTime = this.formatTimestamp(segment.start || 0);
-              const endTime = this.formatTimestamp((segment.start || 0) + (segment.duration || 3));
-              return `[${startTime} - ${endTime}] ${segment.text}`;
+        try {
+          const response = await fetch(attempt.url, {
+            method: 'GET',
+            headers: {
+              'x-api-key': supadataApiKey,
+              'Accept': 'application/json',
+              'User-Agent': 'YouTube-Transcript-Extractor/1.0'
             }
-            return segment.text || '';
-          })
-          .filter(text => text.length > 0)
-          .join('\n');
-      }
+          });
 
-      if (transcriptText && transcriptText.length > 20) {
-        console.log(`Supadata API extraction successful: ${transcriptText.length} characters`);
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            transcript: transcriptText,
-            metadata: {
-              videoId,
-              language: data.language || language,
-              extractionMethod: 'supadata-api',
-              segmentCount: data.segments ? data.segments.length : 0,
-              availableLanguages: data.available_languages || [],
-              credits: data.credits_used || 1
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`Supadata API error (${attempt.description}): ${response.status} - ${errorText}`);
+            
+            // Log specific error types but continue to next attempt
+            if (response.status === 401) {
+              console.error("Supadata API authentication failed - check API key");
+            } else if (response.status === 404) {
+              console.warn("Video not found or no transcript available via Supadata");
+            } else if (response.status === 429) {
+              console.warn("Supadata API rate limit exceeded");
+              // For rate limits, wait a bit before trying next approach
+              await new Promise(resolve => setTimeout(resolve, 1000));
             }
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
+            
+            continue; // Try next approach
           }
-        );
+
+          const data = await response.json();
+          console.log("Supadata API response:", JSON.stringify(data, null, 2));
+          
+          // Enhanced response validation
+          if (!data) {
+            console.warn(`Supadata API returned null response (${attempt.description})`);
+            continue;
+          }
+
+          // Check for various response formats
+          let transcriptText = '';
+          let segments = [];
+          let detectedLanguage = language;
+          
+          // Handle different response structures
+          if (data.content && typeof data.content === 'string' && data.content.trim().length > 0) {
+            transcriptText = data.content.trim();
+            console.log(`Found transcript in 'content' field: ${transcriptText.length} characters`);
+          } else if (data.transcript && typeof data.transcript === 'string' && data.transcript.trim().length > 0) {
+            transcriptText = data.transcript.trim();
+            console.log(`Found transcript in 'transcript' field: ${transcriptText.length} characters`);
+          } else if (data.segments && Array.isArray(data.segments) && data.segments.length > 0) {
+            segments = data.segments;
+            console.log(`Found ${segments.length} transcript segments`);
+            
+            // Build transcript from segments
+            if (includeTimestamps) {
+              transcriptText = segments
+                .map((segment: any) => {
+                  if (segment.text && segment.text.trim()) {
+                    if (segment.start !== undefined) {
+                      const startTime = this.formatTimestamp(segment.start || 0);
+                      const endTime = this.formatTimestamp((segment.start || 0) + (segment.duration || 3));
+                      return `[${startTime} - ${endTime}] ${segment.text.trim()}`;
+                    }
+                    return segment.text.trim();
+                  }
+                  return '';
+                })
+                .filter(text => text.length > 0)
+                .join('\n');
+            } else {
+              transcriptText = segments
+                .map((segment: any) => segment.text ? segment.text.trim() : '')
+                .filter(text => text.length > 0)
+                .join(' ');
+            }
+          } else if (data.text && typeof data.text === 'string' && data.text.trim().length > 0) {
+            transcriptText = data.text.trim();
+            console.log(`Found transcript in 'text' field: ${transcriptText.length} characters`);
+          }
+
+          // Update detected language
+          if (data.language) {
+            detectedLanguage = data.language;
+          }
+
+          // Validate final transcript
+          if (transcriptText && transcriptText.length > 10) {
+            console.log(`Supadata API extraction successful (${attempt.description}): ${transcriptText.length} characters`);
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                transcript: transcriptText,
+                metadata: {
+                  videoId,
+                  language: detectedLanguage,
+                  extractionMethod: 'supadata-api',
+                  segmentCount: segments.length || 0,
+                  availableLanguages: data.available_languages || data.availableLanguages || [],
+                  credits: data.credits_used || data.creditsUsed || 1,
+                  apiAttempt: attempt.description
+                }
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              }
+            );
+          } else {
+            console.warn(`Supadata API returned transcript but content too short (${attempt.description}): "${transcriptText}"`);
+          }
+
+        } catch (requestError) {
+          console.error(`Supadata API request failed (${attempt.description}):`, requestError);
+          continue;
+        }
       }
 
-      console.warn("Supadata API returned transcript but content appears empty or too short");
+      console.warn("All Supadata API attempts failed or returned insufficient content");
       return null;
 
     } catch (error) {
