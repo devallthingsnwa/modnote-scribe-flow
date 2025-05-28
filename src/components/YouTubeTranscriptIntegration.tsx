@@ -38,8 +38,8 @@ export function YouTubeTranscriptIntegration({
     if (!transcript || typeof transcript !== 'string') return false;
     const trimmed = transcript.trim();
 
-    // Check if it's an error message
-    const errorMessages = [
+    // Check if it's an error message or placeholder
+    const errorIndicators = [
       'You can add your own notes here',
       'Transcript not available',
       'No transcript available',
@@ -49,19 +49,27 @@ export function YouTubeTranscriptIntegration({
       'Please try again later',
       'All extraction methods failed',
       'captions available or may be restricted',
-      'technical error'
+      'technical error',
+      'No valid transcript available',
+      'video may not have captions',
+      'Extraction failed'
     ];
     
-    const hasErrorMessage = errorMessages.some(msg => 
+    const hasErrorMessage = errorIndicators.some(msg => 
       trimmed.toLowerCase().includes(msg.toLowerCase())
     );
 
-    // Require minimum length and proper formatting for valid transcripts
-    const hasTimestamps = trimmed.includes('[') && trimmed.includes(']');
-    const hasMultipleLines = trimmed.split('\n').length > 3;
-    const hasMinimumLength = trimmed.length > 200;
+    if (hasErrorMessage) return false;
 
-    return !hasErrorMessage && (hasTimestamps || hasMultipleLines) && hasMinimumLength;
+    // More lenient validation - accept shorter transcripts
+    const hasMinimumLength = trimmed.length > 50; // Reduced from 200
+    const hasTimestamps = trimmed.includes('[') && trimmed.includes(']');
+    const hasMultipleLines = trimmed.split('\n').length > 1; // Reduced from 3
+    const hasValidContent = !trimmed.toLowerCase().includes('undefined') && 
+                           !trimmed.toLowerCase().includes('null') &&
+                           trimmed.length > 20;
+
+    return hasMinimumLength && hasValidContent && (hasTimestamps || hasMultipleLines);
   };
 
   const fetchVideoMetadata = async (videoId: string) => {
@@ -110,30 +118,59 @@ export function YouTubeTranscriptIntegration({
             options: {
               includeTimestamps: true,
               language: 'en',
-              maxRetries: 2
+              maxRetries: 3 // Increased retries
             }
           }
         })
       ]);
 
       if (transcriptResult.error) {
+        console.error('Transcript extraction error:', transcriptResult.error);
         throw new Error(transcriptResult.error.message || "Failed to fetch transcript");
       }
 
       const transcript = transcriptResult.data?.transcript;
+      console.log('Raw transcript received:', transcript ? transcript.substring(0, 200) + '...' : 'null');
 
-      if (!transcript || !isValidTranscript(transcript)) {
-        // Show specific warning for unavailable transcript
+      // Enhanced error handling for different failure cases
+      if (!transcript) {
         toast({
-          title: "⚠️ Transcript Not Available",
-          description: "This video doesn't have captions or transcripts available. The video creator may not have enabled captions, or the video may be restricted.",
+          title: "⚠️ No Transcript Data",
+          description: "The transcript service returned empty data. This video may not have captions available.",
           variant: "destructive"
         });
-        
-        throw new Error("No valid transcript available for this video. The video may not have captions enabled or may be restricted.");
+        throw new Error("No transcript data received from the service");
       }
 
-      // Set the extracted data
+      if (!isValidTranscript(transcript)) {
+        // Check what type of error we got
+        if (transcript.toLowerCase().includes('captions') || 
+            transcript.toLowerCase().includes('not available') ||
+            transcript.toLowerCase().includes('restricted')) {
+          toast({
+            title: "⚠️ Captions Not Available",
+            description: "This video doesn't have captions enabled by the creator, or the video may be age-restricted/private.",
+            variant: "destructive"
+          });
+        } else if (transcript.toLowerCase().includes('failed') || 
+                   transcript.toLowerCase().includes('error')) {
+          toast({
+            title: "❌ Extraction Failed",
+            description: "The transcript extraction failed due to a technical issue. Please try again or use a different video.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "⚠️ Invalid Transcript",
+            description: "The transcript data received appears to be invalid or corrupted. Please try a different video.",
+            variant: "destructive"
+          });
+        }
+        
+        throw new Error("Invalid or empty transcript content received");
+      }
+
+      // Successfully extracted valid transcript
       setExtractedTranscript(transcript);
       setVideoInfo(metadataResult);
 
@@ -156,32 +193,33 @@ export function YouTubeTranscriptIntegration({
       onTranscriptExtracted(enhancedContent);
 
       toast({
-        title: "Transcript extracted!",
+        title: "✅ Transcript Extracted Successfully!",
         description: `Successfully extracted transcript for "${title}"`
       });
 
     } catch (error) {
       console.error("Transcript extraction error:", error);
       
-      // Enhanced error handling with specific warnings
-      let errorTitle = "Extraction failed";
-      let errorDescription = error.message || "Failed to extract transcript.";
-      
-      if (error.message?.includes('no captions') || 
-          error.message?.includes('not available') || 
-          error.message?.includes('restricted')) {
-        errorTitle = "⚠️ Transcript Unavailable";
-        errorDescription = "This video doesn't have transcripts or captions available. Try a different video with captions enabled.";
-      } else if (error.message?.includes('private')) {
-        errorTitle = "🔒 Video Restricted";
-        errorDescription = "This video is private or restricted and cannot be processed.";
+      // Don't show duplicate toast if we already showed one above
+      if (!error.message?.includes('Invalid or empty transcript') && 
+          !error.message?.includes('No transcript data received')) {
+        let errorTitle = "❌ Extraction Failed";
+        let errorDescription = error.message || "Failed to extract transcript.";
+        
+        if (error.message?.includes('private') || error.message?.includes('restricted')) {
+          errorTitle = "🔒 Video Restricted";
+          errorDescription = "This video is private, age-restricted, or region-locked and cannot be processed.";
+        } else if (error.message?.includes('not found')) {
+          errorTitle = "🔍 Video Not Found";
+          errorDescription = "This video could not be found. It may have been deleted or made private.";
+        }
+        
+        toast({
+          title: errorTitle,
+          description: errorDescription,
+          variant: "destructive"
+        });
       }
-      
-      toast({
-        title: errorTitle,
-        description: errorDescription,
-        variant: "destructive"
-      });
     } finally {
       setIsExtracting(false);
     }
