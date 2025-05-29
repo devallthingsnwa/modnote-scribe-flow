@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FileText } from "lucide-react";
@@ -7,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNote, useUpdateNote, useDeleteNote } from "@/lib/api";
 import { getYoutubeVideoId } from "@/lib/utils";
 import { NotePageHeader } from "@/components/note-page/NotePageHeader";
-import { VideoNoteLayout } from "@/components/note-page/VideoNoteLayout";
+import { EnhancedVideoNoteLayout } from "@/components/note-page/EnhancedVideoNoteLayout";
 import { RegularNoteLayout } from "@/components/note-page/RegularNoteLayout";
 
 export default function NotePage() {
@@ -137,7 +136,7 @@ export default function NotePage() {
             </div>
           ) : note ? (
             isVideoNote ? (
-              <VideoNoteLayout
+              <EnhancedVideoNoteLayout
                 note={note}
                 videoId={videoId || ''}
                 updateNoteMutation={updateNoteMutation}

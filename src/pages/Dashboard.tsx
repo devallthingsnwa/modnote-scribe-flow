@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { NotesListPanel } from "@/components/NotesListPanel";
 import { NoteContentPanel } from "@/components/NoteContentPanel";
-import { ImportModal } from "@/components/ImportModal";
+import { EnhancedImportModal } from "@/components/import/EnhancedImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -232,7 +232,7 @@ export default function Dashboard() {
       {/* Mobile Navigation */}
       {isMobile && <MobileNavigation />}
       
-      <ImportModal
+      <EnhancedImportModal
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         onImport={handleImport}
