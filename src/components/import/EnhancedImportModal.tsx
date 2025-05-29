@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const [transcript, setTranscript] = useState<string | null>(null);
   const [contentType, setContentType] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [hasWarning, setHasWarning] = useState(false);
   const { toast } = useToast();
 
   const resetState = () => {
@@ -39,6 +41,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setProgress(0);
     setStatus("");
     setIsProcessing(false);
+    setHasWarning(false);
   };
 
   const handleClose = () => {
@@ -74,18 +77,41 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         const result = await TranscriptionService.transcribeWithFallback(url);
         setProgress(70);
 
+        // Always treat result as success since we now provide fallback content
         if (result.success && result.text) {
           setTranscript(result.text);
+          
+          // Check if this is a warning result
+          const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
+          setHasWarning(isWarning);
+          
+          // Get metadata with fallback
+          const videoId = TranscriptionService.extractVideoId(url);
+          let videoMetadata = null;
+          
+          if (videoId) {
+            try {
+              videoMetadata = await TranscriptionService.getYouTubeMetadata(videoId);
+            } catch (error) {
+              console.warn('Failed to fetch video metadata:', error);
+            }
+          }
+          
           setMetadata({
-            title: `YouTube Video`,
-            author: 'YouTube',
-            duration: 'Unknown',
-            thumbnail: `https://img.youtube.com/vi/${TranscriptionService.extractVideoId(url)}/maxresdefault.jpg`
+            title: videoMetadata?.title || `YouTube Video ${videoId || 'Unknown'}`,
+            author: videoMetadata?.author || 'YouTube',
+            duration: videoMetadata?.duration || 'Unknown',
+            thumbnail: videoMetadata?.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
           });
-          setStatus("✅ Transcript extracted successfully!");
+          
+          if (isWarning) {
+            setStatus("⚠️ Video saved with warning - transcript unavailable");
+          } else {
+            setStatus("✅ Transcript extracted successfully!");
+          }
           setProgress(100);
         } else {
-          throw new Error(result.error || 'Failed to extract transcript');
+          throw new Error(result.error || 'Failed to process video');
         }
       } else {
         // Handle other URL types (articles, podcasts, etc.)
@@ -93,15 +119,28 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setStatus("Processing article/content...");
         setProgress(50);
         
-        // Placeholder for future article/podcast processing
-        setMetadata({
-          title: "Article Content",
-          author: "Web Content",
-          description: "Content extracted from provided URL"
-        });
-        setTranscript("Content extraction for articles and podcasts will be implemented in the next phase.");
-        setStatus("Content preview ready");
-        setProgress(100);
+        const result = await TranscriptionService.transcribeWithFallback(url);
+        
+        if (result.success && result.text) {
+          setTranscript(result.text);
+          const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
+          setHasWarning(isWarning);
+          
+          setMetadata({
+            title: "Article Content",
+            author: "Web Content",
+            description: "Content extracted from provided URL"
+          });
+          
+          if (isWarning) {
+            setStatus("⚠️ Content saved with warning - extraction unavailable");
+          } else {
+            setStatus("✅ Content extracted successfully!");
+          }
+          setProgress(100);
+        } else {
+          throw new Error(result.error || 'Failed to process content');
+        }
       }
 
     } catch (error) {
@@ -129,15 +168,15 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     }
 
     const noteContent = contentType === 'youtube' ? 
-      `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...` :
-      `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Article/Content\n**Imported:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Content\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+      `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Transcript unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Transcript'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...` :
+      `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Article/Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
 
     onImport({
       title: metadata.title,
       content: noteContent,
       source_url: url,
       thumbnail: metadata.thumbnail,
-      is_transcription: contentType === 'youtube'
+      is_transcription: contentType === 'youtube' && !hasWarning
     });
 
     handleClose();
@@ -177,8 +216,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
           {/* Success Status */}
           {!isProcessing && transcript && (
-            <div className="flex items-center gap-2 text-sm text-green-600">
-              <CheckCircle className="h-4 w-4" />
+            <div className={`flex items-center gap-2 text-sm ${hasWarning ? 'text-orange-600' : 'text-green-600'}`}>
+              {hasWarning ? (
+                <AlertCircle className="h-4 w-4" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
               <span>{status}</span>
             </div>
           )}
@@ -201,7 +244,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             {metadata && transcript && (
               <Button onClick={handleImport} className="bg-primary hover:bg-primary/90">
                 <FileText className="h-4 w-4 mr-2" />
-                Import to Notes
+                {hasWarning ? 'Save Note with Warning' : 'Import to Notes'}
               </Button>
             )}
           </div>

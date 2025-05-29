@@ -1,3 +1,4 @@
+
 import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
@@ -63,45 +64,71 @@ export class TranscriptionService {
         console.warn('Audio extraction also failed, trying external providers...');
       }
       
-      // Enhanced error handling for specific failure cases
-      let errorDetails = youtubeResult.error || 'Unknown error';
-      if (errorDetails.includes('captions')) {
+      // Step 3: Try external transcription providers
+      const externalResult = await ExternalProviderService.tryExternalProviders(url);
+      
+      if (externalResult.success) {
         toast({
-          title: "⚠️ No Captions Available",
-          description: "Video has no captions and audio extraction failed. Trying alternative providers...",
-          variant: "destructive",
+          title: "✅ Transcript Extracted Successfully!",
+          description: `Successfully extracted transcript using ${externalResult.provider}`
         });
-      } else if (errorDetails.includes('private') || errorDetails.includes('restricted')) {
-        toast({
-          title: "🔒 Video Restricted",
-          description: "Video is private/restricted and audio extraction failed. Trying alternative providers...",
-          variant: "destructive",
-        });
+        
+        return externalResult;
       }
+
+      // Step 4: If all methods fail, return a "success" result with warning content
+      console.warn('All transcription methods failed, but we will still save the note with a warning');
+      
+      const videoId = YouTubeService.extractVideoId(url);
+      const warningMessage = "⚠️ **Transcript Not Available**\n\nAll transcription methods failed for this video. This could be due to:\n- Video has no captions or auto-generated captions disabled\n- Video is private, restricted, or region-locked\n- Audio quality issues preventing transcription\n- API rate limits or temporary service issues\n\nYou can still use this note to add your own observations about the video.";
+      
+      toast({
+        title: "⚠️ Transcript Unavailable",
+        description: "Note saved with warning - transcript could not be extracted",
+        variant: "default"
+      });
+
+      return {
+        success: true, // Return success so the note gets saved
+        text: warningMessage,
+        metadata: {
+          videoId: videoId || 'unknown',
+          extractionMethod: 'failed-with-warning',
+          isWarning: true
+        },
+        provider: 'warning-fallback'
+      };
     }
     
-    // Try external transcription providers as final fallback
+    // Handle other media types similarly
     const externalResult = await ExternalProviderService.tryExternalProviders(url);
     
     if (externalResult.success) {
       toast({
-        title: "✅ Transcript Extracted Successfully!",
-        description: `Successfully extracted transcript using ${externalResult.provider}`
+        title: "✅ Content Extracted Successfully!",
+        description: `Successfully extracted content using ${externalResult.provider}`
       });
       
       return externalResult;
     }
 
-    // If all providers fail
+    // For non-YouTube content that fails, also provide a warning fallback
+    const warningMessage = "⚠️ **Content Not Available**\n\nUnable to extract content from this URL. You can still use this note to add your own thoughts and observations about the content.";
+    
     toast({
-      title: "❌ All Transcription Methods Failed",
-      description: "Standard transcripts, audio extraction, and external providers all failed. This content may not support automatic transcription.",
-      variant: "destructive",
+      title: "⚠️ Content Unavailable",
+      description: "Note saved with warning - content could not be extracted",
+      variant: "default"
     });
 
     return {
-      success: false,
-      error: 'All transcription methods failed including audio extraction. Please try again later or use a different video.'
+      success: true,
+      text: warningMessage,
+      metadata: {
+        extractionMethod: 'failed-with-warning',
+        isWarning: true
+      },
+      provider: 'warning-fallback'
     };
   }
 
