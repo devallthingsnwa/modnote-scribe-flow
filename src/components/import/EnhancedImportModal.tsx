@@ -159,8 +159,9 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           <UrlInput 
             url={url}
             onChange={handleUrlChange}
-            onProcess={processUrl}
-            isProcessing={isProcessing}
+            onFetchPreview={processUrl}
+            isLoading={isProcessing}
+            disabled={false}
           />
 
           {/* Processing Status */}
