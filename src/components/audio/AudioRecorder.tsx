@@ -1,11 +1,10 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Play, Pause, Download, Trash2, Loader2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { SpeechToTextService } from "@/lib/speechToTextService";
+import { SpeechToTextService } from "@/lib/speechToText";
 import { cn } from "@/lib/utils";
 
 interface AudioRecorderProps {
