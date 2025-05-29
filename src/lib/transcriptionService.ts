@@ -1,8 +1,8 @@
-
 import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
 import { MediaTypeDetector } from "./transcription/mediaTypeDetector";
+import { YouTubeAudioService } from "./transcription/youtubeAudioService";
 import { 
   TranscriptionConfig, 
   TranscriptionResult, 
@@ -16,23 +16,22 @@ export class TranscriptionService {
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     
-    // For YouTube videos, use enhanced extraction with Supadata priority
+    // For YouTube videos, use enhanced extraction with multiple fallbacks
     if (mediaType === 'youtube') {
-      console.log('Starting enhanced YouTube transcript extraction with Supadata priority...');
+      console.log('Starting enhanced YouTube transcript extraction with audio fallback...');
       
+      // Step 1: Try standard transcript extraction
       const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
       
       if (youtubeResult.success) {
         const extractionMethod = youtubeResult.metadata?.extractionMethod || youtubeResult.provider;
         console.log('YouTube transcript extraction successful via:', extractionMethod);
         
-        // Enhanced success notification
         let successMessage = `Successfully extracted transcript`;
         if (extractionMethod === 'supadata-api') {
           successMessage += ' using Supadata API';
-          if (youtubeResult.metadata?.apiAttempt) {
-            successMessage += ` (${youtubeResult.metadata.apiAttempt})`;
-          }
+        } else if (extractionMethod === 'youtube-audio-supadata') {
+          successMessage += ' using Supadata audio extraction and transcription';
         } else {
           successMessage += ` using ${extractionMethod}`;
         }
@@ -45,20 +44,37 @@ export class TranscriptionService {
         return youtubeResult;
       }
       
-      console.warn('Enhanced YouTube transcript extraction failed, trying external providers...');
+      console.warn('Standard transcript extraction failed, trying audio extraction...');
       
-      // Enhanced error handling
+      // Step 2: Try audio extraction and transcription with Supadata
+      const videoId = YouTubeService.extractVideoId(url);
+      if (videoId) {
+        const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
+        
+        if (audioResult.success) {
+          toast({
+            title: "✅ Audio Transcription Successful!",
+            description: "Successfully extracted and transcribed audio using Supadata AI"
+          });
+          
+          return audioResult;
+        }
+        
+        console.warn('Audio extraction also failed, trying external providers...');
+      }
+      
+      // Enhanced error handling for specific failure cases
       let errorDetails = youtubeResult.error || 'Unknown error';
       if (errorDetails.includes('captions')) {
         toast({
           title: "⚠️ No Captions Available",
-          description: "This video doesn't have captions enabled. Trying alternative providers...",
+          description: "Video has no captions and audio extraction failed. Trying alternative providers...",
           variant: "destructive",
         });
       } else if (errorDetails.includes('private') || errorDetails.includes('restricted')) {
         toast({
           title: "🔒 Video Restricted",
-          description: "This video is private or restricted. Trying alternative providers...",
+          description: "Video is private/restricted and audio extraction failed. Trying alternative providers...",
           variant: "destructive",
         });
       }
@@ -78,14 +94,14 @@ export class TranscriptionService {
 
     // If all providers fail
     toast({
-      title: "❌ Transcription Failed",
-      description: "All transcription methods failed. This content may not support automatic transcription or may be restricted.",
+      title: "❌ All Transcription Methods Failed",
+      description: "Standard transcripts, audio extraction, and external providers all failed. This content may not support automatic transcription.",
       variant: "destructive",
     });
 
     return {
       success: false,
-      error: 'All transcription providers failed. Please try again later or use a different video.'
+      error: 'All transcription methods failed including audio extraction. Please try again later or use a different video.'
     };
   }
 

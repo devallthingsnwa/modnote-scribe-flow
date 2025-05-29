@@ -1,6 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { TranscriptionResult, YouTubeMetadata } from "./types";
+import { YouTubeAudioService } from "./youtubeAudioService";
 
 export class YouTubeService {
   static async fetchYouTubeTranscript(url: string, retryCount: number = 0): Promise<TranscriptionResult> {
@@ -65,6 +65,19 @@ export class YouTubeService {
       }
     } catch (error) {
       console.error(`YouTube transcript fetch failed (attempt ${retryCount + 1}):`, error);
+      
+      // If transcript extraction fails, try audio extraction with Supadata
+      if (retryCount === 0) {
+        console.log('Transcript extraction failed, trying audio extraction with Supadata...');
+        const videoId = this.extractVideoId(url);
+        if (videoId) {
+          const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
+          if (audioResult.success) {
+            return audioResult;
+          }
+          console.warn('Audio extraction also failed, continuing with retry logic...');
+        }
+      }
       
       // Retry logic for transient failures
       if (retryCount < 2 && 
