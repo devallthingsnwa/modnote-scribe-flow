@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -45,6 +44,10 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const handleClose = () => {
     resetState();
     onClose();
+  };
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrl(e.target.value);
   };
 
   const processUrl = async () => {
@@ -155,7 +158,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           {/* URL Input */}
           <UrlInput 
             url={url}
-            onChange={setUrl}
+            onChange={handleUrlChange}
             onProcess={processUrl}
             isProcessing={isProcessing}
           />
