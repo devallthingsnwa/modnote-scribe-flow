@@ -1,5 +1,4 @@
-
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Search, Bot, Send, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
+import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
 
 interface SearchResult {
   id: string;
@@ -47,54 +48,27 @@ export function DeepResearchWidget() {
     }
   }, [chatMessages]);
 
-  const searchNotes = (query: string) => {
-    if (!notes || !query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    const results = notes
-      .map(note => {
-        const titleMatch = note.title.toLowerCase().includes(query.toLowerCase());
-        const contentMatch = note.content?.toLowerCase().includes(query.toLowerCase()) || false;
-        
-        if (!titleMatch && !contentMatch) return null;
-
-        let relevance = 0;
-        if (titleMatch) relevance += 2;
-        if (contentMatch) relevance += 1;
-
-        let snippet = '';
-        if (note.content) {
-          const queryIndex = note.content.toLowerCase().indexOf(query.toLowerCase());
-          if (queryIndex !== -1) {
-            const start = Math.max(0, queryIndex - 50);
-            const end = Math.min(note.content.length, queryIndex + query.length + 50);
-            snippet = '...' + note.content.substring(start, end) + '...';
-          } else {
-            snippet = note.content.substring(0, 100) + '...';
-          }
+  // Optimized search with debouncing
+  const debouncedSearch = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return (query: string) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (!notes || !query.trim()) {
+          setSearchResults([]);
+          return;
         }
+        
+        const results = OptimizedSearchService.searchNotes(notes, query);
+        setSearchResults(results.slice(0, 5)); // Limit for widget
+      }, 200); // Faster debounce for widget
+    };
+  }, [notes]);
 
-        return {
-          id: note.id,
-          title: note.title,
-          content: note.content,
-          relevance,
-          snippet
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.relevance - a!.relevance)
-      .slice(0, 5) as SearchResult[];
-
-    setSearchResults(results);
-  };
-
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    searchNotes(query);
-  };
+    debouncedSearch(query);
+  }, [debouncedSearch]);
 
   const handleChatSubmit = async () => {
     if (!chatInput.trim() || isLoading) return;
@@ -107,24 +81,19 @@ export function DeepResearchWidget() {
     };
 
     setChatMessages(prev => [...prev, userMessage]);
+    const currentInput = chatInput;
     setChatInput("");
     setIsLoading(true);
 
     try {
-      const relevantNotes = notes?.filter(note => 
-        note.content && (
-          note.title.toLowerCase().includes(chatInput.toLowerCase()) ||
-          note.content.toLowerCase().includes(chatInput.toLowerCase())
-        )
-      ).slice(0, 3) || [];
-
-      const knowledgeBase = relevantNotes.map(note => 
-        `Title: ${note.title}\nContent: ${note.content?.substring(0, 1000)}...`
-      ).join('\n\n---\n\n');
-
+      // Use optimized context processing
+      const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
+      
+      const knowledgeBase = contextData.relevantChunks.join('\n\n---\n\n');
+      
       const ragContext = knowledgeBase ? 
-        `Based on the following knowledge from the user's notes:\n\n${knowledgeBase}\n\nUser question: ${chatInput}` : 
-        chatInput;
+        `Context (${contextData.totalTokens} chars):\n\n${knowledgeBase}\n\nQ: ${currentInput}` : 
+        currentInput;
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
@@ -141,12 +110,12 @@ export function DeepResearchWidget() {
         type: 'assistant',
         content: data.processedContent || "I'm sorry, I couldn't process your request.",
         timestamp: new Date(),
-        sources: relevantNotes.map(note => ({
-          id: note.id,
-          title: note.title,
-          content: note.content,
-          relevance: 1,
-          snippet: note.content?.substring(0, 100) + '...' || ''
+        sources: contextData.sources.slice(0, 3).map(source => ({
+          id: source.id,
+          title: source.title,
+          content: null,
+          relevance: source.relevance,
+          snippet: `Score: ${source.relevance.toFixed(1)}`
         }))
       };
 
@@ -163,7 +132,7 @@ export function DeepResearchWidget() {
     }
   };
 
-  const toggleMode = () => {
+  const toggleMode = useCallback(() => {
     setIsChatMode(!isChatMode);
     if (!isChatMode) {
       setSearchResults([]);
@@ -171,7 +140,7 @@ export function DeepResearchWidget() {
     } else {
       setChatMessages([]);
     }
-  };
+  }, [isChatMode]);
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -179,7 +148,7 @@ export function DeepResearchWidget() {
         <Button variant="ghost" className="w-full justify-between px-2 py-1 h-auto">
           <div className="flex items-center gap-2">
             <Bot className="h-4 w-4" />
-            <span className="text-sm">AI Research</span>
+            <span className="text-sm">AI Research ⚡</span>
           </div>
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
@@ -226,7 +195,12 @@ export function DeepResearchWidget() {
                     <div className="space-y-2">
                       {searchResults.map((result) => (
                         <div key={result.id} className="p-2 border rounded text-xs hover:bg-muted/50 cursor-pointer">
-                          <h4 className="font-medium truncate mb-1">{result.title}</h4>
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-medium truncate">{result.title}</h4>
+                            <Badge variant="outline" className="text-xs h-4 px-1">
+                              {result.relevance.toFixed(1)}
+                            </Badge>
+                          </div>
                           <p className="text-muted-foreground text-xs line-clamp-2">
                             {result.snippet}
                           </p>
@@ -239,7 +213,7 @@ export function DeepResearchWidget() {
                     </div>
                   ) : (
                     <div className="text-center py-4 text-muted-foreground text-xs">
-                      Search your notes and transcripts
+                      Smart search with caching
                     </div>
                   )}
                 </ScrollArea>
@@ -250,7 +224,7 @@ export function DeepResearchWidget() {
                   {chatMessages.length === 0 ? (
                     <div className="text-center py-4 text-muted-foreground text-xs">
                       <Bot className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                      <p>Ask me about your notes!</p>
+                      <p>Fast AI responses!</p>
                     </div>
                   ) : (
                     <div className="space-y-2">

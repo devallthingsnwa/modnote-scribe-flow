@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { content, type, options } = await req.json();
+    const { content, type, options, stream = false } = await req.json();
     
     if (!content) {
       return new Response(
@@ -26,7 +26,6 @@ serve(async (req) => {
       );
     }
 
-    // Get the API key and check if it exists
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
     
     if (!DEEPSEEK_API_KEY) {
@@ -40,50 +39,65 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${type} content with DeepSeek. Options:`, options);
-    console.log("API Key exists:", DEEPSEEK_API_KEY ? "Yes" : "No");
+    console.log(`Processing ${type} content with DeepSeek. Stream: ${stream}`);
     
-    // Prepare system prompt based on content type and options
-    let systemPrompt = "You are an expert AI assistant that helps users understand and extract value from various types of content.";
+    // Prepare optimized system prompt
+    let systemPrompt = "You are an expert AI assistant that provides concise, accurate responses.";
     let analysisInstructions = "";
     
     if (type === "chat" && options?.rag) {
-      systemPrompt = "You are an advanced AI assistant with RAG (Retrieval-Augmented Generation) capabilities. You excel at analyzing content, retrieving relevant information, and providing comprehensive answers based on the provided knowledge base. You maintain context from conversations and provide educational, helpful responses.";
-      analysisInstructions = "Using the provided knowledge base and conversation context, provide a helpful, accurate, and educational response. Reference specific parts of the content when relevant and maintain conversational flow.";
+      systemPrompt = "You are an advanced AI assistant with RAG capabilities. Provide helpful, accurate responses based on the provided context. Be concise but comprehensive.";
+      analysisInstructions = "Using the provided context, give a clear and helpful response. Reference specific information when relevant.";
     } else if (type === "video" || type === "audio") {
-      systemPrompt = "You are an expert content analyst specializing in video and audio transcript analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from spoken content.";
+      systemPrompt = "You are an expert content analyst. Provide clear, structured analysis of media content.";
     } else if (type === "text") {
-      systemPrompt = "You are an expert content analyst specializing in text analysis. You excel at extracting key insights, summarizing main points, and identifying important highlights from written content.";
+      systemPrompt = "You are an expert content analyst. Extract key insights and provide structured summaries.";
     }
 
-    // Build the analysis prompt based on selected options for non-chat requests
+    // Build optimized analysis prompt
     if (type !== "chat") {
-      analysisInstructions = "Please analyze the following content and provide:\n";
+      analysisInstructions = "Analyze the content and provide:\n";
       const requestedAnalysis = [];
       
       if (options?.summary) {
-        requestedAnalysis.push("1. **Summary**: A comprehensive summary of the main topics and key information");
+        requestedAnalysis.push("• **Summary**: Key points and main topics");
       }
       
       if (options?.highlights) {
-        requestedAnalysis.push("2. **Key Highlights**: The most important points, insights, or memorable moments");
+        requestedAnalysis.push("• **Highlights**: Most important insights");
       }
       
       if (options?.keyPoints) {
-        requestedAnalysis.push("3. **Key Points**: A structured list of the main takeaways and actionable insights");
+        requestedAnalysis.push("• **Key Points**: Main takeaways");
       }
       
-      // If no specific options selected, provide a general analysis
       if (requestedAnalysis.length === 0) {
-        analysisInstructions += "A comprehensive analysis including summary, key highlights, and main takeaways.";
+        analysisInstructions += "A comprehensive analysis with summary and key insights.";
       } else {
         analysisInstructions += requestedAnalysis.join("\n");
       }
       
-      analysisInstructions += "\n\nPlease format your response with clear headings and structure it for easy reading.";
+      analysisInstructions += "\n\nUse clear formatting and be concise.";
     }
 
-    // Call DeepSeek API
+    // Prepare API request body
+    const requestBody = {
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "system", 
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: type === "chat" ? content : `${analysisInstructions}\n\nContent:\n\n${content}`
+        }
+      ],
+      temperature: type === "chat" ? 0.7 : 0.5,
+      max_tokens: type === "chat" ? 1500 : 2000,
+      stream: stream
+    };
+
     console.log("Making request to DeepSeek API...");
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
@@ -91,21 +105,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system", 
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: type === "chat" ? content : `${analysisInstructions}\n\nContent to analyze:\n\n${content}`
-          }
-        ],
-        temperature: type === "chat" ? 0.7 : 0.5,
-        max_tokens: type === "chat" ? 2000 : 3000
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log("DeepSeek API response status:", response.status);
@@ -114,7 +114,6 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("DeepSeek API error response:", errorText);
       
-      // Parse the error to provide better user feedback
       let errorMessage = "Failed to process content with DeepSeek";
       try {
         const errorData = JSON.parse(errorText);
@@ -122,7 +121,6 @@ serve(async (req) => {
           errorMessage = errorData.error.message;
         }
       } catch (e) {
-        // If we can't parse the error, use the raw text
         errorMessage = errorText;
       }
       
@@ -139,6 +137,19 @@ serve(async (req) => {
       );
     }
 
+    // Handle streaming response
+    if (stream) {
+      return new Response(response.body, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
+    // Handle regular response
     const data = await response.json();
     const processedContent = data.choices?.[0]?.message?.content || "No processed content available.";
 
@@ -147,7 +158,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         processedContent,
-        rawResponse: data // Include raw response for debugging
+        usage: data.usage, // Include token usage info
+        model: data.model
       }),
       {
         status: 200,
