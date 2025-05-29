@@ -16,46 +16,46 @@ export interface SpeechToTextResult {
 
 export class SpeechToTextService {
   static async transcribeAudioWithFallback(audioBlob: Blob): Promise<SpeechToTextResult> {
-    console.log("Starting enhanced audio transcription with multiple fallbacks...");
+    console.log("Starting audio transcription with enhanced fallback system...");
+    
+    // Convert blob to base64 once for all providers
+    const base64Audio = await this.convertBlobToBase64(audioBlob);
     
     // Try Supadata first (primary)
-    const supadataResult = await this.transcribeWithSupadata(audioBlob);
-    if (supadataResult.success && supadataResult.text && supadataResult.text.trim().length > 0) {
-      console.log("Supadata speech-to-text successful");
+    const supadataResult = await this.transcribeWithSupadata(audioBlob, base64Audio);
+    if (supadataResult.success && supadataResult.text?.trim()) {
+      console.log("✅ Supadata speech-to-text successful");
       return supadataResult;
     }
     
-    console.warn("Supadata failed, trying OpenAI Whisper...");
+    console.warn("⚠️ Supadata failed, trying OpenAI Whisper Edge Function...");
     
-    // Fallback to OpenAI Whisper (secondary)
-    const whisperResult = await this.transcribeWithWhisper(audioBlob);
-    if (whisperResult.success && whisperResult.text && whisperResult.text.trim().length > 0) {
-      console.log("OpenAI Whisper speech-to-text successful");
+    // Fallback to OpenAI Whisper via Edge Function
+    const whisperResult = await this.transcribeWithWhisper(audioBlob, base64Audio);
+    if (whisperResult.success && whisperResult.text?.trim()) {
+      console.log("✅ OpenAI Whisper Edge Function successful");
       return whisperResult;
     }
     
-    console.warn("OpenAI Whisper failed, trying direct OpenAI API...");
+    console.warn("⚠️ Edge Function failed, trying Direct OpenAI API...");
     
     // Final fallback - Direct OpenAI API call
     const directResult = await this.transcribeWithDirectOpenAI(audioBlob);
-    if (directResult.success && directResult.text && directResult.text.trim().length > 0) {
-      console.log("Direct OpenAI API speech-to-text successful");
+    if (directResult.success && directResult.text?.trim()) {
+      console.log("✅ Direct OpenAI API successful");
       return directResult;
     }
     
-    console.error("All speech-to-text providers failed");
+    console.error("❌ All speech-to-text providers failed");
     return {
       success: false,
-      error: "All speech-to-text providers failed. Please check your internet connection and try again.",
+      error: "All speech-to-text providers failed. Please check your audio quality and internet connection.",
       provider: "none"
     };
   }
 
-  private static async transcribeWithSupadata(audioBlob: Blob): Promise<SpeechToTextResult> {
+  private static async convertBlobToBase64(audioBlob: Blob): Promise<string> {
     try {
-      console.log("Attempting speech-to-text with Supadata API");
-      
-      // Convert blob to base64 with better error handling
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       
@@ -63,15 +63,25 @@ export class SpeechToTextService {
         throw new Error('Empty audio data');
       }
       
+      // Convert to base64 in chunks to handle large files
       let binary = '';
-      const chunkSize = 0x8000;
+      const chunkSize = 0x8000; // 32KB chunks
       
       for (let i = 0; i < uint8Array.length; i += chunkSize) {
         const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
         binary += String.fromCharCode.apply(null, Array.from(chunk));
       }
       
-      const base64Audio = btoa(binary);
+      return btoa(binary);
+    } catch (error) {
+      console.error("Base64 conversion error:", error);
+      throw new Error('Failed to process audio data');
+    }
+  }
+
+  private static async transcribeWithSupadata(audioBlob: Blob, base64Audio: string): Promise<SpeechToTextResult> {
+    try {
+      console.log("🔄 Attempting Supadata transcription...");
       
       const { data, error } = await supabase.functions.invoke('supadata-speech-to-text', {
         body: { 
@@ -86,12 +96,12 @@ export class SpeechToTextService {
       });
 
       if (error) {
-        console.error("Supadata speech-to-text error:", error);
-        throw new Error(error.message || 'Supadata speech-to-text failed');
+        console.error("Supadata error:", error);
+        throw new Error(error.message || 'Supadata service error');
       }
 
-      if (data?.text && data.text.trim().length > 0) {
-        console.log("Supadata speech-to-text successful:", data.text.length, "characters");
+      if (data?.success && data?.text?.trim()) {
+        console.log("✅ Supadata successful:", data.text.length, "characters");
         return {
           success: true,
           text: data.text.trim(),
@@ -105,39 +115,21 @@ export class SpeechToTextService {
         };
       }
 
-      throw new Error('No transcription text received from Supadata');
+      throw new Error('No valid transcription from Supadata');
       
     } catch (error) {
-      console.error("Supadata speech-to-text service error:", error);
+      console.error("❌ Supadata failed:", error);
       return {
         success: false,
-        error: error.message || 'Supadata speech-to-text failed',
+        error: error.message || 'Supadata transcription failed',
         provider: 'supadata'
       };
     }
   }
 
-  private static async transcribeWithWhisper(audioBlob: Blob): Promise<SpeechToTextResult> {
+  private static async transcribeWithWhisper(audioBlob: Blob, base64Audio: string): Promise<SpeechToTextResult> {
     try {
-      console.log("Attempting speech-to-text with OpenAI Whisper via Edge Function");
-      
-      // Convert blob to base64
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      
-      if (uint8Array.length === 0) {
-        throw new Error('Empty audio data');
-      }
-      
-      let binary = '';
-      const chunkSize = 0x8000;
-      
-      for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-        binary += String.fromCharCode.apply(null, Array.from(chunk));
-      }
-      
-      const base64Audio = btoa(binary);
+      console.log("🔄 Attempting OpenAI Whisper Edge Function...");
       
       const { data, error } = await supabase.functions.invoke('speech-to-text', {
         body: { 
@@ -147,17 +139,17 @@ export class SpeechToTextService {
       });
 
       if (error) {
-        console.error("OpenAI Whisper error:", error);
-        throw new Error(error.message || 'OpenAI Whisper failed');
+        console.error("Whisper Edge Function error:", error);
+        throw new Error(error.message || 'Whisper Edge Function error');
       }
 
-      if (data?.text && data.text.trim().length > 0) {
-        console.log("OpenAI Whisper successful:", data.text.length, "characters");
+      if (data?.text?.trim()) {
+        console.log("✅ Whisper Edge Function successful:", data.text.length, "characters");
         return {
           success: true,
           text: data.text.trim(),
           confidence: data.confidence,
-          provider: 'openai-whisper',
+          provider: 'openai-whisper-edge',
           metadata: {
             duration: data.duration,
             language: data.language
@@ -165,23 +157,28 @@ export class SpeechToTextService {
         };
       }
 
-      throw new Error('No transcription text received from OpenAI Whisper');
+      throw new Error('No valid transcription from Whisper Edge Function');
       
     } catch (error) {
-      console.error("OpenAI Whisper service error:", error);
+      console.error("❌ Whisper Edge Function failed:", error);
       return {
         success: false,
-        error: error.message || 'OpenAI Whisper failed',
-        provider: 'openai-whisper'
+        error: error.message || 'Whisper Edge Function failed',
+        provider: 'openai-whisper-edge'
       };
     }
   }
 
   private static async transcribeWithDirectOpenAI(audioBlob: Blob): Promise<SpeechToTextResult> {
     try {
-      console.log("Attempting speech-to-text with Direct OpenAI API");
+      console.log("🔄 Attempting Direct OpenAI API...");
       
-      // Create FormData for direct API call
+      // Get OpenAI API key from environment
+      const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      if (!openaiApiKey || openaiApiKey === 'sk-placeholder') {
+        throw new Error('OpenAI API key not configured');
+      }
+      
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.webm');
       formData.append('model', 'whisper-1');
@@ -191,7 +188,7 @@ export class SpeechToTextService {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY || 'sk-placeholder'}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
         },
         body: formData,
       });
@@ -199,17 +196,17 @@ export class SpeechToTextService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Direct OpenAI API error:", response.status, errorText);
-        throw new Error(`Direct OpenAI API error: ${response.status}`);
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
 
       const result = await response.json();
       
-      if (result.text && result.text.trim().length > 0) {
-        console.log("Direct OpenAI API successful:", result.text.length, "characters");
+      if (result.text?.trim()) {
+        console.log("✅ Direct OpenAI API successful:", result.text.length, "characters");
         
-        // Calculate average confidence from segments if available
+        // Calculate confidence from segments if available
         let avgConfidence = undefined;
-        if (result.segments && result.segments.length > 0) {
+        if (result.segments?.length > 0) {
           const confidenceSum = result.segments.reduce((sum: number, segment: any) => {
             return sum + (segment.avg_logprob || 0);
           }, 0);
@@ -228,10 +225,10 @@ export class SpeechToTextService {
         };
       }
 
-      throw new Error('No transcription text received from Direct OpenAI API');
+      throw new Error('No valid transcription from Direct OpenAI API');
       
     } catch (error) {
-      console.error("Direct OpenAI API service error:", error);
+      console.error("❌ Direct OpenAI API failed:", error);
       return {
         success: false,
         error: error.message || 'Direct OpenAI API failed',
@@ -240,24 +237,25 @@ export class SpeechToTextService {
     }
   }
 
-  // Enhanced retry mechanism
+  // Enhanced retry mechanism with exponential backoff
   static async transcribeWithRetry(audioBlob: Blob, maxRetries: number = 2): Promise<SpeechToTextResult> {
     let lastResult: SpeechToTextResult = { success: false, error: 'Unknown error' };
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`Speech-to-text attempt ${attempt}/${maxRetries}`);
+      console.log(`🔄 Speech-to-text attempt ${attempt}/${maxRetries}`);
       
       const result = await this.transcribeAudioWithFallback(audioBlob);
       
-      if (result.success && result.text && result.text.trim().length > 0) {
+      if (result.success && result.text?.trim()) {
         return result;
       }
       
       lastResult = result;
       
       if (attempt < maxRetries) {
-        console.log(`Attempt ${attempt} failed, retrying in 1 second...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff
+        console.log(`⏳ Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
