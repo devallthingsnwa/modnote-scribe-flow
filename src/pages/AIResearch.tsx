@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { ArrowLeft, Bot, Search, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Bot, Search, Loader2, Send, Sparkles, Database, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -163,79 +163,133 @@ export default function AIResearch() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
+      {/* Enhanced Header */}
+      <div className="border-b border-border/60 bg-background/95 backdrop-blur-md sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <Link to="/dashboard">
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="hover:bg-muted/60 transition-colors">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Dashboard
                 </Button>
               </Link>
-              <div>
-                <h1 className="text-2xl font-bold">AI Research</h1>
-                <p className="text-muted-foreground">Enhanced with smart context & caching</p>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+                    AI Research
+                  </h1>
+                  <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                    <Zap className="h-3 w-3" />
+                    Enhanced with smart context & lightning-fast caching
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            
+            {/* Enhanced Mode Toggle */}
+            <div className="flex gap-2 p-1 bg-muted/50 rounded-lg border">
               <Button
-                variant={!isChatMode ? "default" : "outline"}
+                variant={!isChatMode ? "default" : "ghost"}
                 onClick={toggleMode}
-                className="flex items-center gap-2"
+                className={cn(
+                  "flex items-center gap-2 transition-all duration-200",
+                  !isChatMode ? "shadow-sm" : "hover:bg-muted/60"
+                )}
+                size="sm"
               >
                 <Search className="h-4 w-4" />
                 Search
+                {searchResults.length > 0 && !isChatMode && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-xs">
+                    {searchResults.length}
+                  </Badge>
+                )}
               </Button>
               <Button
-                variant={isChatMode ? "default" : "outline"}
+                variant={isChatMode ? "default" : "ghost"}
                 onClick={toggleMode}
-                className="flex items-center gap-2"
+                className={cn(
+                  "flex items-center gap-2 transition-all duration-200",
+                  isChatMode ? "shadow-sm" : "hover:bg-muted/60"
+                )}
+                size="sm"
               >
                 <Bot className="h-4 w-4" />
                 Chat
+                {chatMessages.length > 0 && isChatMode && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-xs">
+                    {Math.floor(chatMessages.length / 2)}
+                  </Badge>
+                )}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <Card className="max-w-4xl mx-auto">
-          <CardContent className="p-6">
+      {/* Enhanced Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <Card className="max-w-5xl mx-auto shadow-lg border-border/50 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-8">
             {!isChatMode ? (
-              // Optimized Search Mode
-              <div className="space-y-6">
-                <div>
-                  <Input
-                    placeholder="Search across all your notes and transcripts..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearch(e.target.value)}
-                    className="text-lg p-6"
-                  />
+              // Enhanced Search Mode
+              <div className="space-y-8">
+                {/* Search Input Section */}
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      placeholder="Search across all your notes and transcripts..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      className="text-lg pl-12 pr-6 py-6 border-2 focus:border-primary/50 transition-colors bg-background/50"
+                    />
+                  </div>
                   {searchQuery && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Found {searchResults.length} results • Smart ranking enabled
-                    </p>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4" />
+                        <span>Found {searchResults.length} results</span>
+                        <Badge variant="outline" className="text-xs">
+                          Smart ranking enabled
+                        </Badge>
+                      </div>
+                      {searchResults.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs">
+                          <Zap className="h-3 w-3 text-yellow-500" />
+                          <span>Lightning fast</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 
-                <ScrollArea className="h-96">
+                {/* Results Section */}
+                <ScrollArea className="h-[500px] pr-4">
                   {searchResults.length > 0 ? (
                     <div className="space-y-4">
-                      {searchResults.map((result) => (
+                      {searchResults.map((result, index) => (
                         <Link key={result.id} to={`/note/${result.id}`}>
-                          <div className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
-                            <div className="flex items-start justify-between mb-2">
-                              <h3 className="font-semibold">{result.title}</h3>
-                              <Badge variant="secondary" className="text-xs">
-                                Score: {result.relevance.toFixed(1)}
-                              </Badge>
+                          <div className="group p-6 border border-border/60 rounded-xl hover:bg-muted/30 hover:border-primary/30 cursor-pointer transition-all duration-200 hover:shadow-md">
+                            <div className="flex items-start justify-between mb-3">
+                              <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                                {result.title}
+                              </h3>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs bg-primary/10 border-primary/20">
+                                  Score: {result.relevance.toFixed(1)}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  #{index + 1}
+                                </Badge>
+                              </div>
                             </div>
-                            <p className="text-muted-foreground text-sm line-clamp-3">
+                            <p className="text-muted-foreground line-clamp-3 leading-relaxed">
                               {result.snippet}
                             </p>
                           </div>
@@ -243,31 +297,67 @@ export default function AIResearch() {
                       ))}
                     </div>
                   ) : searchQuery ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No results found for "{searchQuery}"</p>
+                    <div className="text-center py-20">
+                      <div className="p-4 bg-muted/20 rounded-full w-fit mx-auto mb-6">
+                        <Search className="h-12 w-12 text-muted-foreground/50" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-2">No results found</h3>
+                      <p className="text-muted-foreground">
+                        No matches for "<span className="font-medium">{searchQuery}</span>"
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Try different keywords or check spelling
+                      </p>
                     </div>
                   ) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Start typing to search your notes and transcripts</p>
-                      <p className="text-sm mt-2">Enhanced with smart ranking and caching</p>
+                    <div className="text-center py-20">
+                      <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full w-fit mx-auto mb-6">
+                        <Sparkles className="h-12 w-12 text-primary" />
+                      </div>
+                      <h3 className="text-2xl font-semibold mb-3">Start your research</h3>
+                      <p className="text-muted-foreground text-lg mb-2">
+                        Search through your notes and transcripts with AI-powered precision
+                      </p>
+                      <div className="flex items-center justify-center gap-4 mt-6">
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          <Zap className="h-3 w-3" />
+                          Smart ranking
+                        </Badge>
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          <Database className="h-3 w-3" />
+                          Fast caching
+                        </Badge>
+                      </div>
                     </div>
                   )}
                 </ScrollArea>
               </div>
             ) : (
-              // Optimized Chat Mode
+              // Enhanced Chat Mode
               <div className="space-y-6">
-                <ScrollArea className="h-96 mb-4">
+                <ScrollArea className="h-[500px] mb-6 pr-4">
                   {chatMessages.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Ask me anything about your notes!</p>
-                      <p className="text-sm mt-2">Optimized for faster responses with smart context processing</p>
+                    <div className="text-center py-20">
+                      <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full w-fit mx-auto mb-6">
+                        <Bot className="h-12 w-12 text-primary" />
+                      </div>
+                      <h3 className="text-2xl font-semibold mb-3">AI Assistant Ready</h3>
+                      <p className="text-muted-foreground text-lg mb-2">
+                        Ask me anything about your notes and I'll find the answers instantly
+                      </p>
+                      <div className="flex items-center justify-center gap-4 mt-6">
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3" />
+                          Optimized context
+                        </Badge>
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          <Zap className="h-3 w-3" />
+                          Fast responses
+                        </Badge>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {chatMessages.map((message) => (
                         <div
                           key={message.id}
@@ -278,28 +368,33 @@ export default function AIResearch() {
                         >
                           <div
                             className={cn(
-                              "max-w-[80%] rounded-lg px-4 py-3",
+                              "max-w-[85%] rounded-2xl px-6 py-4 shadow-sm",
                               message.type === 'user'
                                 ? "bg-primary text-primary-foreground"
-                                : "bg-muted"
+                                : "bg-muted/70 border border-border/50"
                             )}
                           >
                             {message.isStreaming ? (
-                              <div className="flex items-center space-x-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Processing optimized context...</span>
+                              <div className="flex items-center space-x-3">
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <span className="text-sm">Processing with optimized context...</span>
                               </div>
                             ) : (
                               <>
-                                <p className="whitespace-pre-wrap">{message.content}</p>
+                                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                                 {message.sources && message.sources.length > 0 && (
-                                  <div className="mt-3 pt-3 border-t border-muted-foreground/20">
-                                    <p className="text-xs font-medium mb-2">Sources ({message.sources.length}):</p>
+                                  <div className="mt-4 pt-4 border-t border-muted-foreground/20">
+                                    <p className="text-xs font-medium mb-3 text-muted-foreground">
+                                      Sources ({message.sources.length}):
+                                    </p>
                                     <div className="flex flex-wrap gap-2">
                                       {message.sources.map((source) => (
                                         <Link key={source.id} to={`/note/${source.id}`}>
-                                          <Badge variant="secondary" className="text-xs hover:bg-secondary/80">
-                                            {source.title.substring(0, 20)}...
+                                          <Badge 
+                                            variant="secondary" 
+                                            className="text-xs hover:bg-secondary/80 transition-colors cursor-pointer"
+                                          >
+                                            {source.title.substring(0, 25)}...
                                           </Badge>
                                         </Link>
                                       ))}
@@ -315,17 +410,19 @@ export default function AIResearch() {
                   )}
                 </ScrollArea>
                 
-                <div className="flex gap-2">
+                {/* Enhanced Chat Input */}
+                <div className="flex gap-3 p-2 bg-muted/30 rounded-xl border border-border/50">
                   <Input
                     placeholder="Ask about your notes..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
-                    className="flex-1"
+                    className="flex-1 border-0 bg-transparent focus-visible:ring-0 text-base"
                   />
                   <Button
                     onClick={handleChatSubmit}
                     disabled={!chatInput.trim() || isLoading}
+                    className="px-4"
                   >
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
