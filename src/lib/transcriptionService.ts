@@ -21,6 +21,9 @@ export class TranscriptionService {
     if (mediaType === 'youtube') {
       console.log('Starting enhanced YouTube transcript extraction with audio fallback...');
       
+      // Extract video ID once at the beginning
+      const videoId = YouTubeService.extractVideoId(url);
+      
       // Step 1: Try standard transcript extraction
       const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
       
@@ -48,7 +51,6 @@ export class TranscriptionService {
       console.warn('Standard transcript extraction failed, trying audio extraction...');
       
       // Step 2: Try audio extraction and transcription with Supadata
-      const videoId = YouTubeService.extractVideoId(url);
       if (videoId) {
         const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
         
@@ -79,7 +81,6 @@ export class TranscriptionService {
       // Step 4: If all methods fail, return a "success" result with warning content
       console.warn('All transcription methods failed, but we will still save the note with a warning');
       
-      const videoId = YouTubeService.extractVideoId(url);
       const warningMessage = "⚠️ **Transcript Not Available**\n\nAll transcription methods failed for this video. This could be due to:\n- Video has no captions or auto-generated captions disabled\n- Video is private, restricted, or region-locked\n- Audio quality issues preventing transcription\n- API rate limits or temporary service issues\n\nYou can still use this note to add your own observations about the video.";
       
       toast({

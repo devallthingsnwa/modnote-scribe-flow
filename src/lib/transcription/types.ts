@@ -22,6 +22,10 @@ export interface TranscriptionResult {
     availableLanguages?: string[];
     extractionMethod?: string;
     apiAttempt?: string;
+    videoId?: string;
+    isWarning?: boolean;
+    audioQuality?: string;
+    processingTime?: number;
   };
   error?: string;
   provider?: string;
