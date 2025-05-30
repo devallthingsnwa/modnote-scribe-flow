@@ -27,7 +27,7 @@ export class UrlContentScraper {
       
       const data = await response.json();
       
-      if (!data.status === 'success') {
+      if (data.status !== 'success') {
         throw new Error('Failed to scrape content');
       }
       

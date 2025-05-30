@@ -102,22 +102,20 @@ export default function AIResearch() {
     try {
       const startTime = performance.now();
       
-      console.log(`🧠 ULTRA-STRICT CONTEXT PROCESSING: Starting for query "${currentInput}"`);
+      console.log(`🧠 ENHANCED CONTEXT PROCESSING: Starting for query "${currentInput}"`);
       
-      // ULTRA-STRICT context processing with maximum source isolation
-      const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
+      // Enhanced search for context
+      const contextResults = EnhancedSearchEngine.searchNotes(notes || [], currentInput);
       
-      if (contextData.sources.length === 0) {
-        console.log('❌ NO SOURCES PASSED ULTRA-STRICT VALIDATION');
+      if (contextResults.length === 0) {
+        console.log('❌ NO SOURCES FOUND');
         setChatMessages(prev => prev.filter(m => !m.isStreaming));
         
         const noContextMessage: ChatMessage = {
           id: `no_context_${Date.now()}`,
           type: 'assistant',
-          content: `🔒 ULTRA-STRICT VALIDATION: No sources in your notes meet the high relevance threshold for: "${currentInput}"\n\nThis ensures maximum accuracy by preventing information mixing. Try:\n• More specific search terms\n• Exact names or titles\n• Key phrases from your content\n\nOr add more relevant notes to your collection.`,
-          timestamp: new Date(),
-          contextFingerprint: contextData.queryFingerprint,
-          isolationLevel: contextData.isolationLevel
+          content: `🔒 ENHANCED VALIDATION: No sources in your notes meet the relevance threshold for: "${currentInput}"\n\nTry:\n• More specific search terms\n• Exact names or titles\n• Key phrases from your content\n\nOr add more relevant notes to your collection.`,
+          timestamp: new Date()
         };
         
         setChatMessages(prev => [...prev, noContextMessage]);
@@ -125,57 +123,29 @@ export default function AIResearch() {
         return;
       }
 
-      // Create MAXIMUM-ISOLATION context with ultra-strict barriers
-      const ultraStrictContext = `🔒 ULTRA-STRICT AI SYSTEM INSTRUCTIONS - MAXIMUM SOURCE ISOLATION 🔒
+      // Create context with source isolation
+      const contextContent = contextResults.map(result => 
+        `Title: ${result.title}\nContent: ${result.snippet}\nSource: ${result.sourceType}`
+      ).join('\n\n---\n\n');
 
-CRITICAL ACCURACY PROTOCOL ACTIVE:
-- Source mixing detection: ENABLED
-- Cross-contamination prevention: MAXIMUM
-- Fact verification: ULTRA-STRICT
-- Attribution requirements: MANDATORY
+      const enhancedContext = `CONTEXT FROM USER'S NOTES:
+${contextContent}
 
-QUERY VALIDATION:
-Original Query: "${currentInput}"
-Query Fingerprint: ${contextData.queryFingerprint}
-Isolation Level: ${contextData.isolationLevel.toUpperCase()}
-Sources Validated: ${contextData.sources.length} (passed ultra-strict threshold)
-Context Tokens: ${contextData.totalTokens}
+USER QUERY: "${currentInput}"
 
-STRICT CONTEXT SUMMARY:
-${contextData.contextSummary}
+Please provide a helpful response based on the context above. Cite sources when possible.`;
 
-🔒 ISOLATED SOURCE CONTENT WITH MAXIMUM BARRIERS:
-${contextData.relevantChunks.join('\n\n🔒═══ SOURCE ISOLATION BARRIER ═══🔒\n\n')}
-
-🚨 CRITICAL AI INSTRUCTIONS:
-1. NEVER mix information between the isolated sources above
-2. ALWAYS cite the exact source title and ID for each piece of information
-3. If sources conflict, acknowledge the conflict and cite each source separately
-4. If the query cannot be fully answered from these sources, say so explicitly
-5. NEVER use external knowledge - ONLY use the verified content above
-6. Each fact MUST be traceable to a specific source by title
-7. Use format: "According to [Source Title] (ID: ${contextData.sources[0]?.id})..."
-
-RESPONSE VERIFICATION:
-- Source attribution: REQUIRED for every statement
-- Fact checking: Against provided sources ONLY
-- Cross-reference validation: ENABLED
-- External knowledge: FORBIDDEN
-
-USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
-
-      console.log(`📊 ULTRA-STRICT CONTEXT: ${contextData.totalTokens} tokens from ${contextData.sources.length} maximum-verified sources`);
+      console.log(`📊 CONTEXT: ${contextContent.length} chars from ${contextResults.length} sources`);
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
-          content: ultraStrictContext,
+          content: enhancedContext,
           type: 'chat',
           options: { 
             rag: true, 
             strict_context: true,
-            ultra_isolation: true,
             max_tokens: 2500,
-            temperature: 0.05 // Minimum temperature for maximum factual accuracy
+            temperature: 0.1
           }
         }
       });
@@ -195,35 +165,29 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
       const assistantMessage: ChatMessage = {
         id: `response_${Date.now()}`,
         type: 'assistant',
-        content: data.processedContent || "I couldn't generate a response using the ultra-strict validation criteria. This ensures maximum accuracy by preventing information mixing.",
+        content: data.processedContent || "I couldn't generate a response based on your notes.",
         timestamp: new Date(),
-        contextFingerprint: contextData.queryFingerprint,
-        isolationLevel: contextData.isolationLevel,
-        sources: contextData.sources.slice(0, 3).map(source => ({
+        sources: contextResults.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Ultra-Verified Source | Score: ${source.relevance.toFixed(4)} | Type: ${source.metadata?.is_transcription ? 'Video Transcript' : 'Text Note'} | Isolation: MAXIMUM`
+          snippet: `Source: ${source.sourceType} | Relevance: ${source.relevance.toFixed(2)}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
-      console.log(`✅ ULTRA-STRICT RESPONSE: ${responseTime.toFixed(0)}ms using ${contextData.sources.length} maximum-verified sources`);
-      console.log(`📈 ACCURACY METRICS: Context tokens: ${contextData.totalTokens}, Verified sources: ${contextData.sources.length}, Isolation: ${contextData.isolationLevel}`);
+      console.log(`✅ RESPONSE: ${responseTime.toFixed(0)}ms using ${contextResults.length} sources`);
 
       if (data.usage) {
         console.log('💰 Token usage:', data.usage);
       }
 
-      // Success notification for ultra-high-quality responses
-      if (contextData.sources.length > 0 && responseTime < 5000) {
-        toast({
-          title: "Ultra-High Accuracy Response",
-          description: `Generated from ${contextData.sources.length} ultra-verified sources in ${responseTime.toFixed(0)}ms with maximum isolation`,
-        });
-      }
+      toast({
+        title: "Response Generated",
+        description: `Using ${contextResults.length} relevant sources in ${responseTime.toFixed(0)}ms`,
+      });
 
     } catch (error: any) {
       if (error.name === 'AbortError' || controller.signal.aborted) {
@@ -231,22 +195,22 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
         return;
       }
       
-      console.error('🚨 ULTRA-STRICT CHAT ERROR:', error);
+      console.error('🚨 CHAT ERROR:', error);
       
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
       
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         type: 'assistant',
-        content: "🔒 Processing error detected. Ultra-strict validation maintains data integrity by preventing unreliable responses. Please try rephrasing your question or ensure your notes contain relevant information.",
+        content: "Processing error occurred. Please try rephrasing your question.",
         timestamp: new Date()
       };
       
       setChatMessages(prev => [...prev, errorMessage]);
       
       toast({
-        title: "Ultra-Strict Validation Error",
-        description: "Maximum accuracy protection activated. Data integrity maintained.",
+        title: "Processing Error",
+        description: "Failed to generate response. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -263,16 +227,12 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
       // Switching to chat mode
       setSearchResults([]);
       setSearchQuery("");
-      console.log('🔄 SWITCHED TO ULTRA-STRICT CHAT MODE: Maximum accuracy with isolated source attribution');
+      console.log('🔄 SWITCHED TO CHAT MODE: AI-powered conversations');
     } else {
       // Switching to search mode
       setChatMessages([]);
-      console.log('🔄 SWITCHED TO ULTRA-FAST SEARCH MODE: Lightning search with enhanced precision');
+      console.log('🔄 SWITCHED TO SEARCH MODE: Fast search with enhanced precision');
     }
-    
-    // Clear all caches for fresh start with new validation
-    EnhancedSearchService.clearCache();
-    ContextProcessor.clearCache();
   }, [isChatMode]);
 
   // Enhanced cleanup
@@ -281,8 +241,6 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      EnhancedSearchService.clearCache();
-      ContextProcessor.clearCache();
     };
   }, []);
 
