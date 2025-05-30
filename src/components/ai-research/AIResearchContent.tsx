@@ -45,28 +45,26 @@ export function AIResearchContent({
   onChatSubmit
 }: AIResearchContentProps) {
   return (
-    <div className="flex-1 px-2 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 overflow-auto">
-      <div className="max-w-7xl mx-auto">
-        <Card className="w-full shadow-lg border-border/40 bg-card/90 backdrop-blur-sm min-h-[calc(100vh-200px)]">
-          <CardContent className="p-3 sm:p-4 lg:p-6 h-full">
-            {!isChatMode ? (
-              <SearchMode
-                searchQuery={searchQuery}
-                searchResults={searchResults}
-                onSearch={onSearch}
-              />
-            ) : (
-              <ChatMode
-                chatMessages={chatMessages}
-                chatInput={chatInput}
-                isLoading={isLoading}
-                onChatInputChange={onChatInputChange}
-                onChatSubmit={onChatSubmit}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+    <div className="flex-1 px-6 py-8 overflow-auto">
+      <Card className="max-w-5xl mx-auto shadow-lg border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardContent className="p-8">
+          {!isChatMode ? (
+            <SearchMode
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              onSearch={onSearch}
+            />
+          ) : (
+            <ChatMode
+              chatMessages={chatMessages}
+              chatInput={chatInput}
+              isLoading={isLoading}
+              onChatInputChange={onChatInputChange}
+              onChatSubmit={onChatSubmit}
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
