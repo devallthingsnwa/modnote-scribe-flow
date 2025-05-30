@@ -2,8 +2,7 @@ import React, { useState, useCallback, useMemo, useRef } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { EnhancedSearchService } from "@/lib/aiResearch/enhancedSearchService";
-import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
+import { EnhancedSearchEngine } from "@/lib/search/enhancedSearchEngine";
 import { Sidebar } from "@/components/Sidebar";
 import { AIResearchHeader } from "@/components/ai-research/AIResearchHeader";
 import { AIResearchContent } from "@/components/ai-research/AIResearchContent";
@@ -38,27 +37,27 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Enhanced search with comprehensive validation
+  // Enhanced search with improved accuracy
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        if (!notes || !query.trim() || query.trim().length < 3) {
+        if (!notes || !query.trim() || query.trim().length < 2) {
           setSearchResults([]);
           return;
         }
         
-        console.log(`🎯 ENHANCED SEARCH: "${query}" with strict metadata validation across ${notes.length} notes`);
+        console.log(`🔍 ENHANCED SEARCH: "${query}" across ${notes.length} notes`);
         const searchStart = performance.now();
         
-        // Use the new enhanced search service with comprehensive validation
-        const results = EnhancedSearchService.searchNotes(notes, query);
+        // Use the enhanced search engine with strict relevance matching
+        const results = EnhancedSearchEngine.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
-        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} validated results (filtered out irrelevant content)`);
+        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} relevant results`);
         setSearchResults(results);
-      }, 150); // Reduced debounce for better UX
+      }, 100); // Faster debounce for better UX
     };
   }, [notes]);
 
