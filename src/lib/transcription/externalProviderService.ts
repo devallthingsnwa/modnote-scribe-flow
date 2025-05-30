@@ -86,9 +86,11 @@ export class ExternalProviderService {
         throw new Error(`${provider} returned suspiciously short transcript (${transcriptionText.length} chars)`);
       }
 
-      // Quality score based on length and processing time
+      // Quality score based on length and processing time - fix arithmetic operations
+      const lengthScore = Math.min(50, transcriptionText.length / 100);
+      const timeBonus = Math.max(0, 30 - (processingTime / 1000));
       const qualityScore = Math.min(100, Math.max(50, 
-        (transcriptionText.length / 100) + (providerConfig.accuracyScore) - (processingTime / 1000)
+        lengthScore + providerConfig.accuracyScore + timeBonus
       ));
 
       console.log(`✅ ${provider} completed: ${transcriptionText.length} chars in ${processingTime}ms (quality: ${qualityScore.toFixed(1)}%)`);
@@ -155,7 +157,15 @@ export class ExternalProviderService {
         result.status === 'fulfilled' && result.value.success
       )
       .map(result => result.value)
-      .sort((a, b) => (b.metadata?.qualityScore || 0) - (a.metadata?.qualityScore || 0));
+      .sort((a, b) => {
+        const aScore = typeof a.metadata?.qualityScore === 'string' 
+          ? parseFloat(a.metadata.qualityScore) 
+          : (a.metadata?.qualityScore || 0);
+        const bScore = typeof b.metadata?.qualityScore === 'string' 
+          ? parseFloat(b.metadata.qualityScore) 
+          : (b.metadata?.qualityScore || 0);
+        return bScore - aScore;
+      });
 
     if (successfulResults.length > 0) {
       const bestResult = successfulResults[0];

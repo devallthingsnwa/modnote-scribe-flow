@@ -29,7 +29,7 @@ export interface TranscriptionResult {
     audioQuality?: string;
     processingTime?: number;
     providersAttempted?: string;
-    qualityScore?: string;
+    qualityScore?: string | number;
     transcriptionLength?: number;
     providerPriority?: number;
     capabilities?: string[];
@@ -44,6 +44,7 @@ export interface TranscriptionResult {
     strategiesAttempted?: string;
     parallelProcessing?: boolean;
     timestamp?: string;
+    provider?: string;
   };
   error?: string;
   provider?: string;
