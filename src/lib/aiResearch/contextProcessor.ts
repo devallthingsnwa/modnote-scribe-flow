@@ -1,3 +1,4 @@
+
 import { MetadataValidator } from './metadataValidator';
 import { QueryIntentAnalyzer } from './queryIntentAnalyzer';
 
@@ -143,7 +144,7 @@ export class ContextProcessor {
       }
 
       processedSources.push(sourceData);
-      console.log(`🔒 ISOLATED: "${note.title}" (ID: ${note.id}, relevance: ${note.relevanceScore.toFixed(3)}, alignment: ${note.queryAlignment.toFixed(3)})`);
+      console.log(`🔒 ISOLATED: "${note.title}" (ID: ${note.id}, relevance: ${note.relevanceScore.toFixed(3)})`);
     }
 
     const contextSummary = this.createUltraStrictContextSummary(processedSources, query);
@@ -195,102 +196,6 @@ export class ContextProcessor {
     return Math.min(relevanceScore, 1.0);
   }
 
-  private static validateSemanticRelevance(note: any, query: string): number {
-    // Semantic validation to prevent topic mixing
-    const title = (note.title || '').toLowerCase();
-    const content = (note.content || '').toLowerCase();
-    const query_lower = query.toLowerCase();
-
-    // Extract key entities/topics from query
-    const queryEntities = this.extractKeyEntities(query_lower);
-    const noteEntities = this.extractKeyEntities(title + ' ' + content);
-
-    // Calculate entity overlap
-    const commonEntities = queryEntities.filter(entity => 
-      noteEntities.some(noteEntity => 
-        noteEntity.includes(entity) || entity.includes(noteEntity)
-      )
-    );
-
-    const entityOverlap = queryEntities.length > 0 ? commonEntities.length / queryEntities.length : 0;
-    
-    // Boost if entities match well, penalize if no entity overlap
-    return entityOverlap > 0.3 ? 1.0 : 0.2; // Strong penalty for poor entity alignment
-  }
-
-  private static extractKeyEntities(text: string): string[] {
-    // Simple entity extraction - look for proper nouns, specific terms
-    const words = text.split(/\s+/);
-    const entities: string[] = [];
-    
-    for (const word of words) {
-      // Capitalized words (potential proper nouns)
-      if (/^[A-Z][a-z]+/.test(word) && word.length > 3) {
-        entities.push(word.toLowerCase());
-      }
-      // Technical terms, brands, etc.
-      if (word.length > 5 && !/^(the|and|for|are|but|not|you|all|can|had|her|was|one|our|out|day|get|has|him|his|how|man|new|now|old|see|two|way|who|boy|did|its|let|put|say|she|too|use|may|each|which|their|time|will|about)$/.test(word.toLowerCase())) {
-        entities.push(word.toLowerCase());
-      }
-    }
-    
-    return [...new Set(entities)]; // Remove duplicates
-  }
-
-  private static calculateQueryAlignment(note: any, query: string): number {
-    // Additional alignment check to prevent cross-contamination
-    const noteText = `${note.title} ${note.content || ''}`.toLowerCase();
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-    
-    let alignmentScore = 0;
-    for (const word of queryWords) {
-      if (noteText.includes(word)) {
-        alignmentScore += 1;
-      }
-    }
-    
-    return queryWords.length > 0 ? alignmentScore / queryWords.length : 0;
-  }
-
-  private static calculatePhraseMatchBonus(title: string, content: string, query: string): number {
-    let bonus = 0;
-    
-    // Exact phrase in title (highest priority)
-    if (title.includes(query)) {
-      bonus += 8;
-    }
-    
-    // Exact phrase in content
-    if (content.includes(query)) {
-      bonus += 4;
-    }
-    
-    // Partial phrase matching for multi-word queries
-    const queryWords = query.split(/\s+/).filter(w => w.length > 2);
-    if (queryWords.length > 1) {
-      const subsequences = this.generateSubsequences(queryWords);
-      for (const subseq of subsequences) {
-        const phrase = subseq.join(' ');
-        if (phrase.length > 4) {
-          if (title.includes(phrase)) bonus += 2;
-          if (content.includes(phrase)) bonus += 1;
-        }
-      }
-    }
-    
-    return Math.min(bonus, 10); // Cap the bonus
-  }
-
-  private static generateSubsequences(words: string[]): string[][] {
-    const subsequences: string[][] = [];
-    for (let i = 0; i < words.length; i++) {
-      for (let j = i + 2; j <= words.length; j++) { // At least 2 words
-        subsequences.push(words.slice(i, j));
-      }
-    }
-    return subsequences;
-  }
-
   private static createUltraIsolatedChunks(note: any, query: string): string[] {
     const chunks: string[] = [];
     const content = note.content || '';
@@ -301,7 +206,7 @@ export class ContextProcessor {
       `SOURCE_TITLE: ${note.title}\n` +
       `UNIQUE_SOURCE_ID: ${note.id}\n` +
       `SOURCE_TYPE: ${note.is_transcription ? 'VIDEO_TRANSCRIPT' : 'TEXT_NOTE'}\n` +
-      `QUERY_RELEVANCE: ${this.calculateUltraStrictRelevance(note, query).toFixed(4)}\n` +
+      `QUERY_RELEVANCE: ${this.calculateBasicRelevance(note, query).toFixed(4)}\n` +
       `SOURCE_URL: ${note.source_url || 'NONE'}\n` +
       `CREATED: ${note.created_at ? new Date(note.created_at).toISOString() : 'UNKNOWN'}\n` +
       `CONTENT_HASH: ${this.createContentHash(content)}\n` +

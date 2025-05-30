@@ -1,4 +1,3 @@
-
 interface VideoMetadata {
   title?: string;
   channel_name?: string;
@@ -46,13 +45,14 @@ export class MetadataValidator {
     }
     
     // Channel/creator validation for video content
+    let channelValidation = { isValid: true, confidence: 1.0, reason: 'No channel validation needed' };
     if (content.metadata?.is_transcription && content.metadata?.channel_name) {
-      const channelMatch = this.validateChannelRelevance(queryEntities, content.metadata.channel_name);
-      if (!channelMatch.isValid && strictMode) {
+      channelValidation = this.validateChannelRelevance(queryEntities, content.metadata.channel_name);
+      if (!channelValidation.isValid && strictMode) {
         return {
           isValid: false,
-          confidence: channelMatch.confidence,
-          reason: `Channel mismatch: ${channelMatch.reason}`
+          confidence: channelValidation.confidence,
+          reason: `Channel mismatch: ${channelValidation.reason}`
         };
       }
     }
@@ -70,7 +70,7 @@ export class MetadataValidator {
     // Calculate final confidence score
     const finalConfidence = Math.min(
       entityMatch.overlap,
-      channelMatch?.confidence || 1.0,
+      channelValidation.confidence,
       contentTypeMatch.confidence
     );
     
