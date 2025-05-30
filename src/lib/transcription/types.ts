@@ -26,6 +26,7 @@ export interface TranscriptionResult {
     isWarning?: boolean;
     audioQuality?: string;
     processingTime?: number;
+    providersAttempted?: string;
   };
   error?: string;
   provider?: string;
