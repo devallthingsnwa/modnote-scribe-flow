@@ -4,6 +4,8 @@ export interface TranscriptionConfig {
   apiKey?: string;
   enabled: boolean;
   priority: number;
+  timeout?: number;
+  accuracyScore?: number;
 }
 
 export interface TranscriptionResult {
@@ -27,6 +29,21 @@ export interface TranscriptionResult {
     audioQuality?: string;
     processingTime?: number;
     providersAttempted?: string;
+    qualityScore?: string;
+    transcriptionLength?: number;
+    providerPriority?: number;
+    capabilities?: string[];
+    transcriptionSpeed?: string;
+    extractionTimestamp?: string;
+    alternativeResults?: number;
+    errorType?: string;
+    segmentCount?: number;
+    metadataQuality?: string;
+    extractedAt?: string;
+    totalAttempts?: number;
+    strategiesAttempted?: string;
+    parallelProcessing?: boolean;
+    timestamp?: string;
   };
   error?: string;
   provider?: string;
@@ -38,6 +55,11 @@ export interface YouTubeMetadata {
   duration?: string;
   author?: string;
   description?: string;
+  publishedAt?: string;
+  viewCount?: string;
+  tags?: string[];
+  metadataQuality?: 'high' | 'basic' | 'minimal';
+  extractedAt?: string;
 }
 
 export type MediaType = 'youtube' | 'podcast' | 'audio' | 'video' | 'unknown';
