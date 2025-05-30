@@ -36,20 +36,24 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Memoized search function with debouncing
+  // Enhanced search with validation
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        if (!notes || !query.trim()) {
+        if (!notes || !query.trim() || query.trim().length < 2) {
           setSearchResults([]);
           return;
         }
         
+        const searchStart = performance.now();
         const results = OptimizedSearchService.searchNotes(notes, query);
+        const searchTime = performance.now() - searchStart;
+        
+        console.log(`🔍 Search completed in ${searchTime.toFixed(1)}ms for query: "${query}"`);
         setSearchResults(results);
-      }, 300);
+      }, 200); // Reduced debounce for better responsiveness
     };
   }, [notes]);
 
@@ -73,6 +77,7 @@ export default function AIResearch() {
     setChatInput("");
     setIsLoading(true);
 
+    // Add streaming message placeholder
     const streamingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
@@ -83,55 +88,87 @@ export default function AIResearch() {
     setChatMessages(prev => [...prev, streamingMessage]);
 
     try {
+      const startTime = performance.now();
+      
+      // Enhanced context processing with validation
       const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
       
-      const knowledgeBase = contextData.relevantChunks.join('\n\n---\n\n');
-      
-      const ragContext = knowledgeBase ? 
-        `Context from notes (${contextData.totalTokens} chars):\n\n${knowledgeBase}\n\nUser question: ${currentInput}` : 
-        currentInput;
+      if (contextData.sources.length === 0) {
+        // No relevant sources found
+        setChatMessages(prev => prev.filter(m => !m.isStreaming));
+        
+        const noContextMessage: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          type: 'assistant',
+          content: `I couldn't find any relevant notes for your query: "${currentInput}". Please try a different search term or add some notes first.`,
+          timestamp: new Date()
+        };
+        
+        setChatMessages(prev => [...prev, noContextMessage]);
+        setIsLoading(false);
+        return;
+      }
 
-      console.log(`Optimized context size: ${ragContext.length} chars from ${contextData.sources.length} sources`);
+      // Create enhanced context with strict source attribution
+      const enhancedContext = `SYSTEM: You are answering based ONLY on the provided context. Do not use external knowledge.
+
+CONTEXT SOURCES (${contextData.sources.length} relevant notes found):
+${contextData.contextSummary}
+
+CONTENT:
+${contextData.relevantChunks.join('\n\n---NEXT SOURCE---\n\n')}
+
+USER QUERY: ${currentInput}
+
+INSTRUCTIONS: Answer based STRICTLY on the provided context. Reference specific source titles when mentioning information. If the query cannot be answered from the provided context, say so clearly.`;
+
+      console.log(`🧠 Enhanced RAG context: ${enhancedContext.length} chars from ${contextData.sources.length} sources`);
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
-          content: ragContext,
+          content: enhancedContext,
           type: 'chat',
-          options: { rag: true }
+          options: { rag: true, strict_context: true }
         }
       });
 
       if (error) throw error;
 
+      const responseTime = performance.now() - startTime;
+      
+      // Remove streaming message and add final response
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
 
       const assistantMessage: ChatMessage = {
-        id: (Date.now() + 2).toString(),
+        id: (Date.now() + 3).toString(),
         type: 'assistant',
-        content: data.processedContent || "I'm sorry, I couldn't process your request.",
+        content: data.processedContent || "I couldn't process your request based on the available context.",
         timestamp: new Date(),
-        sources: contextData.sources.map(source => ({
+        sources: contextData.sources.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Relevance: ${source.relevance.toFixed(1)}`
+          snippet: `Relevance: ${source.relevance.toFixed(2)} | ${source.metadata?.is_transcription ? 'Video Transcript' : 'Note'}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
+      console.log(`✅ Response generated in ${responseTime.toFixed(0)}ms using ${contextData.sources.length} sources`);
+
       if (data.usage) {
-        console.log('API Usage:', data.usage);
+        console.log('💰 Token usage:', data.usage);
       }
 
-    } catch (error) {
-      console.error('Chat error:', error);
+    } catch (error: any) {
+      console.error('🚨 Chat error:', error);
+      
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
       
       toast({
         title: "Error",
-        description: "Failed to get AI response. Please try again.",
+        description: "Failed to get AI response. Please check your connection and try again.",
         variant: "destructive"
       });
     } finally {
@@ -147,11 +184,18 @@ export default function AIResearch() {
     } else {
       setChatMessages([]);
     }
+    
+    // Clear caches when switching modes
+    OptimizedSearchService.clearCache();
+    ContextProcessor.clearCache();
   }, [isChatMode]);
 
   // Clear cache when component unmounts
   React.useEffect(() => {
-    return () => OptimizedSearchService.clearCache();
+    return () => {
+      OptimizedSearchService.clearCache();
+      ContextProcessor.clearCache();
+    };
   }, []);
 
   return (

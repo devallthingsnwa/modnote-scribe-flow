@@ -45,9 +45,9 @@ export function AIResearchContent({
   onChatSubmit
 }: AIResearchContentProps) {
   return (
-    <div className="flex-1 px-6 py-8 overflow-auto">
-      <Card className="max-w-5xl mx-auto shadow-lg border-border/50 bg-card/80 backdrop-blur-sm">
-        <CardContent className="p-8">
+    <div className="flex-1 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 overflow-auto">
+      <Card className="max-w-6xl mx-auto shadow-lg border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardContent className="p-4 sm:p-6 lg:p-8">
           {!isChatMode ? (
             <SearchMode
               searchQuery={searchQuery}

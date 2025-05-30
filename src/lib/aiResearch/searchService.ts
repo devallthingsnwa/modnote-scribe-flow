@@ -5,146 +5,145 @@ interface SearchResult {
   content: string | null;
   relevance: number;
   snippet: string;
-  matchType: 'title' | 'content' | 'both';
 }
 
 export class OptimizedSearchService {
   private static searchCache = new Map<string, SearchResult[]>();
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-  private static readonly MAX_RESULTS = 8;
+  private static readonly MIN_SEARCH_LENGTH = 2;
+  private static readonly MAX_RESULTS = 8; // Reduced for better accuracy
 
   static searchNotes(notes: any[], query: string): SearchResult[] {
-    if (!notes?.length || !query.trim()) return [];
-
-    const cacheKey = `${query.toLowerCase()}_${notes.length}`;
-    const cached = this.searchCache.get(cacheKey);
-    
-    if (cached) {
-      return cached;
+    if (!query || query.trim().length < this.MIN_SEARCH_LENGTH) {
+      return [];
     }
 
-    const results = this.performSearch(notes, query);
-    
-    // Cache results with TTL
+    const normalizedQuery = query.trim().toLowerCase();
+    const cacheKey = `${normalizedQuery}_${notes.length}`;
+
+    // Check cache first
+    if (this.searchCache.has(cacheKey)) {
+      console.log('🚀 Cache hit for search query:', normalizedQuery);
+      return this.searchCache.get(cacheKey)!;
+    }
+
+    console.log(`🔍 Searching ${notes.length} notes for: "${normalizedQuery}"`);
+
+    // Enhanced search with better precision
+    const results = notes
+      .map(note => this.calculateSearchRelevance(note, normalizedQuery))
+      .filter(result => result.relevance > 0.1) // Higher threshold
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, this.MAX_RESULTS)
+      .map(result => ({
+        ...result,
+        snippet: this.generatePreciseSnippet(result.content || '', normalizedQuery)
+      }));
+
+    // Cache results with timestamp
     this.searchCache.set(cacheKey, results);
     setTimeout(() => this.searchCache.delete(cacheKey), this.CACHE_TTL);
-    
+
+    console.log(`✅ Found ${results.length} relevant search results`);
     return results;
   }
 
-  private static performSearch(notes: any[], query: string): SearchResult[] {
-    const queryLower = query.toLowerCase();
-    const queryTerms = queryLower.split(/\s+/).filter(term => term.length > 1);
+  private static calculateSearchRelevance(note: any, query: string): SearchResult {
+    const title = (note.title || '').toLowerCase();
+    const content = (note.content || '').toLowerCase();
     
-    const results = notes
-      .map(note => {
-        const titleLower = note.title.toLowerCase();
-        const contentLower = note.content?.toLowerCase() || '';
-        
-        let relevance = 0;
-        let matchType: 'title' | 'content' | 'both' = 'content';
-        
-        // Exact phrase matching (highest priority)
-        if (titleLower.includes(queryLower)) {
-          relevance += 10;
-          matchType = 'title';
-        }
-        if (contentLower.includes(queryLower)) {
-          relevance += 5;
-          matchType = matchType === 'title' ? 'both' : 'content';
-        }
-        
-        // Individual term matching
-        const titleMatches = queryTerms.filter(term => titleLower.includes(term)).length;
-        const contentMatches = queryTerms.filter(term => contentLower.includes(term)).length;
-        
-        relevance += titleMatches * 3;
-        relevance += contentMatches * 1;
-        
-        // Boost for term proximity in content
-        if (contentMatches > 1 && note.content) {
-          const proximityBoost = this.calculateProximityScore(note.content, queryTerms);
-          relevance += proximityBoost;
-        }
-        
-        if (relevance === 0) return null;
-        
-        const snippet = this.generateSnippet(note.content || '', queryTerms);
-        
-        return {
-          id: note.id,
-          title: note.title,
-          content: note.content,
-          relevance,
-          snippet,
-          matchType
-        } as SearchResult;
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.relevance - a!.relevance)
-      .slice(0, this.MAX_RESULTS) as SearchResult[];
-    
-    return results;
-  }
+    // Extract search terms
+    const queryTerms = query.split(/\s+/).filter(term => term.length > 1);
+    let relevanceScore = 0;
+    const maxPossibleScore = queryTerms.length * 4;
 
-  private static calculateProximityScore(content: string, terms: string[]): number {
-    const contentLower = content.toLowerCase();
-    let proximityScore = 0;
-    
-    for (let i = 0; i < terms.length - 1; i++) {
-      const term1Index = contentLower.indexOf(terms[i]);
-      const term2Index = contentLower.indexOf(terms[i + 1]);
-      
-      if (term1Index !== -1 && term2Index !== -1) {
-        const distance = Math.abs(term2Index - term1Index);
-        if (distance < 100) { // Within 100 characters
-          proximityScore += Math.max(0, 50 - distance) / 50;
-        }
+    // Title matching (highest priority)
+    for (const term of queryTerms) {
+      if (title.includes(term)) {
+        relevanceScore += 4; // High weight for title
       }
     }
-    
-    return proximityScore;
+
+    // Content matching (medium priority)
+    for (const term of queryTerms) {
+      const regex = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'gi');
+      const matches = content.match(regex) || [];
+      relevanceScore += Math.min(matches.length * 0.5, 2); // Cap content contribution
+    }
+
+    // Exact phrase matching (bonus)
+    if (title.includes(query)) {
+      relevanceScore += 3;
+    } else if (content.includes(query)) {
+      relevanceScore += 2;
+    }
+
+    // Normalize score
+    const normalizedScore = Math.min(relevanceScore / maxPossibleScore, 1);
+
+    return {
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      relevance: normalizedScore,
+      snippet: '' // Will be generated later
+    };
   }
 
-  private static generateSnippet(content: string, queryTerms: string[]): string {
-    if (!content) return '';
-    
+  private static generatePreciseSnippet(content: string, query: string): string {
+    if (!content) return 'No content available';
+
+    const queryTerms = query.split(/\s+/).filter(term => term.length > 1);
     const contentLower = content.toLowerCase();
-    let bestStart = 0;
+    
+    // Find the best matching section
+    let bestIndex = -1;
     let bestScore = 0;
-    
-    // Find the best 150-character window containing query terms
-    for (let i = 0; i <= content.length - 150; i += 25) {
-      const window = contentLower.substring(i, i + 150);
-      const score = queryTerms.reduce((acc, term) => 
-        acc + (window.includes(term) ? 1 : 0), 0
-      );
+
+    for (let i = 0; i < content.length - 200; i += 50) {
+      const section = contentLower.substring(i, i + 200);
+      let sectionScore = 0;
       
-      if (score > bestScore) {
-        bestScore = score;
-        bestStart = i;
+      for (const term of queryTerms) {
+        const matches = (section.match(new RegExp(this.escapeRegex(term), 'gi')) || []).length;
+        sectionScore += matches;
+      }
+      
+      if (sectionScore > bestScore) {
+        bestScore = sectionScore;
+        bestIndex = i;
       }
     }
+
+    let snippet = bestIndex >= 0 
+      ? content.substring(bestIndex, bestIndex + 200) 
+      : content.substring(0, 200);
+
+    // Clean up snippet
+    snippet = snippet.replace(/\n{2,}/g, ' ').trim();
     
-    let snippet = content.substring(bestStart, bestStart + 150);
-    
-    // Ensure we don't cut words
-    if (bestStart > 0) {
-      const spaceIndex = snippet.indexOf(' ');
-      if (spaceIndex > 0) snippet = snippet.substring(spaceIndex + 1);
-      snippet = '...' + snippet;
+    if (snippet.length === 200 && bestIndex >= 0) {
+      snippet = '...' + snippet + '...';
+    } else if (snippet.length === 200) {
+      snippet = snippet + '...';
     }
-    
-    if (bestStart + 150 < content.length) {
-      const lastSpace = snippet.lastIndexOf(' ');
-      if (lastSpace > 0) snippet = snippet.substring(0, lastSpace);
-      snippet += '...';
-    }
-    
+
     return snippet;
+  }
+
+  private static escapeRegex(string: string): string {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   static clearCache(): void {
     this.searchCache.clear();
+    console.log('🧹 Search cache cleared');
+  }
+
+  static getCacheStats(): { size: number; keys: string[] } {
+    return {
+      size: this.searchCache.size,
+      keys: Array.from(this.searchCache.keys())
+    };
   }
 }
