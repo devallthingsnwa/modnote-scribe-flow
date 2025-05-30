@@ -11,7 +11,7 @@ import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AISearchNavbar } from "@/components/AISearchNavbar";
 import { SearchBar } from "@/components/SearchBar";
-import { Button } from "@/components/Button";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const navigate = useNavigate();
