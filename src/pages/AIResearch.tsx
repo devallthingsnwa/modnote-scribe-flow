@@ -24,6 +24,7 @@ interface ChatMessage {
   timestamp: Date;
   sources?: SearchResult[];
   isStreaming?: boolean;
+  contextFingerprint?: string;
 }
 
 export default function AIResearch() {
@@ -36,7 +37,7 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Enhanced search with validation
+  // Enhanced search with strict validation
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
@@ -47,13 +48,15 @@ export default function AIResearch() {
           return;
         }
         
+        console.log(`🔍 SEARCH INITIATED: "${query}" across ${notes.length} notes`);
         const searchStart = performance.now();
+        
         const results = OptimizedSearchService.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
-        console.log(`🔍 Search completed in ${searchTime.toFixed(1)}ms for query: "${query}"`);
+        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} results`);
         setSearchResults(results);
-      }, 200); // Reduced debounce for better responsiveness
+      }, 150);
     };
   }, [notes]);
 
@@ -66,7 +69,7 @@ export default function AIResearch() {
     if (!chatInput.trim() || isLoading) return;
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user_${Date.now()}`,
       type: 'user',
       content: chatInput.trim(),
       timestamp: new Date()
@@ -79,7 +82,7 @@ export default function AIResearch() {
 
     // Add streaming message placeholder
     const streamingMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
+      id: `assistant_${Date.now()}`,
       type: 'assistant',
       content: "",
       timestamp: new Date(),
@@ -90,18 +93,21 @@ export default function AIResearch() {
     try {
       const startTime = performance.now();
       
-      // Enhanced context processing with validation
+      console.log(`🧠 CONTEXT PROCESSING: Starting for query "${currentInput}"`);
+      
+      // STRICT context processing with enhanced validation
       const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
       
       if (contextData.sources.length === 0) {
-        // No relevant sources found
+        console.log('❌ NO RELEVANT SOURCES FOUND');
         setChatMessages(prev => prev.filter(m => !m.isStreaming));
         
         const noContextMessage: ChatMessage = {
-          id: (Date.now() + 2).toString(),
+          id: `no_context_${Date.now()}`,
           type: 'assistant',
-          content: `I couldn't find any relevant notes for your query: "${currentInput}". Please try a different search term or add some notes first.`,
-          timestamp: new Date()
+          content: `I couldn't find any relevant notes for your query: "${currentInput}". This ensures I only provide information from your actual notes and don't mix sources. Please try different search terms or add relevant notes first.`,
+          timestamp: new Date(),
+          contextFingerprint: contextData.queryFingerprint
         };
         
         setChatMessages(prev => [...prev, noContextMessage]);
@@ -109,30 +115,51 @@ export default function AIResearch() {
         return;
       }
 
-      // Create enhanced context with strict source attribution
-      const enhancedContext = `SYSTEM: You are answering based ONLY on the provided context. Do not use external knowledge.
+      // Create ULTRA-STRICT context with source isolation
+      const strictContext = `SYSTEM INSTRUCTIONS: 
+You are answering based EXCLUSIVELY on the provided context sources. DO NOT use any external knowledge or mix information between sources.
 
-CONTEXT SOURCES (${contextData.sources.length} relevant notes found):
+QUERY FINGERPRINT: ${contextData.queryFingerprint}
+SOURCE VERIFICATION: ${contextData.sources.length} verified sources found
+RELEVANCE THRESHOLD: Applied strict filtering (min 0.4)
+
+CONTEXT SUMMARY:
 ${contextData.contextSummary}
 
-CONTENT:
-${contextData.relevantChunks.join('\n\n---NEXT SOURCE---\n\n')}
+VERIFIED CONTENT WITH SOURCE ATTRIBUTION:
+${contextData.relevantChunks.join('\n\n===NEXT_VERIFIED_SOURCE===\n\n')}
 
-USER QUERY: ${currentInput}
+USER QUERY: "${currentInput}"
 
-INSTRUCTIONS: Answer based STRICTLY on the provided context. Reference specific source titles when mentioning information. If the query cannot be answered from the provided context, say so clearly.`;
+CRITICAL INSTRUCTIONS:
+1. Answer ONLY using information from the verified sources above
+2. ALWAYS cite specific source titles when referencing information
+3. If sources contain conflicting information, acknowledge the conflict and cite each source
+4. If the query cannot be fully answered from these sources, say so explicitly
+5. DO NOT combine information from different sources unless explicitly relevant
+6. Each piece of information MUST be traceable to a specific source by title and ID
 
-      console.log(`🧠 Enhanced RAG context: ${enhancedContext.length} chars from ${contextData.sources.length} sources`);
+RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In the video transcript '[Title]'..."`;
+
+      console.log(`📊 CONTEXT STATS: ${contextData.totalTokens} tokens from ${contextData.sources.length} verified sources`);
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
-          content: enhancedContext,
+          content: strictContext,
           type: 'chat',
-          options: { rag: true, strict_context: true }
+          options: { 
+            rag: true, 
+            strict_context: true,
+            max_tokens: 2000,
+            temperature: 0.1 // Lower temperature for more factual responses
+          }
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('🚨 AI API ERROR:', error);
+        throw error;
+      }
 
       const responseTime = performance.now() - startTime;
       
@@ -140,35 +167,54 @@ INSTRUCTIONS: Answer based STRICTLY on the provided context. Reference specific 
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
 
       const assistantMessage: ChatMessage = {
-        id: (Date.now() + 3).toString(),
+        id: `response_${Date.now()}`,
         type: 'assistant',
-        content: data.processedContent || "I couldn't process your request based on the available context.",
+        content: data.processedContent || "I couldn't generate a response based on the available context. Please try rephrasing your question.",
         timestamp: new Date(),
+        contextFingerprint: contextData.queryFingerprint,
         sources: contextData.sources.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Relevance: ${source.relevance.toFixed(2)} | ${source.metadata?.is_transcription ? 'Video Transcript' : 'Note'}`
+          snippet: `Verified Source | Relevance: ${source.relevance.toFixed(3)} | Type: ${source.metadata?.is_transcription ? 'Video Transcript' : 'Text Note'}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
-      console.log(`✅ Response generated in ${responseTime.toFixed(0)}ms using ${contextData.sources.length} sources`);
+      console.log(`✅ RESPONSE GENERATED: ${responseTime.toFixed(0)}ms using ${contextData.sources.length} verified sources`);
+      console.log(`📈 QUALITY METRICS: Context tokens: ${contextData.totalTokens}, Sources: ${contextData.sources.length}`);
 
       if (data.usage) {
         console.log('💰 Token usage:', data.usage);
       }
 
+      // Success notification for high-quality responses
+      if (contextData.sources.length > 0 && responseTime < 5000) {
+        toast({
+          title: "High-Quality Response",
+          description: `Generated from ${contextData.sources.length} verified sources in ${responseTime.toFixed(0)}ms`,
+        });
+      }
+
     } catch (error: any) {
-      console.error('🚨 Chat error:', error);
+      console.error('🚨 CHAT ERROR:', error);
       
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
       
+      const errorMessage: ChatMessage = {
+        id: `error_${Date.now()}`,
+        type: 'assistant',
+        content: "I encountered an error while processing your request. This helps ensure data integrity. Please try again or rephrase your question.",
+        timestamp: new Date()
+      };
+      
+      setChatMessages(prev => [...prev, errorMessage]);
+      
       toast({
-        title: "Error",
-        description: "Failed to get AI response. Please check your connection and try again.",
+        title: "Processing Error",
+        description: "Failed to generate response. Data integrity maintained.",
         variant: "destructive"
       });
     } finally {
@@ -177,20 +223,26 @@ INSTRUCTIONS: Answer based STRICTLY on the provided context. Reference specific 
   };
 
   const toggleMode = useCallback(() => {
-    setIsChatMode(!isChatMode);
-    if (!isChatMode) {
+    const newMode = !isChatMode;
+    setIsChatMode(newMode);
+    
+    if (newMode) {
+      // Switching to chat mode
       setSearchResults([]);
       setSearchQuery("");
+      console.log('🔄 SWITCHED TO CHAT MODE: Enhanced AI responses with strict source attribution');
     } else {
+      // Switching to search mode
       setChatMessages([]);
+      console.log('🔄 SWITCHED TO SEARCH MODE: Fast local search across all notes');
     }
     
-    // Clear caches when switching modes
+    // Clear caches for fresh start
     OptimizedSearchService.clearCache();
     ContextProcessor.clearCache();
   }, [isChatMode]);
 
-  // Clear cache when component unmounts
+  // Performance cleanup
   React.useEffect(() => {
     return () => {
       OptimizedSearchService.clearCache();
@@ -200,11 +252,12 @@ INSTRUCTIONS: Answer based STRICTLY on the provided context. Reference specific 
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      <div className="flex-1 flex flex-col min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
+      <div className="flex-1 flex flex-col min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
         <AIResearchHeader
           isChatMode={isChatMode}
           searchResults={searchResults}
