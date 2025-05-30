@@ -1,3 +1,6 @@
+import { MetadataValidator } from './metadataValidator';
+import { QueryIntentAnalyzer } from './queryIntentAnalyzer';
+
 export interface SourceData {
   id: string;
   title: string;
@@ -22,10 +25,10 @@ export interface ProcessedContext {
 }
 
 export class ContextProcessor {
-  private static readonly MAX_CONTEXT_LENGTH = 4000; // Reduced for better focus
-  private static readonly STRICT_RELEVANCE_THRESHOLD = 0.6; // Much higher threshold
-  private static readonly CHUNK_SIZE = 400; // Smaller chunks
-  private static readonly MAX_SOURCES = 2; // Limit to prevent mixing
+  private static readonly MAX_CONTEXT_LENGTH = 3500; // Reduced for better focus
+  private static readonly ULTRA_STRICT_RELEVANCE_THRESHOLD = 0.8; // Increased threshold
+  private static readonly CHUNK_SIZE = 350;
+  private static readonly MAX_SOURCES = 2;
 
   static processNotesForContext(notes: any[], query: string): ProcessedContext {
     if (!notes || notes.length === 0) {
@@ -39,43 +42,68 @@ export class ContextProcessor {
       };
     }
 
-    console.log(`🔒 STRICT ISOLATION: Processing ${notes.length} notes for: "${query}"`);
+    console.log(`🔒 ENHANCED CONTEXT PROCESSING: ${notes.length} notes with metadata validation for: "${query}"`);
 
-    // Ultra-strict relevance scoring with semantic validation
+    // Analyze query intent for better filtering
+    const queryIntent = QueryIntentAnalyzer.analyzeQuery(query);
+    console.log(`📊 Query Intent Analysis:`, queryIntent);
+
+    // Enhanced relevance scoring with metadata validation
     const scoredNotes = notes
       .map(note => {
-        const relevanceScore = this.calculateUltraStrictRelevance(note, query);
-        const semanticMatch = this.validateSemanticRelevance(note, query);
+        // Basic relevance calculation
+        const basicRelevance = this.calculateBasicRelevance(note, query);
+        
+        // Metadata validation
+        const metadataValidation = MetadataValidator.validateContentRelevance(
+          { title: note.title, metadata: note },
+          query,
+          true // strict mode
+        );
+        
+        // Intent validation
+        const intentValidation = QueryIntentAnalyzer.validateContentAgainstIntent(
+          queryIntent,
+          { title: note.title, metadata: note }
+        );
+        
+        // Combined scoring
+        const finalScore = basicRelevance * metadataValidation.confidence * intentValidation.score;
         
         return {
           ...note,
-          relevanceScore: relevanceScore * semanticMatch, // Multiply by semantic factor
+          relevanceScore: finalScore,
+          metadataValidation,
+          intentValidation,
           sourceIdentifier: `${note.title}_${note.id}`,
-          contentHash: this.createContentHash(note.content || ''),
-          queryAlignment: this.calculateQueryAlignment(note, query)
+          contentHash: this.createContentHash(note.content || '')
         };
       })
       .filter(note => {
-        const passesThreshold = note.relevanceScore >= this.STRICT_RELEVANCE_THRESHOLD;
-        const hasQueryAlignment = note.queryAlignment > 0.3;
+        const passesThreshold = note.relevanceScore >= this.ULTRA_STRICT_RELEVANCE_THRESHOLD;
+        const passesMetadata = note.metadataValidation.isValid;
+        const passesIntent = note.intentValidation.matches;
         
-        if (!passesThreshold) {
-          console.log(`❌ FILTERED OUT: "${note.title}" - relevance ${note.relevanceScore.toFixed(3)} below ${this.STRICT_RELEVANCE_THRESHOLD}`);
+        if (!passesThreshold || !passesMetadata || !passesIntent) {
+          console.log(`❌ CONTEXT FILTERED: "${note.title}"`);
+          console.log(`   Score: ${note.relevanceScore.toFixed(3)} (threshold: ${this.ULTRA_STRICT_RELEVANCE_THRESHOLD})`);
+          console.log(`   Metadata: ${passesMetadata} (${note.metadataValidation.reason})`);
+          console.log(`   Intent: ${passesIntent} (${note.intentValidation.reasons.join(', ')})`);
         }
         
-        return passesThreshold && hasQueryAlignment;
+        return passesThreshold && passesMetadata && passesIntent;
       })
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .slice(0, this.MAX_SOURCES);
 
-    console.log(`🎯 ULTRA-FILTERED: ${scoredNotes.length} sources passed strict validation`);
+    console.log(`🎯 ULTRA-VALIDATED: ${scoredNotes.length} sources passed all validation layers`);
 
     if (scoredNotes.length === 0) {
       return {
         relevantChunks: [],
         sources: [],
         totalTokens: 0,
-        contextSummary: `STRICT VALIDATION: No sources meet ultra-high relevance threshold for query: "${query}"`,
+        contextSummary: `STRICT VALIDATION: No sources meet ultra-high validation criteria for query: "${query}"`,
         queryFingerprint: this.createQueryFingerprint(query, []),
         isolationLevel: 'strict'
       };
@@ -133,54 +161,38 @@ export class ContextProcessor {
     };
   }
 
-  private static calculateUltraStrictRelevance(note: any, query: string): number {
+  private static calculateBasicRelevance(note: any, query: string): number {
     const queryLower = query.toLowerCase().trim();
     const titleLower = (note.title || '').toLowerCase();
     const contentLower = (note.content || '').toLowerCase();
 
-    // Extract only the most significant query terms
-    const stopWords = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use', 'may', 'each', 'which', 'their', 'time', 'will', 'about', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'would', 'make', 'like', 'into', 'more', 'go', 'no', 'do', 'does', 'what', 'where', 'when', 'why', 'how', 'video', 'content', 'note', 'notes']);
-    
-    const queryTerms = queryLower
-      .split(/\s+/)
-      .filter(term => term.length > 3 && !stopWords.has(term)) // Increased minimum length
-      .slice(0, 3); // Limit to most important terms
-
-    if (queryTerms.length === 0) return 0;
-
     let relevanceScore = 0;
-    const maxScore = queryTerms.length * 6; // Higher max score for stricter curve
+    const queryTerms = queryLower.split(/\s+/).filter(term => term.length > 3);
 
-    // ULTRA-STRICT title matching (must be exact or very close)
+    // Title matching (highest weight)
     for (const term of queryTerms) {
-      // Exact word boundary matching only
-      const wordBoundaryRegex = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'i');
-      if (titleLower.match(wordBoundaryRegex)) {
-        relevanceScore += 6; // Maximum weight for exact title match
+      if (titleLower.includes(term)) {
+        relevanceScore += 0.5;
       }
     }
 
-    // STRICT content matching with position priority
+    // Content matching (lower weight)
     for (const term of queryTerms) {
-      const regex = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'gi');
-      const matches = contentLower.match(regex) || [];
-      
-      if (matches.length > 0) {
-        // Only count early occurrences heavily
-        const firstMatch = contentLower.indexOf(matches[0].toLowerCase());
-        if (firstMatch < 300) { // Must be very early in content
-          relevanceScore += Math.min(matches.length, 2); // Cap at 2 points
-        }
+      const matches = (contentLower.match(new RegExp(this.escapeRegex(term), 'gi')) || []).length;
+      if (matches > 0) {
+        relevanceScore += Math.min(matches * 0.1, 0.3);
       }
     }
 
-    // Exact phrase matching (critical for proper source identification)
-    const phraseBonus = this.calculatePhraseMatchBonus(titleLower, contentLower, queryLower);
-    relevanceScore += phraseBonus;
+    // Channel name boost
+    if (note.channel_name) {
+      const channelLower = note.channel_name.toLowerCase();
+      if (queryLower.includes(channelLower)) {
+        relevanceScore += 0.4;
+      }
+    }
 
-    // Apply ultra-strict normalization with power curve
-    const normalizedScore = Math.min(relevanceScore / maxScore, 1);
-    return Math.pow(normalizedScore, 2.5); // Very steep curve for maximum selectivity
+    return Math.min(relevanceScore, 1.0);
   }
 
   private static validateSemanticRelevance(note: any, query: string): number {
@@ -373,7 +385,7 @@ export class ContextProcessor {
     return `🔒 ULTRA-STRICT CONTEXT VALIDATION\n` +
       `QUERY: "${query}"\n` +
       `VERIFIED_SOURCES: ${sources.length} (Max: ${this.MAX_SOURCES})\n` +
-      `RELEVANCE_THRESHOLD: ${this.STRICT_RELEVANCE_THRESHOLD} (Ultra-High)\n` +
+      `RELEVANCE_THRESHOLD: ${this.ULTRA_STRICT_RELEVANCE_THRESHOLD} (Ultra-High)\n` +
       `ISOLATION_LEVEL: MAXIMUM\n` +
       `VALIDATED_SOURCES:\n${sourcesList}\n` +
       `⚠️  CRITICAL INSTRUCTION: AI must reference ONLY these verified sources. NO external knowledge. NO source mixing.`;
@@ -400,6 +412,6 @@ export class ContextProcessor {
   }
 
   static clearCache(): void {
-    console.log('🧹 Ultra-strict context processor cache cleared');
+    console.log('🧹 Enhanced context processor cache cleared');
   }
 }

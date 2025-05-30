@@ -1,9 +1,8 @@
-
 import React, { useState, useCallback, useMemo, useRef } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
+import { EnhancedSearchService } from "@/lib/aiResearch/enhancedSearchService";
 import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
 import { Sidebar } from "@/components/Sidebar";
 import { AIResearchHeader } from "@/components/ai-research/AIResearchHeader";
@@ -39,7 +38,7 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Ultra-enhanced search with maximum validation
+  // Enhanced search with comprehensive validation
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
@@ -50,15 +49,16 @@ export default function AIResearch() {
           return;
         }
         
-        console.log(`🔍 ULTRA-SEARCH INITIATED: "${query}" across ${notes.length} notes with maximum precision`);
+        console.log(`🎯 ENHANCED SEARCH: "${query}" with strict metadata validation across ${notes.length} notes`);
         const searchStart = performance.now();
         
-        const results = OptimizedSearchService.searchNotes(notes, query);
+        // Use the new enhanced search service with comprehensive validation
+        const results = EnhancedSearchService.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
-        console.log(`⚡ ULTRA-SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} ultra-verified results`);
+        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} validated results (filtered out irrelevant content)`);
         setSearchResults(results);
-      }, 200); // Slightly longer debounce for better UX
+      }, 150); // Reduced debounce for better UX
     };
   }, [notes]);
 
@@ -272,7 +272,7 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
     }
     
     // Clear all caches for fresh start with new validation
-    OptimizedSearchService.clearCache();
+    EnhancedSearchService.clearCache();
     ContextProcessor.clearCache();
   }, [isChatMode]);
 
@@ -282,7 +282,7 @@ USER QUERY FOR VERIFIED RESPONSE: "${currentInput}"`;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      OptimizedSearchService.clearCache();
+      EnhancedSearchService.clearCache();
       ContextProcessor.clearCache();
     };
   }, []);
