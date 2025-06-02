@@ -1,9 +1,9 @@
+
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
-import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
-import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
+import { SemanticSearchEngine } from "@/lib/vectorSearch/semanticSearchEngine";
 
 interface SearchResult {
   id: string;
@@ -45,16 +45,16 @@ export function useDeepResearch() {
 
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
-    return (query: string) => {
+    return async (query: string) => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
         if (!notes || !query.trim()) {
           setSearchResults([]);
           return;
         }
         
         const searchStart = performance.now();
-        const results = OptimizedSearchService.searchNotes(notes, query);
+        const results = await SemanticSearchEngine.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
         setSearchResults(results.slice(0, 6));
@@ -94,23 +94,37 @@ export function useDeepResearch() {
 
     try {
       const contextStart = performance.now();
-      const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
+      
+      // Use semantic search for better context
+      const contextResults = await SemanticSearchEngine.searchNotes(notes || [], currentInput);
       const contextTime = performance.now() - contextStart;
       
-      const knowledgeBase = contextData.relevantChunks.join('\n\n---\n\n');
+      if (contextResults.length === 0) {
+        const noContextMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          type: 'assistant',
+          content: "I couldn't find semantically similar content in your notes for this query. Try using different keywords or adding more relevant content.",
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, noContextMessage]);
+        setIsLoading(false);
+        return;
+      }
       
-      const ragContext = knowledgeBase ? 
-        `Context (${contextData.totalTokens} chars from ${contextData.sources.length} sources):\n\n${knowledgeBase}\n\nQ: ${currentInput}` : 
-        currentInput;
+      const knowledgeBase = contextResults.map(result => 
+        `${result.title}\n${result.snippet}\nSimilarity: ${result.relevance.toFixed(3)}`
+      ).join('\n\n---\n\n');
+      
+      const ragContext = `Context (${knowledgeBase.length} chars from ${contextResults.length} semantically similar sources):\n\n${knowledgeBase}\n\nQ: ${currentInput}`;
 
-      console.log(`⚡ Ultra-fast context: ${contextTime.toFixed(1)}ms | ${contextData.totalTokens} chars | ${contextData.sources.length} sources`);
+      console.log(`⚡ Semantic context: ${contextTime.toFixed(1)}ms | ${knowledgeBase.length} chars | ${contextResults.length} sources`);
 
       const apiStart = performance.now();
       const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: ragContext,
           type: 'chat',
-          options: { rag: true },
+          options: { rag: true, semantic_search: true },
           stream: false
         }
       });
@@ -135,24 +149,20 @@ export function useDeepResearch() {
         content: data.processedContent || "I'm sorry, I couldn't process your request.",
         timestamp: new Date(),
         responseTime: totalTime,
-        tokenCount: data.usage?.total_tokens || contextData.totalTokens,
-        sources: contextData.sources.slice(0, 3).map(source => ({
+        tokenCount: data.usage?.total_tokens || knowledgeBase.length,
+        sources: contextResults.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Score: ${source.relevance.toFixed(1)}`
+          snippet: `Similarity: ${source.relevance.toFixed(3)}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
       setMetrics(responseMetrics);
 
-      if (totalTime < 2000) {
-        console.log(`🚀 Lightning fast response: ${totalTime.toFixed(0)}ms`);
-      } else if (totalTime < 5000) {
-        console.log(`⚡ Good response time: ${totalTime.toFixed(0)}ms`);
-      }
+      console.log(`🚀 Semantic response: ${totalTime.toFixed(0)}ms`);
 
     } catch (error: any) {
       if (error.name === 'AbortError' || controller.signal.aborted) {
@@ -160,7 +170,7 @@ export function useDeepResearch() {
         return;
       }
       
-      console.error('Enhanced chat error:', error);
+      console.error('Semantic chat error:', error);
       toast({
         title: "Error",
         description: "Failed to get AI response. Please try again.",
@@ -199,10 +209,9 @@ export function useDeepResearch() {
   const clearChat = useCallback(() => {
     setChatMessages([]);
     setMetrics(null);
-    OptimizedSearchService.clearCache();
     toast({
       title: "Chat Cleared",
-      description: "Conversation history and cache cleared.",
+      description: "Conversation history cleared.",
     });
   }, [toast]);
 

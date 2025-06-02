@@ -1,8 +1,9 @@
+
 import React, { useState, useCallback, useMemo, useRef } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { EnhancedSearchEngine } from "@/lib/search/enhancedSearchEngine";
+import { SemanticSearchEngine } from "@/lib/vectorSearch/semanticSearchEngine";
 import { Sidebar } from "@/components/Sidebar";
 import { AIResearchHeader } from "@/components/ai-research/AIResearchHeader";
 import { AIResearchContent } from "@/components/ai-research/AIResearchContent";
@@ -37,27 +38,27 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Enhanced search with improved accuracy
+  // Enhanced semantic search with vector embeddings
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
         if (!notes || !query.trim() || query.trim().length < 2) {
           setSearchResults([]);
           return;
         }
         
-        console.log(`🔍 ENHANCED SEARCH: "${query}" across ${notes.length} notes`);
+        console.log(`🧠 SEMANTIC SEARCH: "${query}" across ${notes.length} notes using vector embeddings`);
         const searchStart = performance.now();
         
-        // Use the enhanced search engine with strict relevance matching
-        const results = EnhancedSearchEngine.searchNotes(notes, query);
+        // Use semantic search with Pinecone
+        const results = await SemanticSearchEngine.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
-        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} relevant results`);
+        console.log(`⚡ SEMANTIC SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} relevant results`);
         setSearchResults(results);
-      }, 100); // Faster debounce for better UX
+      }, 100);
     };
   }, [notes]);
 
@@ -102,19 +103,19 @@ export default function AIResearch() {
     try {
       const startTime = performance.now();
       
-      console.log(`🧠 ENHANCED CONTEXT PROCESSING: Starting for query "${currentInput}"`);
+      console.log(`🧠 SEMANTIC RAG PROCESSING: Starting for query "${currentInput}"`);
       
-      // Enhanced search for context
-      const contextResults = EnhancedSearchEngine.searchNotes(notes || [], currentInput);
+      // Enhanced semantic search for context
+      const contextResults = await SemanticSearchEngine.searchNotes(notes || [], currentInput);
       
       if (contextResults.length === 0) {
-        console.log('❌ NO SOURCES FOUND');
+        console.log('❌ NO SEMANTIC MATCHES FOUND');
         setChatMessages(prev => prev.filter(m => !m.isStreaming));
         
         const noContextMessage: ChatMessage = {
           id: `no_context_${Date.now()}`,
           type: 'assistant',
-          content: `🔒 ENHANCED VALIDATION: No sources in your notes meet the relevance threshold for: "${currentInput}"\n\nTry:\n• More specific search terms\n• Exact names or titles\n• Key phrases from your content\n\nOr add more relevant notes to your collection.`,
+          content: `🔍 SEMANTIC SEARCH: No content in your notes meets the similarity threshold for: "${currentInput}"\n\nThe AI couldn't find semantically similar content. Try:\n• More specific terms or phrases\n• Different keywords that might be in your content\n• Adding more relevant notes to improve future searches`,
           timestamp: new Date()
         };
         
@@ -123,19 +124,19 @@ export default function AIResearch() {
         return;
       }
 
-      // Create context with source isolation
+      // Create enhanced context with semantic similarity scores
       const contextContent = contextResults.map(result => 
-        `Title: ${result.title}\nContent: ${result.snippet}\nSource: ${result.sourceType}`
+        `Title: ${result.title}\nContent: ${result.snippet}\nSimilarity: ${result.relevance.toFixed(3)}\nSource: ${result.sourceType}`
       ).join('\n\n---\n\n');
 
-      const enhancedContext = `CONTEXT FROM USER'S NOTES:
+      const enhancedContext = `SEMANTIC CONTEXT FROM USER'S NOTES (Vector Search):
 ${contextContent}
 
 USER QUERY: "${currentInput}"
 
-Please provide a helpful response based on the context above. Cite sources when possible.`;
+Please provide a comprehensive response based on the semantically similar content above. Reference specific information and similarity scores when relevant.`;
 
-      console.log(`📊 CONTEXT: ${contextContent.length} chars from ${contextResults.length} sources`);
+      console.log(`📊 SEMANTIC CONTEXT: ${contextContent.length} chars from ${contextResults.length} sources`);
 
       const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
@@ -143,7 +144,7 @@ Please provide a helpful response based on the context above. Cite sources when 
           type: 'chat',
           options: { 
             rag: true, 
-            strict_context: true,
+            semantic_search: true,
             max_tokens: 2500,
             temperature: 0.1
           }
@@ -172,21 +173,17 @@ Please provide a helpful response based on the context above. Cite sources when 
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Source: ${source.sourceType} | Relevance: ${source.relevance.toFixed(2)}`
+          snippet: `Similarity: ${source.relevance.toFixed(3)} | Source: ${source.sourceType}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
-      console.log(`✅ RESPONSE: ${responseTime.toFixed(0)}ms using ${contextResults.length} sources`);
-
-      if (data.usage) {
-        console.log('💰 Token usage:', data.usage);
-      }
+      console.log(`✅ SEMANTIC RAG RESPONSE: ${responseTime.toFixed(0)}ms using ${contextResults.length} semantically similar sources`);
 
       toast({
-        title: "Response Generated",
-        description: `Using ${contextResults.length} relevant sources in ${responseTime.toFixed(0)}ms`,
+        title: "Semantic Search Complete",
+        description: `Found ${contextResults.length} semantically similar sources in ${responseTime.toFixed(0)}ms`,
       });
 
     } catch (error: any) {
@@ -195,7 +192,7 @@ Please provide a helpful response based on the context above. Cite sources when 
         return;
       }
       
-      console.error('🚨 CHAT ERROR:', error);
+      console.error('🚨 SEMANTIC CHAT ERROR:', error);
       
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
       
@@ -227,11 +224,11 @@ Please provide a helpful response based on the context above. Cite sources when 
       // Switching to chat mode
       setSearchResults([]);
       setSearchQuery("");
-      console.log('🔄 SWITCHED TO CHAT MODE: AI-powered conversations');
+      console.log('🔄 SWITCHED TO SEMANTIC CHAT MODE: AI-powered conversations with vector search');
     } else {
       // Switching to search mode
       setChatMessages([]);
-      console.log('🔄 SWITCHED TO SEARCH MODE: Fast search with enhanced precision');
+      console.log('🔄 SWITCHED TO SEMANTIC SEARCH MODE: Vector-based similarity search');
     }
   }, [isChatMode]);
 
