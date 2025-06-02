@@ -56,22 +56,30 @@ export default function Dashboard() {
   }) => {
     console.log('📥 Content imported successfully:', note.title);
     
+    // Close the import modal first
+    setImportModalOpen(false);
+    
+    // Show immediate feedback
     toast({
       title: "Content imported successfully",
       description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
     
-    // Force refresh the notes list to show the new import immediately
+    // Force refresh the notes list multiple times to ensure it updates
     console.log('🔄 Refreshing notes list after import...');
-    await refetch();
     
-    // Close the import modal
-    setImportModalOpen(false);
-    
-    // Index the imported note for semantic search in the background
-    if (note.content) {
-      try {
-        // Wait a moment for the database to update, then find and index the note
+    try {
+      // First immediate refresh
+      await refetch();
+      
+      // Second refresh after a short delay to catch any database lag
+      setTimeout(async () => {
+        console.log('🔄 Secondary refresh after import...');
+        await refetch();
+      }, 1000);
+      
+      // Index the imported note for semantic search in the background
+      if (note.content) {
         setTimeout(async () => {
           try {
             const updatedNotes = await refetch();
@@ -84,10 +92,18 @@ export default function Dashboard() {
           } catch (error) {
             console.warn('⚠️ Failed to index imported note:', error);
           }
-        }, 1000);
-      } catch (error) {
-        console.warn('⚠️ Failed to schedule note indexing:', error);
+        }, 2000);
       }
+    } catch (error) {
+      console.error('❌ Error refreshing notes after import:', error);
+      // Try one more time if the first refresh fails
+      setTimeout(async () => {
+        try {
+          await refetch();
+        } catch (retryError) {
+          console.error('❌ Retry refresh also failed:', retryError);
+        }
+      }, 2000);
     }
   };
 
