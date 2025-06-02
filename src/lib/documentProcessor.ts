@@ -22,25 +22,18 @@ export class DocumentProcessor {
     title?: string
   ): Promise<DocumentProcessingResult> {
     try {
-      // Step 1: Upload file to Supabase Storage
-      const fileName = `${userId}/${Date.now()}_${file.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file);
+      console.log('📄 Processing document:', file.name);
 
-      if (uploadError) throw uploadError;
-
-      // Step 2: Extract text content (this would need OCR/PDF parsing)
+      // Step 1: Extract text content (this would need OCR/PDF parsing)
       const textContent = await this.extractTextFromFile(file);
       
-      // Step 3: Store note in Supabase
+      // Step 2: Store note in Supabase
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
         .insert({
           user_id: userId,
           title: title || file.name,
           content: textContent,
-          source_url: uploadData.path,
           is_transcription: false
         })
         .select()
@@ -48,7 +41,9 @@ export class DocumentProcessor {
 
       if (noteError) throw noteError;
 
-      // Step 4: Index in Pinecone for semantic search
+      console.log('✅ Note saved to Supabase:', noteData.id);
+
+      // Step 3: Index in Pinecone for semantic search
       await SemanticSearchEngine.indexNote(
         noteData.id,
         noteData.title,
@@ -62,7 +57,7 @@ export class DocumentProcessor {
       };
 
     } catch (error) {
-      console.error('Document processing error:', error);
+      console.error('❌ Document processing error:', error);
       return {
         success: false,
         error: error.message
@@ -80,6 +75,8 @@ export class DocumentProcessor {
     metadata: any
   ): Promise<DocumentProcessingResult> {
     try {
+      console.log('🎥 Processing video transcript:', metadata.title);
+
       // Store video note in Supabase
       const { data: noteData, error: noteError } = await supabase
         .from('notes')
@@ -96,6 +93,8 @@ export class DocumentProcessor {
 
       if (noteError) throw noteError;
 
+      console.log('✅ Video note saved to Supabase:', noteData.id);
+
       // Index in Pinecone
       await SemanticSearchEngine.indexNote(
         noteData.id,
@@ -110,7 +109,7 @@ export class DocumentProcessor {
       };
 
     } catch (error) {
-      console.error('Video processing error:', error);
+      console.error('❌ Video processing error:', error);
       return {
         success: false,
         error: error.message
@@ -148,6 +147,8 @@ export class DocumentProcessor {
 
       if (error) throw error;
 
+      console.log('✅ Chat history saved:', data.id);
+
       // Index conversation for future retrieval
       await SemanticSearchEngine.indexNote(
         data.id,
@@ -158,7 +159,7 @@ export class DocumentProcessor {
 
       return true;
     } catch (error) {
-      console.error('Error storing chat history:', error);
+      console.error('❌ Error storing chat history:', error);
       return false;
     }
   }

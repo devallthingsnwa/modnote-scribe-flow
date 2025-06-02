@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
@@ -10,6 +9,7 @@ import { EnhancedImportModal } from "@/components/import/EnhancedImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNoteIndexing } from "@/hooks/useNoteIndexing";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
+  const { indexNote } = useNoteIndexing();
 
   console.log('Dashboard component rendered', { notes: notes?.length, error, isLoading });
 
@@ -46,18 +47,39 @@ export default function Dashboard() {
     navigate("/new");
   };
 
-  const handleImport = (note: {
+  const handleImport = async (note: {
     title: string;
     content: string;
     source_url?: string;
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
+    console.log('📥 Importing note to dashboard:', note.title);
+    
     toast({
       title: "Content imported successfully",
       description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
-    refetch();
+    
+    // Refresh notes list immediately
+    await refetch();
+    
+    // Index the imported note for semantic search
+    if (note.content) {
+      try {
+        // Find the newly imported note and index it
+        const updatedNotes = await refetch();
+        const importedNote = updatedNotes.data?.find(n => n.title === note.title);
+        
+        if (importedNote) {
+          await indexNote(importedNote);
+          console.log('✅ Imported note indexed for semantic search');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to index imported note:', error);
+      }
+    }
+    
     setImportModalOpen(false);
   };
 
