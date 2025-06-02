@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
@@ -9,7 +10,6 @@ import { EnhancedImportModal } from "@/components/import/EnhancedImportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useCreateNote } from "@/lib/api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -24,7 +24,8 @@ export default function Dashboard() {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
-  const createNoteMutation = useCreateNote();
+
+  console.log('Dashboard component rendered', { notes: notes?.length, error, isLoading });
 
   const handleNoteSelect = (noteId: string) => {
     if (isSelectMode) {
@@ -52,36 +53,12 @@ export default function Dashboard() {
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    createNoteMutation.mutate(
-      {
-        note: {
-          title: note.title,
-          content: note.content,
-          source_url: note.source_url,
-          thumbnail: note.thumbnail,
-          is_transcription: note.is_transcription,
-        },
-        tagIds: [],
-      },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Content imported and saved",
-            description: `Your content "${note.title}" has been imported and saved successfully.`,
-          });
-          refetch();
-          setImportModalOpen(false);
-        },
-        onError: (error) => {
-          toast({
-            title: "Import failed",
-            description: "There was an error saving your imported content. Please try again.",
-            variant: "destructive",
-          });
-          console.error("Import error:", error);
-        }
-      }
-    );
+    toast({
+      title: "Content imported successfully",
+      description: `Your content "${note.title}" has been imported and is available in your notes.`,
+    });
+    refetch();
+    setImportModalOpen(false);
   };
 
   const handleNoteDeleted = () => {
@@ -106,7 +83,6 @@ export default function Dashboard() {
 
   const handleBulkDelete = () => {
     if (selectedNoteIds.length > 0) {
-      // This will be handled by the NotesListPanel component
       setSelectedNoteIds([]);
       setIsSelectMode(false);
       refetch();
@@ -122,6 +98,7 @@ export default function Dashboard() {
   }) || [];
 
   if (error) {
+    console.error('Dashboard error:', error);
     return (
       <div className="flex h-screen">
         <div className="hidden md:block">
