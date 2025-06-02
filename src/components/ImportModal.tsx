@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -68,18 +69,18 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           throw new Error("Invalid YouTube URL");
         }
 
-        console.log("Processing YouTube video:", videoId);
+        console.log("🎥 Processing YouTube video:", videoId);
 
-        // Use VideoNoteProcessor.processVideo to get both metadata and transcript
+        // Use VideoNoteProcessor to get metadata and transcript
         const result = await VideoNoteProcessor.processVideo(videoId, {
           fetchMetadata: true,
           fetchTranscript: true,
           generateSummary: false,
         });
 
-        console.log("Video processing result:", result);
+        console.log("📋 Video processing result:", result);
 
-        // Create content with the results
+        // Prepare note data
         const title = result.metadata?.title || `YouTube Video ${videoId}`;
         const author = result.metadata?.author || 'Unknown';
         const duration = result.metadata?.duration || 'Unknown';
@@ -100,30 +101,64 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           content += "Transcript could not be extracted for this video. You can add your own notes here...";
         }
 
-        // Save to Supabase - this should always work regardless of transcript success
-        const { data: noteData, error: noteError } = await supabase
+        // Save directly to Supabase with explicit logging
+        console.log("💾 Attempting to save note to Supabase...");
+        const noteData = {
+          user_id: user.id,
+          title,
+          content,
+          source_url: url,
+          thumbnail: thumbnail,
+          is_transcription: !!result.transcript,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        console.log("📊 Note data being inserted:", {
+          title: noteData.title,
+          contentLength: noteData.content.length,
+          userId: noteData.user_id,
+          sourceUrl: noteData.source_url,
+          isTranscription: noteData.is_transcription
+        });
+
+        const { data: insertedNote, error: insertError } = await supabase
           .from('notes')
-          .insert({
-            user_id: user.id,
-            title,
-            content,
-            source_url: url,
-            thumbnail: thumbnail,
-            is_transcription: !!result.transcript,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+          .insert([noteData])
           .select()
           .single();
 
-        if (noteError) {
-          console.error('Error saving note to Supabase:', noteError);
-          throw new Error('Failed to save note to database');
+        if (insertError) {
+          console.error("❌ Supabase insert error:", insertError);
+          throw new Error(`Failed to save note to database: ${insertError.message}`);
         }
 
-        console.log('✅ Note saved to Supabase:', noteData.id);
+        if (!insertedNote) {
+          console.error("❌ No note data returned after insert");
+          throw new Error("Failed to save note - no data returned");
+        }
 
-        // Call onImport callback to refresh the dashboard
+        console.log("✅ Note successfully saved to Supabase:", {
+          id: insertedNote.id,
+          title: insertedNote.title,
+          createdAt: insertedNote.created_at
+        });
+
+        // Verify the note was actually saved by fetching it back
+        const { data: verifyNote, error: verifyError } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('id', insertedNote.id)
+          .single();
+
+        if (verifyError || !verifyNote) {
+          console.error("❌ Note verification failed:", verifyError);
+          throw new Error("Note was saved but could not be verified");
+        }
+
+        console.log("🔍 Note verification successful:", verifyNote.title);
+
+        // Call onImport to trigger dashboard refresh
         onImport({
           title,
           content,
@@ -138,32 +173,35 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             ? `Imported "${title}" with transcript` 
             : `Imported "${title}" (transcript not available, but you can add notes)`,
         });
+
       } else {
         // Handle other URL types (web pages, etc.)
         const title = customTitle || `Imported from ${new URL(url).hostname}`;
         const content = customContent || `# ${title}\n\n**Source:** ${url}\n\n## Content\n\nAdd your notes here...`;
         
-        // Save directly to Supabase
-        const { data: noteData, error: noteError } = await supabase
+        console.log("🌐 Saving web URL content to Supabase...");
+        const noteData = {
+          user_id: user.id,
+          title,
+          content,
+          source_url: url,
+          is_transcription: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: insertedNote, error: insertError } = await supabase
           .from('notes')
-          .insert({
-            user_id: user.id,
-            title,
-            content,
-            source_url: url,
-            is_transcription: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+          .insert([noteData])
           .select()
           .single();
 
-        if (noteError) {
-          console.error('Error saving note to Supabase:', noteError);
-          throw new Error('Failed to save note');
+        if (insertError) {
+          console.error("❌ Supabase insert error:", insertError);
+          throw new Error(`Failed to save note: ${insertError.message}`);
         }
 
-        console.log('✅ Note saved to Supabase:', noteData.id);
+        console.log("✅ Web content note saved to Supabase:", insertedNote.id);
 
         onImport({
           title,
@@ -178,14 +216,14 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
         });
       }
 
-      // Reset form
+      // Reset form and close modal
       setUrl("");
       setCustomTitle("");
       setCustomContent("");
       onClose();
 
     } catch (error) {
-      console.error("Import error:", error);
+      console.error("💥 Import error:", error);
       toast({
         title: "Import failed",
         description: error.message || "Failed to import content. Please try again.",
@@ -210,26 +248,28 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
     const content = customContent || "Start writing your note here...";
     
     try {
-      // Save directly to Supabase
-      const { data: noteData, error: noteError } = await supabase
+      console.log("📝 Creating manual note in Supabase...");
+      const noteData = {
+        user_id: user.id,
+        title,
+        content,
+        is_transcription: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: insertedNote, error: insertError } = await supabase
         .from('notes')
-        .insert({
-          user_id: user.id,
-          title,
-          content,
-          is_transcription: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .insert([noteData])
         .select()
         .single();
 
-      if (noteError) {
-        console.error('Error saving note to Supabase:', noteError);
-        throw new Error('Failed to save note');
+      if (insertError) {
+        console.error("❌ Manual note insert error:", insertError);
+        throw new Error(`Failed to save note: ${insertError.message}`);
       }
 
-      console.log('✅ Manual note saved to Supabase:', noteData.id);
+      console.log("✅ Manual note saved to Supabase:", insertedNote.id);
 
       onImport({
         title,
@@ -242,12 +282,12 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
         description: `Created "${title}"`,
       });
 
-      // Reset form
+      // Reset form and close
       setCustomTitle("");
       setCustomContent("");
       onClose();
     } catch (error) {
-      console.error("Error creating manual note:", error);
+      console.error("💥 Manual note creation error:", error);
       toast({
         title: "Failed to create note",
         description: error.message || "Please try again.",
