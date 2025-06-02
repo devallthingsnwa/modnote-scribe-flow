@@ -1,4 +1,3 @@
-
 import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
@@ -14,61 +13,82 @@ import {
 export type { TranscriptionConfig, TranscriptionResult, YouTubeMetadata, MediaType };
 
 export class TranscriptionService {
-  // Transcription API priority: Podsqueeze (default) → Whisper (OSS) → Riverside.fm (fallback)
   private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
 
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     
-    console.log(`🎯 Starting transcription for ${mediaType} content: ${url}`);
+    console.log(`🎯 Starting enhanced transcription for ${mediaType} content: ${url}`);
     
-    // For YouTube videos, use enhanced extraction with multiple fallbacks
     if (mediaType === 'youtube') {
       return await this.handleYouTubeTranscription(url);
     }
     
-    // For other media types (podcasts, audio files), use external providers
     return await this.handleGeneralMediaTranscription(url);
   }
 
   private static async handleYouTubeTranscription(url: string): Promise<TranscriptionResult> {
     console.log('🎥 Processing YouTube video with enhanced extraction...');
     
-    // Step 1: Try YouTube transcript extraction (fastest)
-    const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
-    
-    if (youtubeResult.success) {
-      console.log('✅ YouTube transcript extraction successful');
-      return youtubeResult;
+    // Step 1: Try YouTube transcript extraction (fastest and most reliable)
+    try {
+      const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
+      
+      if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
+        console.log('✅ YouTube transcript extraction successful');
+        return youtubeResult;
+      }
+    } catch (error) {
+      console.warn('⚠️ YouTube transcript extraction failed:', error);
     }
     
-    console.warn('⚠️ YouTube transcript failed, trying audio extraction...');
+    console.log('🔄 Trying audio extraction with Supadata...');
     
     // Step 2: Try audio extraction with Supadata
     const videoId = YouTubeService.extractVideoId(url);
     if (videoId) {
-      const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
-      
-      if (audioResult.success) {
-        console.log('✅ Audio transcription successful with Supadata');
-        return audioResult;
+      try {
+        const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
+        
+        if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
+          console.log('✅ Audio transcription successful with Supadata');
+          return audioResult;
+        }
+      } catch (error) {
+        console.warn('⚠️ Audio extraction failed:', error);
       }
     }
     
-    console.warn('⚠️ Audio extraction failed, trying external providers...');
+    console.log('🔄 Trying external providers with priority...');
     
-    // Step 3: Try external transcription providers with priority
-    return await this.tryExternalProvidersWithPriority(url);
+    // Step 3: Try external transcription providers (skip for YouTube URLs that can't be processed)
+    try {
+      const result = await this.tryExternalProvidersWithPriority(url);
+      if (result.success && result.text && result.text.length > 50) {
+        return result;
+      }
+    } catch (error) {
+      console.warn('⚠️ External providers failed:', error);
+    }
+    
+    // Step 4: Create a useful fallback note
+    return this.createFallbackResult(url, videoId);
   }
 
   private static async handleGeneralMediaTranscription(url: string): Promise<TranscriptionResult> {
     console.log('🎵 Processing general media content...');
     
-    // For non-YouTube content, go straight to external providers
-    return await this.tryExternalProvidersWithPriority(url);
+    try {
+      return await this.tryExternalProvidersWithPriority(url);
+    } catch (error) {
+      console.warn('⚠️ General media transcription failed:', error);
+      return this.createFallbackResult(url);
+    }
   }
 
   private static async tryExternalProvidersWithPriority(url: string): Promise<TranscriptionResult> {
+    const errors: string[] = [];
+    
     for (const provider of this.PROVIDER_PRIORITY) {
       console.log(`🔄 Attempting transcription with ${provider}...`);
       
@@ -90,32 +110,76 @@ export class TranscriptionService {
           return result;
         }
         
-        console.warn(`⚠️ ${provider} returned empty/short transcription, trying next...`);
+        errors.push(`${provider}: ${result.error || 'Empty result'}`);
+        console.warn(`⚠️ ${provider} returned insufficient content, trying next...`);
         
       } catch (error) {
+        const errorMsg = `${provider}: ${error.message}`;
+        errors.push(errorMsg);
         console.error(`❌ ${provider} failed:`, error);
         continue;
       }
     }
 
-    // If all providers fail, return a fallback result that still allows note creation
-    console.warn('❌ All transcription providers failed');
+    throw new Error(`All providers failed: ${errors.join(', ')}`);
+  }
+
+  private static createFallbackResult(url: string, videoId?: string): TranscriptionResult {
+    console.log('📝 Creating fallback result with helpful guidance');
     
-    const fallbackMessage = `⚠️ **Transcription Unavailable**\n\nAll transcription services failed for this content. This could be due to:\n- Content restrictions or privacy settings\n- Audio quality issues\n- Temporary service unavailability\n- Unsupported media format\n\nYou can still use this note to add your own observations about the content.`;
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     
+    let fallbackContent = `# 🎥 Video Note\n\n`;
+    fallbackContent += `**Source:** ${url}\n`;
+    fallbackContent += `**Status:** ⚠️ Transcript unavailable\n`;
+    fallbackContent += `**Created:** ${new Date().toLocaleString()}\n\n`;
+    fallbackContent += `---\n\n`;
+    
+    if (isYouTube) {
+      fallbackContent += `## 📋 About This Video\n\n`;
+      fallbackContent += `This YouTube video could not be automatically transcribed due to:\n`;
+      fallbackContent += `- Captions may be disabled or unavailable\n`;
+      fallbackContent += `- Video may have content restrictions\n`;
+      fallbackContent += `- Temporary service limitations\n\n`;
+      fallbackContent += `## 💡 What You Can Do\n\n`;
+      fallbackContent += `1. **Manual Notes**: Add your own observations and key points below\n`;
+      fallbackContent += `2. **External Tools**: Try using YouTube's auto-generated captions if available\n`;
+      fallbackContent += `3. **Audio Recording**: Record and transcribe key sections manually\n\n`;
+    } else {
+      fallbackContent += `## 📋 About This Content\n\n`;
+      fallbackContent += `This content could not be automatically transcribed. You can still use this note to:\n`;
+      fallbackContent += `- Add your own summary and key points\n`;
+      fallbackContent += `- Save important timestamps and references\n`;
+      fallbackContent += `- Organize your thoughts about this content\n\n`;
+    }
+    
+    fallbackContent += `## 📝 My Notes\n\n`;
+    fallbackContent += `*Add your personal notes, observations, and key takeaways here...*\n\n`;
+    fallbackContent += `### Key Points\n`;
+    fallbackContent += `- \n`;
+    fallbackContent += `- \n`;
+    fallbackContent += `- \n\n`;
+    fallbackContent += `### Questions/Follow-up\n`;
+    fallbackContent += `- \n`;
+    fallbackContent += `- \n\n`;
+    fallbackContent += `### Related Resources\n`;
+    fallbackContent += `- \n`;
+    fallbackContent += `- \n`;
+
     toast({
-      title: "⚠️ Transcription Failed",
-      description: "Note saved with warning - transcription could not be completed",
+      title: "📝 Note Created",
+      description: "Transcript unavailable - note saved for manual input",
       variant: "default"
     });
 
     return {
-      success: true, // Return success so note gets saved
-      text: fallbackMessage,
+      success: true,
+      text: fallbackContent,
       metadata: {
-        extractionMethod: 'fallback-warning',
+        extractionMethod: 'enhanced-fallback',
         isWarning: true,
-        providersAttempted: this.PROVIDER_PRIORITY.join(', ')
+        providersAttempted: this.PROVIDER_PRIORITY.join(', '),
+        fallbackType: isYouTube ? 'youtube-guidance' : 'general-guidance'
       },
       provider: 'fallback-system'
     };
@@ -142,7 +206,6 @@ export class TranscriptionService {
     return MediaTypeDetector.detectMediaType(url);
   }
 
-  // Configuration management for transcription providers
   static getProviderConfig(): TranscriptionConfig[] {
     return this.PROVIDER_PRIORITY.map((provider, index) => ({
       provider: provider as any,

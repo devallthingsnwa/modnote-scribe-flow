@@ -49,7 +49,6 @@ async function transcribeWithPodsqueeze(url: string, options: any) {
 
   const data = await response.json();
   
-  // Enhanced response validation
   if (!data.transcription && !data.text) {
     throw new Error('No transcription text received from Podsqueeze');
   }
@@ -68,7 +67,7 @@ async function transcribeWithPodsqueeze(url: string, options: any) {
   };
 }
 
-// Whisper - OSS option for audio files
+// Whisper - OSS option for audio files - Fixed language handling
 async function transcribeWithWhisper(url: string, options: any) {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) {
@@ -76,6 +75,11 @@ async function transcribeWithWhisper(url: string, options: any) {
   }
 
   console.log('🎵 Starting Whisper transcription for:', url);
+
+  // For YouTube URLs, we can't directly download audio, so skip this provider
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    throw new Error('Whisper provider cannot process YouTube URLs directly');
+  }
 
   // Download the audio first
   const audioResponse = await fetch(url);
@@ -87,7 +91,10 @@ async function transcribeWithWhisper(url: string, options: any) {
   const formData = new FormData();
   formData.append('file', audioBlob, 'audio.mp3');
   formData.append('model', 'whisper-1');
-  formData.append('language', options.language || 'en');
+  
+  // Fix language parameter - use 'en' instead of 'auto'
+  const language = options.language === 'auto' ? 'en' : (options.language || 'en');
+  formData.append('language', language);
   formData.append('response_format', options.include_timestamps ? 'verbose_json' : 'json');
 
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
