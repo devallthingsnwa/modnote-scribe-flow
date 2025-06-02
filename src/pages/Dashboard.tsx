@@ -52,6 +52,7 @@ export default function Dashboard() {
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
+    console.log('📥 Starting import process for:', note.title);
     setImportModalOpen(false);
     await handleImport(note);
   };

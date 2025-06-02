@@ -27,84 +27,79 @@ export function useDashboardImportHandler({ refetch }: DashboardImportHandlerPro
       description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
     
-    // Aggressively refresh the notes list multiple times to ensure database sync
-    console.log('🔄 Starting aggressive notes list refresh...');
+    // Immediate refresh to get the latest data
+    console.log('🔄 Performing immediate refresh after import...');
     
     try {
-      // First immediate refresh
-      console.log('🔄 Refresh attempt 1...');
-      await refetch();
+      // Wait a bit for database consistency
+      await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Second refresh after 500ms delay
-      setTimeout(async () => {
-        console.log('🔄 Refresh attempt 2 (500ms delay)...');
+      // First refresh attempt
+      console.log('🔄 First refresh attempt...');
+      const firstRefresh = await refetch();
+      console.log('📋 First refresh result:', {
+        notesCount: firstRefresh.data?.length,
+        foundImported: firstRefresh.data?.some((n: any) => n.title === note.title)
+      });
+      
+      // If not found, try again with a longer delay
+      if (!firstRefresh.data?.some((n: any) => n.title === note.title)) {
+        console.log('⏳ Note not found, waiting longer for database sync...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         const secondRefresh = await refetch();
         console.log('📋 Second refresh result:', {
           notesCount: secondRefresh.data?.length,
           foundImported: secondRefresh.data?.some((n: any) => n.title === note.title)
         });
-      }, 500);
-      
-      // Third refresh after 1.5s delay to catch slower database writes
-      setTimeout(async () => {
-        console.log('🔄 Refresh attempt 3 (1.5s delay)...');
-        const thirdRefresh = await refetch();
-        console.log('📋 Third refresh result:', {
-          notesCount: thirdRefresh.data?.length,
-          foundImported: thirdRefresh.data?.some((n: any) => n.title === note.title)
-        });
-      }, 1500);
-      
-      // Fourth refresh after 3s as final fallback
-      setTimeout(async () => {
-        console.log('🔄 Final refresh attempt (3s delay)...');
-        const finalRefresh = await refetch();
-        console.log('📋 Final refresh result:', {
-          notesCount: finalRefresh.data?.length,
-          foundImported: finalRefresh.data?.some((n: any) => n.title === note.title)
-        });
         
-        // If still not found, show a helpful message
-        if (!finalRefresh.data?.some((n: any) => n.title === note.title)) {
-          console.warn('⚠️ Imported note still not visible after all refresh attempts');
-          toast({
-            title: "Note may need manual refresh",
-            description: "If your imported note doesn't appear, try refreshing the page.",
-            variant: "default",
+        // Final attempt if still not found
+        if (!secondRefresh.data?.some((n: any) => n.title === note.title)) {
+          console.log('⏳ Still not found, one final attempt...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const finalRefresh = await refetch();
+          console.log('📋 Final refresh result:', {
+            notesCount: finalRefresh.data?.length,
+            foundImported: finalRefresh.data?.some((n: any) => n.title === note.title)
           });
-        }
-      }, 3000);
-      
-      // Index the imported note for semantic search in the background
-      if (note.content) {
-        setTimeout(async () => {
-          try {
-            // Wait for the note to appear in the list before indexing
-            const latestNotes = await refetch();
-            const importedNote = latestNotes.data?.find((n: any) => n.title === note.title);
-            
-            if (importedNote) {
-              await indexNote(importedNote);
-              console.log('✅ Imported note indexed for semantic search');
-            } else {
-              console.warn('⚠️ Could not find imported note for indexing');
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to index imported note:', error);
+          
+          if (!finalRefresh.data?.some((n: any) => n.title === note.title)) {
+            console.warn('⚠️ Imported note still not visible after all attempts');
+            toast({
+              title: "Note imported but may need refresh",
+              description: "Your note was saved successfully. If it doesn't appear, try refreshing the page.",
+              variant: "default",
+            });
           }
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('❌ Error during notes refresh sequence:', error);
-      // Emergency fallback refresh
-      setTimeout(async () => {
-        try {
-          console.log('🚨 Emergency fallback refresh...');
-          await refetch();
-        } catch (retryError) {
-          console.error('❌ Emergency refresh also failed:', retryError);
         }
-      }, 4000);
+      }
+      
+      // Index the imported note for semantic search
+      if (note.content) {
+        // Get the latest notes after all refresh attempts
+        const latestNotes = await refetch();
+        const importedNote = latestNotes.data?.find((n: any) => n.title === note.title);
+        
+        if (importedNote) {
+          try {
+            await indexNote(importedNote);
+            console.log('✅ Imported note indexed for semantic search');
+          } catch (indexError) {
+            console.warn('⚠️ Failed to index imported note:', indexError);
+          }
+        } else {
+          console.warn('⚠️ Could not find imported note for indexing');
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error during import refresh sequence:', error);
+      toast({
+        title: "Import may need verification",
+        description: "There was an issue refreshing the list. Please refresh the page to see your imported content.",
+        variant: "default",
+      });
     }
   };
 
