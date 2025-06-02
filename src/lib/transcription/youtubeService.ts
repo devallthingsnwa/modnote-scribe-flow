@@ -79,9 +79,9 @@ export class YouTubeService {
         throw new Error('Invalid YouTube URL');
       }
 
-      console.log(`🎥 Enhanced YouTube transcript extraction for: ${videoId} (attempt ${retryCount + 1}/2)`);
+      console.log(`🎥 Enhanced YouTube transcript extraction for: ${videoId} (attempt ${retryCount + 1}/3)`);
       
-      // Enhanced extraction with concurrent strategies
+      // Enhanced extraction with longer timeout for longer videos
       const startTime = Date.now();
       
       const { data, error } = await Promise.race([
@@ -93,13 +93,15 @@ export class YouTubeService {
               language: 'auto',
               format: 'enhanced',
               qualityLevel: 'high',
-              multipleStrategies: true
+              multipleStrategies: true,
+              extendedTimeout: true, // Enable extended timeout for longer videos
+              chunkProcessing: true  // Enable chunked processing
             }
           }
         }),
-        // Timeout after 30 seconds for faster user experience
+        // Extended timeout for longer videos (2 minutes instead of 30 seconds)
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Transcript extraction timeout')), 30000)
+          setTimeout(() => reject(new Error('Extended transcript extraction timeout (2 min)')), 120000)
         )
       ]);
 
@@ -113,14 +115,15 @@ export class YouTubeService {
         const transcriptLength = data.transcript.length;
         console.log(`✅ Transcript extracted: ${transcriptLength} chars in ${processingTime}ms via ${data.metadata?.extractionMethod}`);
         
-        // Enhanced quality validation
-        if (transcriptLength < 15) {
+        // Enhanced quality validation for longer videos
+        if (transcriptLength < 10) {
           throw new Error('Transcript too short - likely incomplete');
         }
 
-        // Quality scoring
+        // Quality scoring with bonus for longer content
+        const lengthBonus = Math.min(20, transcriptLength / 1000); // Bonus for longer transcripts
         const qualityScore = Math.min(100, Math.max(60, 
-          (transcriptLength / 50) + (data.metadata?.segmentCount || 0) * 2
+          (transcriptLength / 50) + (data.metadata?.segmentCount || 0) * 2 + lengthBonus
         ));
 
         return {
@@ -132,7 +135,8 @@ export class YouTubeService {
             qualityScore: qualityScore.toFixed(1),
             transcriptionSpeed: (transcriptLength / (processingTime / 1000)).toFixed(1) + ' chars/sec',
             videoId,
-            extractionTimestamp: new Date().toISOString()
+            extractionTimestamp: new Date().toISOString(),
+            isLongVideo: transcriptLength > 5000 // Flag for long videos
           },
           provider: data.metadata?.extractionMethod || 'youtube-transcript'
         };
@@ -142,10 +146,12 @@ export class YouTubeService {
     } catch (error) {
       console.error(`❌ YouTube transcript failed (attempt ${retryCount + 1}):`, error);
       
-      // Smart retry logic - only retry on transient errors
-      if (retryCount === 0 && this.shouldRetry(error.message)) {
-        console.log('🔄 Retrying with enhanced strategy...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      // Enhanced retry logic for longer videos
+      if (retryCount < 2 && this.shouldRetry(error.message)) {
+        console.log('🔄 Retrying with enhanced strategy for longer video...');
+        // Exponential backoff with longer delays for longer videos
+        const delay = retryCount === 0 ? 3000 : 8000; 
+        await new Promise(resolve => setTimeout(resolve, delay));
         return this.fetchYouTubeTranscript(url, retryCount + 1);
       }
       
@@ -158,7 +164,7 @@ export class YouTubeService {
   }
 
   private static shouldRetry(errorMessage: string): boolean {
-    const retryableErrors = ['timeout', 'network', 'rate limit', 'temporary'];
+    const retryableErrors = ['timeout', 'network', 'rate limit', 'temporary', 'processing'];
     return retryableErrors.some(error => 
       errorMessage.toLowerCase().includes(error)
     );
