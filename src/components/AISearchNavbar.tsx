@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Search, Bot, X, Send, Loader2, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -135,8 +134,8 @@ export function AISearchNavbar() {
         `Based on the following knowledge from the user's notes:\n\n${knowledgeBase}\n\nUser question: ${chatInput}` : 
         chatInput;
 
-      // Call DeepSeek API
-      const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
+      // Call Mistral AI API
+      const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: ragContext,
           type: 'chat',

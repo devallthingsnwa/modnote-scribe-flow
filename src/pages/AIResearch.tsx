@@ -137,7 +137,7 @@ Please provide a helpful response based on the context above. Cite sources when 
 
       console.log(`📊 CONTEXT: ${contextContent.length} chars from ${contextResults.length} sources`);
 
-      const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
+      const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: enhancedContext,
           type: 'chat',

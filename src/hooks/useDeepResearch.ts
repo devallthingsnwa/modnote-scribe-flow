@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
@@ -107,7 +106,7 @@ export function useDeepResearch() {
       console.log(`⚡ Ultra-fast context: ${contextTime.toFixed(1)}ms | ${contextData.totalTokens} chars | ${contextData.sources.length} sources`);
 
       const apiStart = performance.now();
-      const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
+      const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: ragContext,
           type: 'chat',
