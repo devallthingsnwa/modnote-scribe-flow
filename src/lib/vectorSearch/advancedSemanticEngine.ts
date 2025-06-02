@@ -1,4 +1,3 @@
-
 import { PineconeService } from './pineconeService';
 import { SemanticSearchEngine } from './semanticSearchEngine';
 
@@ -19,6 +18,7 @@ interface EnhancedSearchResult {
     contentLength?: number;
     keyTerms?: string[];
     topicRelevance?: number;
+    searchMethod?: string;
   };
 }
 
@@ -192,7 +192,8 @@ export class AdvancedSemanticEngine {
           is_transcription: result.sourceType === 'video',
           similarity: result.similarity,
           contentLength: result.content?.length || 0,
-          keyTerms: this.extractKeyTerms(result.content, query)
+          keyTerms: this.extractKeyTerms(result.content, query),
+          searchMethod: 'semantic'
         }
       }));
     } catch (error) {
@@ -248,7 +249,8 @@ export class AdvancedSemanticEngine {
             channel_name: note.channel_name,
             video_id: note.video_id,
             contentLength: note.content?.length || 0,
-            keyTerms: this.extractKeyTerms(note.content, query)
+            keyTerms: this.extractKeyTerms(note.content, query),
+            searchMethod: 'keyword'
           }
         };
       })
