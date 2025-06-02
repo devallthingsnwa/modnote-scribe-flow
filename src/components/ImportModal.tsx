@@ -70,52 +70,31 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
         console.log("Processing YouTube video:", videoId);
 
-        // Always try to get metadata first
-        let metadata;
-        try {
-          const metadataResult = await VideoNoteProcessor.getYouTubeMetadata(videoId);
-          metadata = metadataResult;
-        } catch (error) {
-          console.warn('Failed to fetch metadata, using fallback:', error);
-          metadata = {
-            title: `YouTube Video ${videoId}`,
-            author: 'Unknown',
-            duration: 'Unknown',
-            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-          };
-        }
+        // Use VideoNoteProcessor.processVideo to get both metadata and transcript
+        const result = await VideoNoteProcessor.processVideo(videoId, {
+          fetchMetadata: true,
+          fetchTranscript: true,
+          generateSummary: false,
+        });
 
-        // Try to fetch transcript, but don't fail if it doesn't work
-        let transcript = "";
-        try {
-          const transcriptResult = await VideoNoteProcessor.processVideo(videoId, {
-            fetchMetadata: false, // We already have metadata
-            fetchTranscript: true,
-            generateSummary: false,
-          });
+        console.log("Video processing result:", result);
 
-          if (transcriptResult.success && transcriptResult.transcript) {
-            transcript = transcriptResult.transcript;
-          }
-        } catch (error) {
-          console.warn('Transcript extraction failed, proceeding without transcript:', error);
-        }
-
-        // Create content with or without transcript
-        const title = metadata?.title || `YouTube Video ${videoId}`;
-        const author = metadata?.author || 'Unknown';
-        const duration = metadata?.duration || 'Unknown';
+        // Create content with the results
+        const title = result.metadata?.title || `YouTube Video ${videoId}`;
+        const author = result.metadata?.author || 'Unknown';
+        const duration = result.metadata?.duration || 'Unknown';
+        const thumbnail = result.metadata?.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
         
         let content = `# 🎥 ${title}\n\n`;
         content += `**Source:** ${url}\n`;
         content += `**Author:** ${author}\n`;
         content += `**Duration:** ${duration}\n`;
-        content += `**Type:** Video ${transcript ? 'Transcript' : 'Note'}\n\n`;
+        content += `**Type:** Video ${result.transcript ? 'Transcript' : 'Note'}\n\n`;
         content += `---\n\n`;
         
-        if (transcript && transcript.length > 100) {
+        if (result.transcript && result.transcript.length > 100) {
           content += `## 📝 Transcript\n\n`;
-          content += transcript;
+          content += result.transcript;
         } else {
           content += `## 📝 Notes\n\n`;
           content += "Transcript could not be extracted for this video. You can add your own notes here...";
@@ -129,8 +108,8 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             title,
             content,
             source_url: url,
-            thumbnail: metadata?.thumbnail,
-            is_transcription: !!transcript,
+            thumbnail: thumbnail,
+            is_transcription: !!result.transcript,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -149,13 +128,13 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           title,
           content,
           source_url: url,
-          thumbnail: metadata?.thumbnail,
-          is_transcription: !!transcript,
+          thumbnail: thumbnail,
+          is_transcription: !!result.transcript,
         });
 
         toast({
           title: "Video imported successfully!",
-          description: transcript 
+          description: result.transcript 
             ? `Imported "${title}" with transcript` 
             : `Imported "${title}" (transcript not available, but you can add notes)`,
         });
