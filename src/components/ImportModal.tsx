@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -71,37 +70,58 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
         console.log("Processing YouTube video:", videoId);
 
-        // Fetch video metadata and transcript
-        const result = await VideoNoteProcessor.processVideo(videoId, {
-          fetchMetadata: true,
-          fetchTranscript: true,
-          generateSummary: false,
-        });
-
-        if (!result.success) {
-          throw new Error(result.error || "Failed to process video");
+        // Always try to get metadata first
+        let metadata;
+        try {
+          const metadataResult = await VideoNoteProcessor.getYouTubeMetadata(videoId);
+          metadata = metadataResult;
+        } catch (error) {
+          console.warn('Failed to fetch metadata, using fallback:', error);
+          metadata = {
+            title: `YouTube Video ${videoId}`,
+            author: 'Unknown',
+            duration: 'Unknown',
+            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+          };
         }
 
-        // Format the content with metadata and transcript
-        const title = result.metadata?.title || `YouTube Video ${videoId}`;
-        const author = result.metadata?.author || 'Unknown';
-        const duration = result.metadata?.duration || 'Unknown';
+        // Try to fetch transcript, but don't fail if it doesn't work
+        let transcript = "";
+        try {
+          const transcriptResult = await VideoNoteProcessor.processVideo(videoId, {
+            fetchMetadata: false, // We already have metadata
+            fetchTranscript: true,
+            generateSummary: false,
+          });
+
+          if (transcriptResult.success && transcriptResult.transcript) {
+            transcript = transcriptResult.transcript;
+          }
+        } catch (error) {
+          console.warn('Transcript extraction failed, proceeding without transcript:', error);
+        }
+
+        // Create content with or without transcript
+        const title = metadata?.title || `YouTube Video ${videoId}`;
+        const author = metadata?.author || 'Unknown';
+        const duration = metadata?.duration || 'Unknown';
         
         let content = `# 🎥 ${title}\n\n`;
         content += `**Source:** ${url}\n`;
         content += `**Author:** ${author}\n`;
         content += `**Duration:** ${duration}\n`;
-        content += `**Type:** Video Transcript\n\n`;
+        content += `**Type:** Video ${transcript ? 'Transcript' : 'Note'}\n\n`;
         content += `---\n\n`;
-        content += `## 📝 Transcript\n\n`;
         
-        if (result.transcript && result.transcript.length > 100) {
-          content += result.transcript;
+        if (transcript && transcript.length > 100) {
+          content += `## 📝 Transcript\n\n`;
+          content += transcript;
         } else {
-          content += "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.";
+          content += `## 📝 Notes\n\n`;
+          content += "Transcript could not be extracted for this video. You can add your own notes here...";
         }
 
-        // Save directly to Supabase
+        // Save to Supabase - this should always work regardless of transcript success
         const { data: noteData, error: noteError } = await supabase
           .from('notes')
           .insert({
@@ -109,8 +129,8 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             title,
             content,
             source_url: url,
-            thumbnail: result.metadata?.thumbnail,
-            is_transcription: true,
+            thumbnail: metadata?.thumbnail,
+            is_transcription: !!transcript,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -119,7 +139,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
         if (noteError) {
           console.error('Error saving note to Supabase:', noteError);
-          throw new Error('Failed to save note');
+          throw new Error('Failed to save note to database');
         }
 
         console.log('✅ Note saved to Supabase:', noteData.id);
@@ -129,13 +149,15 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           title,
           content,
           source_url: url,
-          thumbnail: result.metadata?.thumbnail,
-          is_transcription: true,
+          thumbnail: metadata?.thumbnail,
+          is_transcription: !!transcript,
         });
 
         toast({
           title: "Video imported successfully!",
-          description: `Imported "${title}" with transcript`,
+          description: transcript 
+            ? `Imported "${title}" with transcript` 
+            : `Imported "${title}" (transcript not available, but you can add notes)`,
         });
       } else {
         // Handle other URL types (web pages, etc.)
@@ -270,7 +292,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Import from URL (YouTube videos will auto-extract transcripts)
+                Import from URL (YouTube videos will auto-extract metadata and attempt transcript)
               </label>
               <div className="flex gap-2">
                 <Input
@@ -287,7 +309,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
                   {isProcessing ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      {isYouTubeUrl(url) ? "Extracting..." : "Importing..."}
+                      {isYouTubeUrl(url) ? "Processing..." : "Importing..."}
                     </>
                   ) : (
                     <>
@@ -303,7 +325,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
               </div>
               {isYouTubeUrl(url) && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  📹 YouTube video detected - will extract title, metadata, and transcript automatically
+                  📹 YouTube video detected - will extract metadata and attempt transcript (will save even if transcript fails)
                 </p>
               )}
             </div>
