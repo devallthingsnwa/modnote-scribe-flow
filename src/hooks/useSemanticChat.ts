@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,12 +30,9 @@ interface PerformanceMetrics {
   totalTime: number;
 }
 
-export function useDeepResearch() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+export function useSemanticChat() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isChatMode, setIsChatMode] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
@@ -43,32 +40,7 @@ export function useDeepResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  const debouncedSearch = useMemo(() => {
-    let timeoutId: NodeJS.Timeout;
-    return async (query: string) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        if (!notes || !query.trim()) {
-          setSearchResults([]);
-          return;
-        }
-        
-        const searchStart = performance.now();
-        const results = await SemanticSearchEngine.searchNotes(notes, query);
-        const searchTime = performance.now() - searchStart;
-        
-        setSearchResults(results.slice(0, 6));
-        setMetrics(prev => ({ ...prev, searchTime } as PerformanceMetrics));
-      }, 150);
-    };
-  }, [notes]);
-
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    debouncedSearch(query);
-  }, [debouncedSearch]);
-
-  const handleChatSubmit = async () => {
+  const handleChatSubmit = useCallback(async () => {
     if (!chatInput.trim() || isLoading) return;
 
     if (abortControllerRef.current) {
@@ -181,7 +153,7 @@ export function useDeepResearch() {
       setStreamingContent("");
       abortControllerRef.current = null;
     }
-  };
+  }, [chatInput, isLoading, notes, toast]);
 
   const cancelRequest = useCallback(() => {
     if (abortControllerRef.current) {
@@ -195,17 +167,6 @@ export function useDeepResearch() {
     }
   }, [toast]);
 
-  const toggleMode = useCallback(() => {
-    setIsChatMode(!isChatMode);
-    if (!isChatMode) {
-      setSearchResults([]);
-      setSearchQuery("");
-    } else {
-      setChatMessages([]);
-      setMetrics(null);
-    }
-  }, [isChatMode]);
-
   const clearChat = useCallback(() => {
     setChatMessages([]);
     setMetrics(null);
@@ -216,19 +177,14 @@ export function useDeepResearch() {
   }, [toast]);
 
   return {
-    searchQuery,
-    searchResults,
     chatMessages,
     isLoading,
-    isChatMode,
     chatInput,
     setChatInput,
     metrics,
     streamingContent,
-    handleSearch,
     handleChatSubmit,
     cancelRequest,
-    toggleMode,
     clearChat,
     abortControllerRef
   };
