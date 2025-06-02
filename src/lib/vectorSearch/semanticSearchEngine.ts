@@ -19,8 +19,12 @@ interface SemanticSearchResult {
 }
 
 export class SemanticSearchEngine {
-  private static readonly MIN_SIMILARITY_THRESHOLD = 0.7;
-  private static readonly MAX_RESULTS = 8;
+  private static readonly MIN_SIMILARITY_THRESHOLD = 0.65; // Slightly lower for more results
+  private static readonly MAX_RESULTS = 6; // Reduced for faster processing
+  
+  // Simple in-memory cache for search results
+  private static searchCache = new Map<string, { results: SemanticSearchResult[]; timestamp: number }>();
+  private static readonly CACHE_DURATION = 30000; // 30 seconds cache
   
   static async searchNotes(
     notes: any[], 
@@ -28,71 +32,111 @@ export class SemanticSearchEngine {
   ): Promise<SemanticSearchResult[]> {
     if (!query.trim()) return [];
     
-    console.log(`🧠 SEMANTIC SEARCH: "${query}" using vector similarity`);
+    // Check cache first for instant results
+    const cacheKey = query.toLowerCase().trim();
+    const cached = this.searchCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      console.log('⚡ CACHE HIT: Instant search results');
+      return cached.results;
+    }
+    
+    console.log(`🧠 SEMANTIC SEARCH: "${query}" using optimized similarity`);
     const searchStart = performance.now();
     
     try {
-      // Perform semantic search using Pinecone
-      const vectorResults = await PineconeService.semanticSearch(query, 20);
+      // Try semantic search with timeout for fast fallback
+      const semanticPromise = PineconeService.semanticSearch(query, 12);
+      const timeoutPromise = new Promise<any[]>((_, reject) => 
+        setTimeout(() => reject(new Error('Semantic search timeout')), 2000) // 2 second timeout
+      );
       
-      if (vectorResults.length === 0) {
-        console.log('⚠️ No semantic matches found, falling back to keyword search');
-        return this.fallbackKeywordSearch(notes, query);
+      let vectorResults: any[] = [];
+      try {
+        vectorResults = await Promise.race([semanticPromise, timeoutPromise]);
+      } catch (timeoutError) {
+        console.log('⚠️ Semantic search timeout, using fast fallback');
+        vectorResults = [];
       }
       
-      // Filter by similarity threshold and map to expected format
-      const semanticResults = vectorResults
-        .filter(result => result.similarity >= this.MIN_SIMILARITY_THRESHOLD)
-        .slice(0, this.MAX_RESULTS)
-        .map(result => ({
-          id: result.noteId,
-          title: result.title,
-          content: result.content,
-          relevance: result.similarity,
-          snippet: this.generateSnippet(result.content, query),
-          sourceType: result.sourceType,
-          metadata: {
-            source_url: result.metadata?.noteId, // We'll need to fetch full note data if needed
-            created_at: result.metadata?.createdAt,
-            is_transcription: result.sourceType === 'video',
-            similarity: result.similarity
-          }
-        }));
+      let results: SemanticSearchResult[];
+      
+      if (vectorResults.length === 0) {
+        console.log('⚠️ No semantic matches, using optimized keyword search');
+        results = this.optimizedKeywordSearch(notes, query);
+      } else {
+        // Process semantic results
+        results = vectorResults
+          .filter(result => result.similarity >= this.MIN_SIMILARITY_THRESHOLD)
+          .slice(0, this.MAX_RESULTS)
+          .map(result => ({
+            id: result.noteId,
+            title: result.title,
+            content: result.content,
+            relevance: result.similarity,
+            snippet: this.generateSnippet(result.content, query),
+            sourceType: result.sourceType,
+            metadata: {
+              source_url: result.metadata?.noteId,
+              created_at: result.metadata?.createdAt,
+              is_transcription: result.sourceType === 'video',
+              similarity: result.similarity
+            }
+          }));
+      }
       
       const searchTime = performance.now() - searchStart;
-      console.log(`⚡ SEMANTIC SEARCH COMPLETE: ${searchTime.toFixed(1)}ms, ${semanticResults.length} results`);
       
-      return semanticResults;
+      // Cache successful results
+      this.searchCache.set(cacheKey, { results, timestamp: Date.now() });
+      
+      // Clean old cache entries
+      if (this.searchCache.size > 20) {
+        const oldestKey = this.searchCache.keys().next().value;
+        this.searchCache.delete(oldestKey);
+      }
+      
+      console.log(`⚡ OPTIMIZED SEARCH COMPLETE: ${searchTime.toFixed(1)}ms, ${results.length} results`);
+      
+      return results;
     } catch (error) {
       console.error('❌ Semantic search error:', error);
-      console.log('🔄 Falling back to keyword search');
-      return this.fallbackKeywordSearch(notes, query);
+      console.log('🔄 Falling back to optimized keyword search');
+      return this.optimizedKeywordSearch(notes, query);
     }
   }
   
-  private static fallbackKeywordSearch(notes: any[], query: string): SemanticSearchResult[] {
+  private static optimizedKeywordSearch(notes: any[], query: string): SemanticSearchResult[] {
     const queryLower = query.toLowerCase();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
     
-    return notes
+    // Pre-filter notes for better performance
+    const relevantNotes = notes.filter(note => {
+      const titleLower = (note.title || '').toLowerCase();
+      const contentLower = (note.content || '').toLowerCase();
+      
+      // Quick relevance check
+      return queryWords.some(word => 
+        titleLower.includes(word) || contentLower.includes(word)
+      );
+    });
+    
+    return relevantNotes
       .map(note => {
         const titleLower = (note.title || '').toLowerCase();
         const contentLower = (note.content || '').toLowerCase();
         
         let relevance = 0;
         
-        // Title matching
-        if (titleLower.includes(queryLower)) {
-          relevance += 0.8;
-        }
+        // Optimized scoring
+        if (titleLower.includes(queryLower)) relevance += 0.9;
         
-        // Content matching
-        const queryWords = queryLower.split(/\s+/).filter(w => w.length > 3);
         for (const word of queryWords) {
-          if (titleLower.includes(word)) relevance += 0.3;
-          if (contentLower.includes(word)) relevance += 0.1;
+          if (titleLower.includes(word)) relevance += 0.4;
+          if (contentLower.includes(word)) relevance += 0.15;
         }
         
-        if (relevance < 0.3) return null;
+        if (relevance < 0.2) return null;
         
         return {
           id: note.id,
@@ -123,12 +167,12 @@ export class SemanticSearchEngine {
     const queryIndex = contentLower.indexOf(queryLower);
     
     if (queryIndex !== -1) {
-      const start = Math.max(0, queryIndex - 50);
-      const end = Math.min(content.length, queryIndex + query.length + 50);
+      const start = Math.max(0, queryIndex - 40);
+      const end = Math.min(content.length, queryIndex + query.length + 40);
       return (start > 0 ? '...' : '') + content.substring(start, end) + (end < content.length ? '...' : '');
     }
     
-    return content.substring(0, 150) + (content.length > 150 ? '...' : '');
+    return content.substring(0, 120) + (content.length > 120 ? '...' : '');
   }
   
   static async indexNote(noteId: string, title: string, content: string, sourceType: 'video' | 'note'): Promise<boolean> {

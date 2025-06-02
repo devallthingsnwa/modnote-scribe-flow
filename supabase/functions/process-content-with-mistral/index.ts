@@ -39,32 +39,32 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${type} content with Mistral AI. Stream: ${stream}`);
+    console.log(`Processing ${type} content with Mistral AI. Stream: ${stream}, Fast mode: ${options?.fast_mode}`);
     
-    // Prepare optimized system prompt
-    let systemPrompt = "You are an expert AI assistant that provides concise, accurate responses.";
+    // Optimized system prompts for faster processing
+    let systemPrompt = "You are a helpful AI assistant. Be concise and accurate.";
     let analysisInstructions = "";
     
     if (type === "chat" && options?.rag) {
-      systemPrompt = "You are an advanced AI assistant with RAG capabilities. Provide helpful, accurate responses based on the provided context. Be concise but comprehensive.";
-      analysisInstructions = "Using the provided context, give a clear and helpful response. Reference specific information when relevant.";
+      systemPrompt = "You are an AI assistant with access to user notes. Provide helpful, concise responses based on the context.";
+      analysisInstructions = "Based on the context provided, give a clear and helpful response. Be concise but informative.";
     } else if (type === "video" || type === "audio") {
-      systemPrompt = "You are an expert content analyst. Provide clear, structured analysis of media content.";
+      systemPrompt = "You are a content analyst. Provide clear, structured analysis.";
     } else if (type === "text") {
-      systemPrompt = "You are an expert content analyst. Extract key insights and provide structured summaries.";
+      systemPrompt = "You are a content analyst. Extract key insights efficiently.";
     }
 
-    // Build optimized analysis prompt
+    // Build optimized analysis prompt for faster processing
     if (type !== "chat") {
       analysisInstructions = "Analyze the content and provide:\n";
       const requestedAnalysis = [];
       
       if (options?.summary) {
-        requestedAnalysis.push("• **Summary**: Key points and main topics");
+        requestedAnalysis.push("• **Summary**: Key points");
       }
       
       if (options?.highlights) {
-        requestedAnalysis.push("• **Highlights**: Most important insights");
+        requestedAnalysis.push("• **Highlights**: Important insights");
       }
       
       if (options?.keyPoints) {
@@ -72,17 +72,23 @@ serve(async (req) => {
       }
       
       if (requestedAnalysis.length === 0) {
-        analysisInstructions += "A comprehensive analysis with summary and key insights.";
+        analysisInstructions += "A concise analysis with key insights.";
       } else {
         analysisInstructions += requestedAnalysis.join("\n");
       }
       
-      analysisInstructions += "\n\nUse clear formatting and be concise.";
+      analysisInstructions += "\n\nBe concise and structured.";
     }
 
-    // Prepare API request body for Mistral
+    // Optimize model selection and parameters for speed
+    const isFastMode = options?.fast_mode || false;
+    const modelToUse = isFastMode ? "mistral-small-latest" : "mistral-large-latest";
+    const maxTokens = isFastMode ? 800 : (type === "chat" ? 1200 : 1800);
+    const temperature = isFastMode ? 0.3 : (type === "chat" ? 0.7 : 0.5);
+
+    // Prepare optimized API request body
     const requestBody = {
-      model: "mistral-large-latest",
+      model: modelToUse,
       messages: [
         {
           role: "system", 
@@ -93,12 +99,12 @@ serve(async (req) => {
           content: type === "chat" ? content : `${analysisInstructions}\n\nContent:\n\n${content}`
         }
       ],
-      temperature: type === "chat" ? 0.7 : 0.5,
-      max_tokens: type === "chat" ? 1500 : 2000,
+      temperature: temperature,
+      max_tokens: maxTokens,
       stream: stream
     };
 
-    console.log("Making request to Mistral AI API...");
+    console.log(`Making optimized request to Mistral AI API (${modelToUse})...`);
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -153,13 +159,14 @@ serve(async (req) => {
     const data = await response.json();
     const processedContent = data.choices?.[0]?.message?.content || "No processed content available.";
 
-    console.log("Content processed successfully with Mistral AI");
+    console.log(`Content processed successfully with Mistral AI (${modelToUse})`);
     
     return new Response(
       JSON.stringify({ 
         processedContent,
-        usage: data.usage, // Include token usage info
-        model: data.model
+        usage: data.usage,
+        model: data.model,
+        optimized: isFastMode
       }),
       {
         status: 200,

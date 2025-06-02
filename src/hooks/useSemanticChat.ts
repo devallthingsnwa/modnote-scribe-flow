@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,10 @@ interface PerformanceMetrics {
   totalTime: number;
 }
 
+// Context cache to avoid redundant searches
+const contextCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+const CACHE_DURATION = 60000; // 1 minute cache
+
 export function useSemanticChat() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,6 +43,38 @@ export function useSemanticChat() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
   const { data: notes } = useNotes();
+
+  // Memoize processed notes for faster searches
+  const processedNotes = useMemo(() => {
+    if (!notes) return [];
+    return notes.map(note => ({
+      ...note,
+      searchableContent: `${note.title} ${note.content || ''}`.toLowerCase()
+    }));
+  }, [notes]);
+
+  const getCachedContext = useCallback((query: string) => {
+    const cacheKey = query.toLowerCase().trim();
+    const cached = contextCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('🚀 Using cached context for faster response');
+      return cached.results;
+    }
+    
+    return null;
+  }, []);
+
+  const setCachedContext = useCallback((query: string, results: SearchResult[]) => {
+    const cacheKey = query.toLowerCase().trim();
+    contextCache.set(cacheKey, { results, timestamp: Date.now() });
+    
+    // Clean old cache entries
+    if (contextCache.size > 50) {
+      const oldestKey = contextCache.keys().next().value;
+      contextCache.delete(oldestKey);
+    }
+  }, []);
 
   const handleChatSubmit = useCallback(async () => {
     if (!chatInput.trim() || isLoading) return;
@@ -67,15 +103,30 @@ export function useSemanticChat() {
     try {
       const contextStart = performance.now();
       
-      // Use semantic search for better context
-      const contextResults = await SemanticSearchEngine.searchNotes(notes || [], currentInput);
+      // Try cache first for instant response
+      let contextResults = getCachedContext(currentInput);
+      
+      if (!contextResults) {
+        // Use parallel processing for better performance
+        const searchPromises = [
+          SemanticSearchEngine.searchNotes(processedNotes, currentInput),
+          // Could add additional search strategies here
+        ];
+        
+        const [semanticResults] = await Promise.all(searchPromises);
+        contextResults = semanticResults;
+        
+        // Cache for future use
+        setCachedContext(currentInput, contextResults);
+      }
+      
       const contextTime = performance.now() - contextStart;
       
       if (contextResults.length === 0) {
         const noContextMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           type: 'assistant',
-          content: "I couldn't find semantically similar content in your notes for this query. Try using different keywords or adding more relevant content.",
+          content: "I couldn't find relevant content in your notes for this query. Try using different keywords or adding more relevant content.",
           timestamp: new Date()
         };
         setChatMessages(prev => [...prev, noContextMessage]);
@@ -83,20 +134,29 @@ export function useSemanticChat() {
         return;
       }
       
-      const knowledgeBase = contextResults.map(result => 
-        `${result.title}\n${result.snippet}\nSimilarity: ${result.relevance.toFixed(3)}`
-      ).join('\n\n---\n\n');
+      // Optimize context size for faster API calls
+      const topResults = contextResults.slice(0, 4); // Limit to top 4 results
+      const optimizedContext = topResults.map(result => 
+        `${result.title}: ${result.snippet.substring(0, 200)}`
+      ).join('\n\n');
       
-      const ragContext = `Context (${knowledgeBase.length} chars from ${contextResults.length} semantically similar sources):\n\n${knowledgeBase}\n\nQ: ${currentInput}`;
+      // More concise prompt for faster processing
+      const ragContext = `Context:\n${optimizedContext}\n\nQ: ${currentInput}`;
 
-      console.log(`⚡ Semantic context: ${contextTime.toFixed(1)}ms | ${knowledgeBase.length} chars | ${contextResults.length} sources`);
+      console.log(`⚡ Optimized context: ${contextTime.toFixed(1)}ms | ${optimizedContext.length} chars | ${topResults.length} sources`);
 
       const apiStart = performance.now();
+      
+      // Use optimized API call with reduced token limits for speed
       const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: ragContext,
           type: 'chat',
-          options: { rag: true, semantic_search: true },
+          options: { 
+            rag: true, 
+            semantic_search: true,
+            fast_mode: true // Flag for faster processing
+          },
           stream: false
         }
       });
@@ -121,8 +181,8 @@ export function useSemanticChat() {
         content: data.processedContent || "I'm sorry, I couldn't process your request.",
         timestamp: new Date(),
         responseTime: totalTime,
-        tokenCount: data.usage?.total_tokens || knowledgeBase.length,
-        sources: contextResults.slice(0, 3).map(source => ({
+        tokenCount: optimizedContext.length,
+        sources: topResults.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
@@ -134,7 +194,7 @@ export function useSemanticChat() {
       setChatMessages(prev => [...prev, assistantMessage]);
       setMetrics(responseMetrics);
 
-      console.log(`🚀 Semantic response: ${totalTime.toFixed(0)}ms`);
+      console.log(`🚀 FAST RAG response: ${totalTime.toFixed(0)}ms`);
 
     } catch (error: any) {
       if (error.name === 'AbortError' || controller.signal.aborted) {
@@ -142,7 +202,7 @@ export function useSemanticChat() {
         return;
       }
       
-      console.error('Semantic chat error:', error);
+      console.error('Fast RAG error:', error);
       toast({
         title: "Error",
         description: "Failed to get AI response. Please try again.",
@@ -153,7 +213,7 @@ export function useSemanticChat() {
       setStreamingContent("");
       abortControllerRef.current = null;
     }
-  }, [chatInput, isLoading, notes, toast]);
+  }, [chatInput, isLoading, processedNotes, toast, getCachedContext, setCachedContext]);
 
   const cancelRequest = useCallback(() => {
     if (abortControllerRef.current) {
@@ -170,9 +230,11 @@ export function useSemanticChat() {
   const clearChat = useCallback(() => {
     setChatMessages([]);
     setMetrics(null);
+    // Clear cache when clearing chat
+    contextCache.clear();
     toast({
       title: "Chat Cleared",
-      description: "Conversation history cleared.",
+      description: "Conversation history and cache cleared.",
     });
   }, [toast]);
 
