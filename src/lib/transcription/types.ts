@@ -45,6 +45,7 @@ export interface TranscriptionResult {
     parallelProcessing?: boolean;
     timestamp?: string;
     provider?: string;
+    fallbackType?: string;
   };
   error?: string;
   provider?: string;
