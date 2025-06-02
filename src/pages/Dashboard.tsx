@@ -54,33 +54,41 @@ export default function Dashboard() {
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    console.log('📥 Importing note to dashboard:', note.title);
+    console.log('📥 Content imported successfully:', note.title);
     
     toast({
       title: "Content imported successfully",
       description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
     
-    // Refresh notes list immediately
+    // Force refresh the notes list to show the new import immediately
+    console.log('🔄 Refreshing notes list after import...');
     await refetch();
     
-    // Index the imported note for semantic search
+    // Close the import modal
+    setImportModalOpen(false);
+    
+    // Index the imported note for semantic search in the background
     if (note.content) {
       try {
-        // Find the newly imported note and index it
-        const updatedNotes = await refetch();
-        const importedNote = updatedNotes.data?.find(n => n.title === note.title);
-        
-        if (importedNote) {
-          await indexNote(importedNote);
-          console.log('✅ Imported note indexed for semantic search');
-        }
+        // Wait a moment for the database to update, then find and index the note
+        setTimeout(async () => {
+          try {
+            const updatedNotes = await refetch();
+            const importedNote = updatedNotes.data?.find(n => n.title === note.title);
+            
+            if (importedNote) {
+              await indexNote(importedNote);
+              console.log('✅ Imported note indexed for semantic search');
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to index imported note:', error);
+          }
+        }, 1000);
       } catch (error) {
-        console.warn('⚠️ Failed to index imported note:', error);
+        console.warn('⚠️ Failed to schedule note indexing:', error);
       }
     }
-    
-    setImportModalOpen(false);
   };
 
   const handleNoteDeleted = () => {

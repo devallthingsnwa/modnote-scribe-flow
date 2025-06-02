@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { Loader2, FileText, Video, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -99,6 +101,30 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           content += "Unable to fetch transcript for this video. The video may not have captions available or may be restricted.";
         }
 
+        // Save directly to Supabase
+        const { data: noteData, error: noteError } = await supabase
+          .from('notes')
+          .insert({
+            user_id: user.id,
+            title,
+            content,
+            source_url: url,
+            thumbnail: result.metadata?.thumbnail,
+            is_transcription: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (noteError) {
+          console.error('Error saving note to Supabase:', noteError);
+          throw new Error('Failed to save note');
+        }
+
+        console.log('✅ Note saved to Supabase:', noteData.id);
+
+        // Call onImport callback to refresh the dashboard
         onImport({
           title,
           content,
@@ -116,6 +142,28 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
         const title = customTitle || `Imported from ${new URL(url).hostname}`;
         const content = customContent || `# ${title}\n\n**Source:** ${url}\n\n## Content\n\nAdd your notes here...`;
         
+        // Save directly to Supabase
+        const { data: noteData, error: noteError } = await supabase
+          .from('notes')
+          .insert({
+            user_id: user.id,
+            title,
+            content,
+            source_url: url,
+            is_transcription: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (noteError) {
+          console.error('Error saving note to Supabase:', noteError);
+          throw new Error('Failed to save note');
+        }
+
+        console.log('✅ Note saved to Supabase:', noteData.id);
+
         onImport({
           title,
           content,
@@ -147,25 +195,64 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
     }
   };
 
-  const handleManualNote = () => {
+  const handleManualNote = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create notes",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const title = customTitle || "New Note";
     const content = customContent || "Start writing your note here...";
     
-    onImport({
-      title,
-      content,
-      is_transcription: false,
-    });
+    try {
+      // Save directly to Supabase
+      const { data: noteData, error: noteError } = await supabase
+        .from('notes')
+        .insert({
+          user_id: user.id,
+          title,
+          content,
+          is_transcription: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Note created!",
-      description: `Created "${title}"`,
-    });
+      if (noteError) {
+        console.error('Error saving note to Supabase:', noteError);
+        throw new Error('Failed to save note');
+      }
 
-    // Reset form
-    setCustomTitle("");
-    setCustomContent("");
-    onClose();
+      console.log('✅ Manual note saved to Supabase:', noteData.id);
+
+      onImport({
+        title,
+        content,
+        is_transcription: false,
+      });
+
+      toast({
+        title: "Note created!",
+        description: `Created "${title}"`,
+      });
+
+      // Reset form
+      setCustomTitle("");
+      setCustomContent("");
+      onClose();
+    } catch (error) {
+      console.error("Error creating manual note:", error);
+      toast({
+        title: "Failed to create note",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
