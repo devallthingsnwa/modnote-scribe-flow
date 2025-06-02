@@ -15,3 +15,6 @@ verify_jwt = true
 
 [functions.process-content-with-mistral]
 verify_jwt = true
+
+[functions.pinecone-operations]
+verify_jwt = true

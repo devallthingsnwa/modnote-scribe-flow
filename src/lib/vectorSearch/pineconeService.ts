@@ -22,7 +22,6 @@ interface PineconeQueryResponse {
 }
 
 export class PineconeService {
-  private static readonly PINECONE_INDEX_NAME = 'notes-embeddings';
   private static readonly EMBEDDING_DIMENSION = 1536; // OpenAI text-embedding-3-small dimension
   private static readonly TOP_K = 10;
   
@@ -33,7 +32,7 @@ export class PineconeService {
     sourceType: 'video' | 'note'
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const chunks = this.chunkContent(content, 1000); // Split into manageable chunks
+      const chunks = this.chunkContent(content, 1000);
       const vectors: PineconeVector[] = [];
       
       for (let i = 0; i < chunks.length; i++) {
@@ -57,16 +56,14 @@ export class PineconeService {
         }
       }
       
-      // Upsert vectors to Pinecone via edge function
-      const response = await fetch('/api/pinecone-upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vectors })
+      const { data, error } = await supabase.functions.invoke('pinecone-operations', {
+        body: {
+          operation: 'upsert',
+          vectors
+        }
       });
       
-      if (!response.ok) {
-        throw new Error(`Failed to upsert vectors: ${response.statusText}`);
-      }
+      if (error) throw error;
       
       return { success: true };
     } catch (error) {
@@ -92,21 +89,16 @@ export class PineconeService {
         throw new Error('Failed to generate query embedding');
       }
       
-      const response = await fetch('/api/pinecone-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('pinecone-operations', {
+        body: {
+          operation: 'query',
           vector: queryEmbedding,
           topK,
           includeMetadata: true
-        })
+        }
       });
       
-      if (!response.ok) {
-        throw new Error(`Semantic search failed: ${response.statusText}`);
-      }
-      
-      const data: PineconeQueryResponse = await response.json();
+      if (error) throw error;
       
       return data.matches.map(match => ({
         noteId: match.metadata.noteId,
@@ -124,15 +116,14 @@ export class PineconeService {
   
   static async deleteNoteVectors(noteId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch('/api/pinecone-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteId })
+      const { data, error } = await supabase.functions.invoke('pinecone-operations', {
+        body: {
+          operation: 'delete',
+          noteId
+        }
       });
       
-      if (!response.ok) {
-        throw new Error(`Failed to delete vectors: ${response.statusText}`);
-      }
+      if (error) throw error;
       
       return { success: true };
     } catch (error) {
@@ -143,17 +134,15 @@ export class PineconeService {
   
   private static async generateEmbedding(text: string): Promise<number[] | null> {
     try {
-      const response = await fetch('/api/generate-embedding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
+      const { data, error } = await supabase.functions.invoke('pinecone-operations', {
+        body: {
+          operation: 'generate-embedding',
+          text
+        }
       });
       
-      if (!response.ok) {
-        throw new Error(`Embedding generation failed: ${response.statusText}`);
-      }
+      if (error) throw error;
       
-      const data = await response.json();
       return data.embedding;
     } catch (error) {
       console.error('Error generating embedding:', error);
@@ -199,3 +188,6 @@ export class PineconeService {
     return chunks.length > 0 ? chunks : [content];
   }
 }
+
+// Import supabase client
+import { supabase } from "@/integrations/supabase/client";

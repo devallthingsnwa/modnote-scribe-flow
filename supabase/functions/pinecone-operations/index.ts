@@ -37,23 +37,23 @@ serve(async (req) => {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    const url = new URL(req.url);
-    const operation = url.pathname.split('/').pop();
     const body = await req.json();
+    const { operation } = body;
 
-    const PINECONE_INDEX_HOST = "https://notes-embeddings-YOUR_PROJECT_ID.svc.YOUR_ENVIRONMENT.pinecone.io";
+    // Replace with your actual Pinecone index host URL
+    const PINECONE_INDEX_HOST = "https://notes-embeddings-b82a1fd.svc.apw5-4e34-81fa.pinecone.io";
     
     switch (operation) {
       case 'generate-embedding':
         return await generateEmbedding(body.text, OPENAI_API_KEY);
       
-      case 'pinecone-upsert':
+      case 'upsert':
         return await upsertVectors(body.vectors, PINECONE_API_KEY, PINECONE_INDEX_HOST);
       
-      case 'pinecone-query':
+      case 'query':
         return await queryVectors(body, PINECONE_API_KEY, PINECONE_INDEX_HOST);
       
-      case 'pinecone-delete':
+      case 'delete':
         return await deleteVectors(body.noteId, PINECONE_API_KEY, PINECONE_INDEX_HOST);
       
       default:
@@ -177,7 +177,6 @@ async function queryVectors(queryData: any, apiKey: string, indexHost: string) {
 
 async function deleteVectors(noteId: string, apiKey: string, indexHost: string) {
   try {
-    // Delete all chunks for this note
     const response = await fetch(`${indexHost}/vectors/delete`, {
       method: "POST",
       headers: {
