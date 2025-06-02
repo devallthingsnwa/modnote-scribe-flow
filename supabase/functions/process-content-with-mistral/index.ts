@@ -14,7 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    const { content, type, options, stream = false } = await req.json();
+    const requestBody = await req.json();
+    const { content, type, options = {}, stream = false } = requestBody;
     
     if (!content) {
       return new Response(
@@ -39,55 +40,41 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing ${type} content with Mistral AI. Stream: ${stream}, Fast mode: ${options?.fast_mode}`);
+    console.log(`Processing ${type} content with Mistral AI. Stream: ${stream}, Fast mode: ${options.fast_mode || false}`);
     
-    // Optimized system prompts for faster processing
+    // System prompts for different content types
     let systemPrompt = "You are a helpful AI assistant. Be concise and accurate.";
-    let analysisInstructions = "";
+    let userPrompt = content;
     
-    if (type === "chat" && options?.rag) {
+    if (type === "chat" && options.rag) {
       systemPrompt = "You are an AI assistant with access to user notes. Provide helpful, concise responses based on the context.";
-      analysisInstructions = "Based on the context provided, give a clear and helpful response. Be concise but informative.";
+      userPrompt = content;
     } else if (type === "video" || type === "audio") {
       systemPrompt = "You are a content analyst. Provide clear, structured analysis.";
+      userPrompt = `Analyze this content and provide key insights:\n\n${content}`;
     } else if (type === "text") {
       systemPrompt = "You are a content analyst. Extract key insights efficiently.";
-    }
-
-    // Build optimized analysis prompt for faster processing
-    if (type !== "chat") {
-      analysisInstructions = "Analyze the content and provide:\n";
-      const requestedAnalysis = [];
       
-      if (options?.summary) {
-        requestedAnalysis.push("• **Summary**: Key points");
-      }
+      const analysisRequests = [];
+      if (options.summary) analysisRequests.push("• **Summary**: Key points");
+      if (options.highlights) analysisRequests.push("• **Highlights**: Important insights");
+      if (options.keyPoints) analysisRequests.push("• **Key Points**: Main takeaways");
       
-      if (options?.highlights) {
-        requestedAnalysis.push("• **Highlights**: Important insights");
-      }
-      
-      if (options?.keyPoints) {
-        requestedAnalysis.push("• **Key Points**: Main takeaways");
-      }
-      
-      if (requestedAnalysis.length === 0) {
-        analysisInstructions += "A concise analysis with key insights.";
+      if (analysisRequests.length > 0) {
+        userPrompt = `Analyze the content and provide:\n${analysisRequests.join("\n")}\n\nContent:\n\n${content}`;
       } else {
-        analysisInstructions += requestedAnalysis.join("\n");
+        userPrompt = `Provide a concise analysis with key insights:\n\n${content}`;
       }
-      
-      analysisInstructions += "\n\nBe concise and structured.";
     }
 
-    // Optimize model selection and parameters for speed
-    const isFastMode = options?.fast_mode || false;
+    // Model selection for speed optimization
+    const isFastMode = options.fast_mode === true;
     const modelToUse = isFastMode ? "mistral-small-latest" : "mistral-large-latest";
     const maxTokens = isFastMode ? 800 : (type === "chat" ? 1200 : 1800);
     const temperature = isFastMode ? 0.3 : (type === "chat" ? 0.7 : 0.5);
 
-    // Prepare optimized API request body
-    const requestBody = {
+    // Prepare API request
+    const apiRequestBody = {
       model: modelToUse,
       messages: [
         {
@@ -96,7 +83,7 @@ serve(async (req) => {
         },
         {
           role: "user",
-          content: type === "chat" ? content : `${analysisInstructions}\n\nContent:\n\n${content}`
+          content: userPrompt
         }
       ],
       temperature: temperature,
@@ -104,21 +91,22 @@ serve(async (req) => {
       stream: stream
     };
 
-    console.log(`Making optimized request to Mistral AI API (${modelToUse})...`);
+    console.log(`Making request to Mistral AI API (${modelToUse})...`);
+    
     const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${MISTRAL_API_KEY}`,
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(apiRequestBody),
     });
 
     console.log("Mistral AI API response status:", response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Mistral AI API error response:", errorText);
+      console.error("Mistral AI API error:", errorText);
       
       let errorMessage = "Failed to process content with Mistral AI";
       try {

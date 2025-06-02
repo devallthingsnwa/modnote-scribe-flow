@@ -12,3 +12,6 @@ verify_jwt = true
 
 [functions.youtube-metadata]
 verify_jwt = true
+
+[functions.process-content-with-mistral]
+verify_jwt = true
