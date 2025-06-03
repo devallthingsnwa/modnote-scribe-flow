@@ -1,5 +1,6 @@
+
 import { useState } from "react";
-import { Search, Bell, Settings, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Bell, Settings, Plus, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -107,13 +108,6 @@ export function ModNoteHeader({
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Multi Media
-              </Button>
-              <Button 
-                onClick={() => setShowUploadModal(true)}
-                className="bg-purple-400 hover:bg-purple-500 text-white px-4 py-2 text-sm rounded-md h-8"
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Upload
               </Button>
             </div>
           </div>
