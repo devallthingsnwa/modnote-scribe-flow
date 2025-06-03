@@ -1,28 +1,11 @@
 
 import { useState, useCallback } from "react";
 import { useNotes } from "@/lib/api";
-import { AdvancedSemanticEngine } from "@/lib/vectorSearch/advancedSemanticEngine";
-
-interface EnhancedSearchResult {
-  id: string;
-  title: string;
-  content: string | null;
-  relevance: number;
-  snippet: string;
-  sourceType: 'video' | 'note';
-  metadata?: {
-    source_url?: string;
-    created_at?: string;
-    is_transcription?: boolean;
-    channel_name?: string;
-    video_id?: string;
-    similarity?: number;
-    contentLength?: number;
-    keyTerms?: string[];
-    topicRelevance?: number;
-    searchMethod?: string;
-  };
-}
+import { HybridSearchStrategy } from "@/lib/vectorSearch/searchStrategies/hybridSearch";
+import { SemanticSearchStrategy } from "@/lib/vectorSearch/searchStrategies/semanticSearch";
+import { KeywordSearchStrategy } from "@/lib/vectorSearch/searchStrategies/keywordSearch";
+import { SearchCache } from "@/lib/vectorSearch/searchCache";
+import { EnhancedSearchResult, SearchOptions } from "@/lib/vectorSearch/types";
 
 interface SearchMetrics {
   searchTime: number;
@@ -39,6 +22,16 @@ export function useEnhancedSemanticSearch() {
   const [isSearching, setIsSearching] = useState(false);
   const { data: notes } = useNotes();
 
+  const executeSearch = useCallback(async (query: string, searchOptions: SearchOptions): Promise<EnhancedSearchResult[]> => {
+    if (searchOptions.hybridMode) {
+      return await HybridSearchStrategy.execute(notes || [], query);
+    } else if (searchOptions.useSemanticSearch) {
+      return await SemanticSearchStrategy.execute(notes || [], query);
+    } else {
+      return await KeywordSearchStrategy.execute(notes || [], query);
+    }
+  }, [notes]);
+
   const handleSearch = useCallback(async (query: string, strategy: 'hybrid' | 'semantic' | 'keyword' = 'hybrid') => {
     setSearchQuery(query);
     
@@ -52,14 +45,28 @@ export function useEnhancedSemanticSearch() {
     const searchStart = performance.now();
     
     try {
-      const searchOptions = {
-        useSemanticSearch: strategy === 'semantic' || strategy === 'hybrid',
-        useKeywordSearch: strategy === 'keyword' || strategy === 'hybrid',
-        hybridMode: strategy === 'hybrid',
-        contextOptimization: true
-      };
+      // Check cache first
+      const cacheKey = `${query.toLowerCase().trim()}_${strategy}`;
+      const cachedResults = SearchCache.get(cacheKey);
       
-      const results = await AdvancedSemanticEngine.enhancedSearch(notes, query, searchOptions);
+      let results: EnhancedSearchResult[];
+      let cacheHit = false;
+      
+      if (cachedResults) {
+        results = cachedResults;
+        cacheHit = true;
+      } else {
+        const searchOptions = {
+          useSemanticSearch: strategy === 'semantic' || strategy === 'hybrid',
+          useKeywordSearch: strategy === 'keyword' || strategy === 'hybrid',
+          hybridMode: strategy === 'hybrid',
+          contextOptimization: true
+        };
+        
+        results = await executeSearch(query, searchOptions);
+        SearchCache.set(cacheKey, results, strategy);
+      }
+      
       const searchTime = performance.now() - searchStart;
       
       // Calculate quality score
@@ -71,7 +78,7 @@ export function useEnhancedSemanticSearch() {
         searchTime,
         resultCount: results.length,
         strategy,
-        cacheHit: searchTime < 50, // Approximate cache hit detection
+        cacheHit,
         qualityScore
       });
       
@@ -83,13 +90,13 @@ export function useEnhancedSemanticSearch() {
     } finally {
       setIsSearching(false);
     }
-  }, [notes]);
+  }, [notes, executeSearch]);
 
   const clearSearch = useCallback(() => {
     setSearchQuery("");
     setSearchResults([]);
     setSearchMetrics(null);
-    AdvancedSemanticEngine.clearCache();
+    SearchCache.clear();
   }, []);
 
   return {

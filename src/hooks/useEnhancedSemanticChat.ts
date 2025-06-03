@@ -2,28 +2,11 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
-import { AdvancedSemanticEngine } from "@/lib/vectorSearch/advancedSemanticEngine";
-
-interface EnhancedSearchResult {
-  id: string;
-  title: string;
-  content: string | null;
-  relevance: number;
-  snippet: string;
-  sourceType: 'video' | 'note';
-  metadata?: {
-    source_url?: string;
-    created_at?: string;
-    is_transcription?: boolean;
-    channel_name?: string;
-    video_id?: string;
-    similarity?: number;
-    contentLength?: number;
-    keyTerms?: string[];
-    topicRelevance?: number;
-    searchMethod?: string;
-  };
-}
+import { HybridSearchStrategy } from "@/lib/vectorSearch/searchStrategies/hybridSearch";
+import { SemanticSearchStrategy } from "@/lib/vectorSearch/searchStrategies/semanticSearch";
+import { KeywordSearchStrategy } from "@/lib/vectorSearch/searchStrategies/keywordSearch";
+import { SearchCache } from "@/lib/vectorSearch/searchCache";
+import { EnhancedSearchResult, SearchOptions } from "@/lib/vectorSearch/types";
 
 interface EnhancedChatMessage {
   id: string;
@@ -73,7 +56,7 @@ export function useEnhancedSemanticChat() {
     return notes.map(note => ({
       ...note,
       searchableContent: `${note.title} ${note.content || ''}`.toLowerCase(),
-      contentQuality: this.calculateContentQuality(note),
+      contentQuality: calculateContentQuality(note),
       lastAccessed: null
     }));
   }, [notes]);
@@ -115,7 +98,7 @@ export function useEnhancedSemanticChat() {
 
   const setEnhancedCachedContext = useCallback((query: string, results: EnhancedSearchResult[], strategy: string) => {
     const cacheKey = `${query.toLowerCase().trim()}_${searchStrategy}`;
-    const quality = this.calculateContextQuality(results);
+    const quality = calculateContextQuality(results);
     
     enhancedContextCache.set(cacheKey, { 
       results, 
@@ -146,6 +129,16 @@ export function useEnhancedSemanticChat() {
     
     return (avgRelevance * 0.5 + diversityScore * 0.3 + contentRichness * 0.2);
   }, []);
+
+  const executeSearch = useCallback(async (query: string, searchOptions: SearchOptions): Promise<EnhancedSearchResult[]> => {
+    if (searchOptions.hybridMode) {
+      return await HybridSearchStrategy.execute(processedNotes, query);
+    } else if (searchOptions.useSemanticSearch) {
+      return await SemanticSearchStrategy.execute(processedNotes, query);
+    } else {
+      return await KeywordSearchStrategy.execute(processedNotes, query);
+    }
+  }, [processedNotes]);
 
   const handleEnhancedChatSubmit = useCallback(async () => {
     if (!chatInput.trim() || isLoading) return;
@@ -194,11 +187,7 @@ export function useEnhancedSemanticChat() {
           contextOptimization: true
         };
         
-        contextResults = await AdvancedSemanticEngine.enhancedSearch(
-          processedNotes, 
-          currentInput, 
-          searchOptions
-        );
+        contextResults = await executeSearch(currentInput, searchOptions);
         
         // Cache the results
         setEnhancedCachedContext(currentInput, contextResults, searchStrategy);
@@ -221,12 +210,12 @@ export function useEnhancedSemanticChat() {
       
       // Enhanced context preparation with quality optimization
       const topResults = contextResults.slice(0, 5);
-      const contextQuality = this.calculateContextQuality(topResults);
+      const contextQuality = calculateContextQuality(topResults);
       
       // Adaptive context size based on quality
       const contextLimit = contextQuality > 0.7 ? 2500 : contextQuality > 0.5 ? 2000 : 1500;
       
-      const optimizedContext = this.buildOptimizedContext(topResults, currentInput, contextLimit);
+      const optimizedContext = buildOptimizedContext(topResults, currentInput, contextLimit);
       
       // Enhanced RAG prompt with context quality indicators
       const ragPrompt = `Context Quality: ${(contextQuality * 100).toFixed(1)}%
@@ -321,7 +310,7 @@ Answer:`;
       setStreamingContent("");
       abortControllerRef.current = null;
     }
-  }, [chatInput, isLoading, processedNotes, searchStrategy, toast, getEnhancedCachedContext, setEnhancedCachedContext, calculateContextQuality]);
+  }, [chatInput, isLoading, processedNotes, searchStrategy, toast, getEnhancedCachedContext, setEnhancedCachedContext, calculateContextQuality, executeSearch]);
 
   const buildOptimizedContext = useCallback((results: EnhancedSearchResult[], query: string, limit: number) => {
     let context = '';
@@ -373,7 +362,7 @@ Answer:`;
     setChatMessages([]);
     setMetrics(null);
     enhancedContextCache.clear();
-    AdvancedSemanticEngine.clearCache();
+    SearchCache.clear();
     toast({
       title: "Enhanced Chat Cleared",
       description: "Conversation history and all caches cleared.",
@@ -402,7 +391,7 @@ Answer:`;
     switchSearchStrategy,
     cacheStats: {
       contextCache: enhancedContextCache.size,
-      searchCache: AdvancedSemanticEngine.getCacheStats()
+      searchCache: SearchCache.getStats().size
     },
     abortControllerRef
   };
