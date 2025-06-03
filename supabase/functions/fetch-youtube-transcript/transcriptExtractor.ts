@@ -1,340 +1,226 @@
 
+import { SupadataStrategy } from "./strategies/SupadataStrategy.ts";
+import { FallbackMethods } from "./fallbackMethods.ts";
 import { corsHeaders } from "./utils.ts";
 
+export interface TranscriptOptions {
+  includeTimestamps?: boolean;
+  language?: string;
+  format?: 'text' | 'json' | 'srt';
+  extendedTimeout?: boolean;
+  retryCount?: number;
+}
+
+export interface TranscriptSegment {
+  start: number;
+  duration: number;
+  text: string;
+}
+
+export interface TranscriptResponse {
+  success: boolean;
+  transcript: string;
+  segments?: TranscriptSegment[];
+  metadata?: {
+    videoId: string;
+    title?: string;
+    author?: string;
+    language?: string;
+    duration?: number;
+    segmentCount?: number;
+    extractionMethod: string;
+    provider?: string;
+    quality?: string;
+  };
+  error?: string;
+}
+
 export class TranscriptExtractor {
-  async extractTranscriptWithExtendedHandling(videoId: string, options: any = {}) {
-    const isExtendedTimeout = options.extendedTimeout || false;
-    const baseTimeout = isExtendedTimeout ? 120000 : 60000; // 2 minutes for extended, 1 minute for normal
-    const maxRetries = options.maxRetries || 3;
+  
+  async extractTranscriptWithExtendedHandling(videoId: string, options: TranscriptOptions = {}): Promise<Response> {
+    const timeout = options.extendedTimeout ? 120000 : 60000; // 2 minutes for extended, 1 minute normal
+    const maxAttempts = 3;
     
-    console.log(`Enhanced extraction for ${videoId} with ${isExtendedTimeout ? 'extended' : 'normal'} timeout (${baseTimeout}ms)`);
+    console.log(`Enhanced extraction for ${videoId} with extended timeout (${timeout}ms)`);
     
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`Enhanced attempt ${attempt}/${maxRetries} for video ${videoId}`);
+        console.log(`Enhanced attempt ${attempt}/${maxAttempts} for video ${videoId}`);
         
-        const result = await this.extractWithTimeout(videoId, baseTimeout, attempt);
-        
-        if (result.success) {
-          console.log(`✅ Success on attempt ${attempt}: ${result.transcript?.length || 0} characters`);
-          return new Response(
-            JSON.stringify(result),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
+        const result = await this.extractWithTimeout(videoId, options, timeout);
+        if (result) {
+          return result;
         }
         
-        // If not the last attempt, continue to retry
-        if (attempt < maxRetries) {
-          const delay = attempt === 1 ? 3000 : (attempt === 2 ? 8000 : 15000);
-          console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        // Add delay between attempts
+        if (attempt < maxAttempts) {
+          const delay = attempt * 2000; // 2s, 4s delays
+          console.log(`Waiting ${delay}ms before next attempt...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
       } catch (error) {
-        console.error(`Attempt ${attempt} error:`, error.message);
+        console.error(`Enhanced parsing error on attempt ${attempt}:`, error);
         
-        if (attempt === maxRetries) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              transcript: `Unable to extract transcript after ${maxRetries} attempts. This video may be very long or have restricted captions.`,
-              error: `All ${maxRetries} attempts failed: ${error.message}`,
-              metadata: {
-                videoId,
-                attempts: maxRetries,
-                extractionMethod: 'enhanced-retry',
-                lastError: error.message
-              }
-            }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
+        if (attempt === maxAttempts) {
+          // Final attempt - return comprehensive fallback
+          return this.createEnhancedFallbackResponse(videoId, error.message);
         }
       }
     }
+    
+    return this.createEnhancedFallbackResponse(videoId, "All extraction attempts failed");
   }
-
-  private async extractWithTimeout(videoId: string, timeout: number, attempt: number) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.log(`Timeout after ${timeout}ms on attempt ${attempt}`);
-      controller.abort();
-    }, timeout);
-
-    try {
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  
+  private async extractWithTimeout(videoId: string, options: TranscriptOptions, timeout: number): Promise<Response | null> {
+    return new Promise(async (resolve) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`Extraction timeout after ${timeout}ms`);
+        resolve(null);
+      }, timeout);
       
-      // Enhanced headers for better compatibility
-      const response = await fetch(videoUrl, {
+      try {
+        const result = await this.tryAllExtractionMethods(videoId, options);
+        clearTimeout(timeoutId);
+        resolve(result);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("Extraction error:", error);
+        resolve(null);
+      }
+    });
+  }
+  
+  private async tryAllExtractionMethods(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    console.log("Trying all extraction methods in sequence...");
+    
+    // Strategy 1: Supadata API (if available)
+    try {
+      console.log("Attempting Supadata API extraction...");
+      const supadataStrategy = new SupadataStrategy();
+      const supadataResult = await supadataStrategy.extract(videoId, options);
+      
+      if (supadataResult) {
+        console.log("Supadata API extraction successful");
+        return supadataResult;
+      }
+    } catch (error) {
+      console.warn("Supadata API extraction failed:", error);
+    }
+    
+    // Strategy 2: Enhanced fallback methods
+    try {
+      console.log("Attempting enhanced fallback methods...");
+      const fallbackMethods = new FallbackMethods();
+      const fallbackResult = await fallbackMethods.tryAllMethods(videoId, options);
+      
+      if (fallbackResult) {
+        console.log("Fallback methods extraction successful");
+        return fallbackResult;
+      }
+    } catch (error) {
+      console.warn("Fallback methods extraction failed:", error);
+    }
+    
+    // Strategy 3: Basic scraping attempt
+    try {
+      console.log("Attempting basic YouTube page scraping...");
+      const scrapingResult = await this.tryBasicScraping(videoId, options);
+      
+      if (scrapingResult) {
+        console.log("Basic scraping successful");
+        return scrapingResult;
+      }
+    } catch (error) {
+      console.warn("Basic scraping failed:", error);
+    }
+    
+    console.log("All extraction methods failed");
+    return null;
+  }
+  
+  private async tryBasicScraping(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    try {
+      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const response = await fetch(watchUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        signal: controller.signal
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}`);
       }
 
       const html = await response.text();
       console.log(`Fetched HTML content: ${html.length} characters`);
-
-      // Enhanced parsing for longer videos
-      return await this.parseVideoDataWithEnhancedHandling(html, videoId, attempt);
-
-    } catch (error) {
-      clearTimeout(timeoutId);
       
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeout}ms (attempt ${attempt})`);
-      }
+      // Try to extract video title and basic info
+      const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"[^>]*>/);
+      const authorMatch = html.match(/<meta property="og:site_name" content="([^"]*)"[^>]*>/);
       
-      throw error;
-    }
-  }
-
-  private async parseVideoDataWithEnhancedHandling(html: string, videoId: string, attempt: number) {
-    try {
-      // Extract player response with enhanced regex
-      const playerResponseRegex = /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*(?:;|\n)/;
-      const match = html.match(playerResponseRegex);
+      const title = titleMatch ? titleMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&') : `YouTube Video ${videoId}`;
+      const author = authorMatch ? authorMatch[1] : 'YouTube';
       
-      if (!match) {
-        throw new Error("Could not find ytInitialPlayerResponse in page");
-      }
-
-      const playerResponse = JSON.parse(match[1]);
-      console.log(`Parsed player response on attempt ${attempt}`);
-
-      // Check for captions
-      const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      
-      if (!captionTracks || captionTracks.length === 0) {
-        return {
-          success: false,
-          transcript: "No captions available for this video. The video may not have subtitles or they may be disabled.",
-          error: "No caption tracks found",
-          metadata: {
-            videoId,
-            extractionMethod: 'enhanced-parsing',
-            attempt,
-            hasPlayerResponse: true,
-            captionTracks: 0
-          }
-        };
-      }
-
-      console.log(`Found ${captionTracks.length} caption tracks`);
-
-      // Select best caption track with preference for English
-      let selectedTrack = captionTracks[0];
-      for (const track of captionTracks) {
-        if (track.languageCode === 'en' || track.vssId?.includes('en') || track.name?.simpleText?.toLowerCase().includes('english')) {
-          selectedTrack = track;
-          console.log(`Selected English track: ${track.name?.simpleText || track.languageCode}`);
-          break;
-        }
-      }
-
-      // Fetch and parse captions with enhanced handling
-      const transcript = await this.fetchCaptionsWithEnhancedHandling(selectedTrack, videoId, attempt);
-      
-      if (!transcript) {
-        throw new Error("Failed to extract transcript content");
-      }
-
-      // Enhanced metadata
-      const videoDetails = playerResponse?.videoDetails;
-      const duration = videoDetails?.lengthSeconds ? parseInt(videoDetails.lengthSeconds) : 0;
-      const isLongVideo = duration > 1800; // 30+ minutes
-      
-      return {
+      // Basic response with video info (no transcript available)
+      const transcriptResponse: TranscriptResponse = {
         success: true,
-        transcript,
+        transcript: `Video Title: ${title}\n\nTranscript not available through automatic extraction. This video may not have captions enabled, may be restricted, or may be a live stream.\n\nYou can:\n1. Check if captions are available by visiting the video directly\n2. Add your own notes about this video\n3. Try again later as captions may become available`,
         metadata: {
           videoId,
-          title: videoDetails?.title || 'Unknown Title',
-          duration,
-          isLongVideo,
-          extractionMethod: 'enhanced-captions',
-          attempt,
-          captionLanguage: selectedTrack.languageCode || 'unknown',
-          segmentCount: transcript.split('\n').length,
-          transcriptLength: transcript.length
+          title,
+          author,
+          language: options.language || 'en',
+          duration: 0,
+          segmentCount: 0,
+          extractionMethod: 'basic-scraping-info-only',
+          provider: 'youtube-scraping',
+          quality: 'basic'
         }
       };
 
-    } catch (error) {
-      console.error(`Enhanced parsing error on attempt ${attempt}:`, error);
-      throw new Error(`Parse error: ${error.message}`);
-    }
-  }
-
-  private async fetchCaptionsWithEnhancedHandling(captionTrack: any, videoId: string, attempt: number): Promise<string | null> {
-    try {
-      let captionUrl = captionTrack.baseUrl;
+      return new Response(
+        JSON.stringify(transcriptResponse),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
       
-      if (!captionUrl) {
-        throw new Error("No caption URL found in track");
-      }
-
-      // Ensure absolute URL
-      if (!captionUrl.startsWith('http')) {
-        captionUrl = `https://www.youtube.com${captionUrl}`;
-      }
-
-      // Request WebVTT format for better parsing
-      if (!captionUrl.includes('fmt=')) {
-        captionUrl += captionUrl.includes('?') ? '&fmt=vtt' : '?fmt=vtt';
-      }
-
-      console.log(`Fetching captions from: ${captionUrl.substring(0, 100)}...`);
-
-      // Extended timeout for caption fetching
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds for captions
-
-      const response = await fetch(captionUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Caption fetch failed: ${response.status}`);
-      }
-
-      const captionContent = await response.text();
-      console.log(`Fetched caption content: ${captionContent.length} characters on attempt ${attempt}`);
-
-      // Enhanced parsing with memory management for longer videos
-      return this.parseWebVTTWithEnhancedHandling(captionContent, videoId);
-
     } catch (error) {
-      console.error(`Caption fetch error on attempt ${attempt}:`, error);
-      throw new Error(`Caption error: ${error.message}`);
-    }
-  }
-
-  private parseWebVTTWithEnhancedHandling(content: string, videoId: string): string | null {
-    try {
-      if (!content.includes('WEBVTT')) {
-        console.warn('Content does not appear to be WebVTT format');
-        return null;
-      }
-
-      const lines = content.split('\n');
-      const segments: Array<{start: string, end: string, text: string}> = [];
-      let currentSegment: any = null;
-      let processedLines = 0;
-
-      console.log(`Processing ${lines.length} lines for video ${videoId}`);
-
-      for (const line of lines) {
-        processedLines++;
-        
-        // Progress logging for very long videos
-        if (processedLines % 1000 === 0) {
-          console.log(`Processed ${processedLines}/${lines.length} lines...`);
-        }
-
-        const trimmedLine = line.trim();
-        
-        if (!trimmedLine || trimmedLine === 'WEBVTT' || trimmedLine.startsWith('Kind:') || trimmedLine.startsWith('Language:')) {
-          continue;
-        }
-
-        // Enhanced timestamp pattern matching
-        const timestampPattern = /^(\d{1,2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{1,2}:\d{2}:\d{2}\.\d{3})/;
-        const timestampMatch = trimmedLine.match(timestampPattern);
-
-        if (timestampMatch) {
-          // Save previous segment
-          if (currentSegment?.text) {
-            segments.push(currentSegment);
-          }
-
-          // Start new segment
-          currentSegment = {
-            start: timestampMatch[1],
-            end: timestampMatch[2],
-            text: ''
-          };
-        } else if (currentSegment && trimmedLine) {
-          // Add text to current segment with enhanced cleaning
-          const cleanedText = trimmedLine
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&nbsp;/g, ' ')
-            .replace(/<[^>]*>/g, '') // Remove HTML tags
-            .replace(/\[.*?\]/g, '') // Remove sound effects [music], [applause], etc.
-            .trim();
-
-          if (cleanedText) {
-            currentSegment.text += (currentSegment.text ? ' ' : '') + cleanedText;
-          }
-        }
-      }
-
-      // Don't forget the last segment
-      if (currentSegment?.text) {
-        segments.push(currentSegment);
-      }
-
-      console.log(`✅ Parsed ${segments.length} segments for video ${videoId}`);
-
-      if (segments.length === 0) {
-        return null;
-      }
-
-      // Enhanced formatting with chunked processing for memory efficiency
-      const chunkSize = 100;
-      const formattedChunks: string[] = [];
-
-      for (let i = 0; i < segments.length; i += chunkSize) {
-        const chunk = segments.slice(i, i + chunkSize);
-        const formattedChunk = chunk
-          .map(segment => {
-            const startTime = segment.start.substring(0, 8); // Remove milliseconds for readability
-            const endTime = segment.end.substring(0, 8);
-            return `[${startTime} - ${endTime}] ${segment.text}`;
-          })
-          .join('\n');
-        
-        formattedChunks.push(formattedChunk);
-        
-        // Log progress for very long videos
-        if (formattedChunks.length % 10 === 0) {
-          console.log(`Formatted ${i + chunk.length}/${segments.length} segments...`);
-        }
-      }
-
-      const finalTranscript = formattedChunks.join('\n');
-      console.log(`✅ Final transcript: ${finalTranscript.length} characters`);
-      
-      return finalTranscript;
-
-    } catch (error) {
-      console.error('Enhanced WebVTT parsing error:', error);
+      console.error("Basic scraping failed:", error);
       return null;
     }
+  }
+  
+  private createEnhancedFallbackResponse(videoId: string, error: string): Response {
+    console.log("Creating enhanced fallback response");
+    
+    const transcriptResponse: TranscriptResponse = {
+      success: true, // Mark as success so the client can still save the note
+      transcript: `# YouTube Video Analysis\n\n**Video ID:** ${videoId}\n**Source:** https://www.youtube.com/watch?v=${videoId}\n**Status:** Transcript extraction unavailable\n**Timestamp:** ${new Date().toLocaleString()}\n\n---\n\n## Analysis Status\n\nAutomatic transcript extraction was not possible for this video. Common reasons:\n\n- **No Captions Available**: Video doesn't have auto-generated or manual captions\n- **Restricted Access**: Video may be private, unlisted, or region-restricted\n- **Live Content**: Live streams may not have stable caption data\n- **Service Limitations**: Temporary API or service restrictions\n\n## Recommended Actions\n\n### Immediate Steps\n1. **Visit Video Directly**: Check https://www.youtube.com/watch?v=${videoId} for available captions\n2. **Manual Notes**: Use the space below to add your own observations\n3. **Check Later**: Captions may become available over time\n\n### Alternative Methods\n- Enable captions directly on YouTube (CC button)\n- Use browser extensions for transcript extraction\n- Contact the video creator about caption availability\n\n---\n\n## My Notes\n\n### Key Points\n- [ ] Main topic: \n- [ ] Important insights: \n- [ ] Action items: \n\n### Timestamps & Moments\n*Add specific timestamps and observations*\n\n**00:00** - \n**05:00** - \n**10:00** - \n\n### Personal Reflections\n*Your thoughts and how this relates to your interests*\n\n---\n\n*Note: This structured template was created automatically when transcript extraction was unavailable. Edit this content to add your personal insights and observations.*`,
+      metadata: {
+        videoId,
+        title: `YouTube Video ${videoId}`,
+        author: 'Unknown',
+        language: 'en',
+        duration: 0,
+        segmentCount: 0,
+        extractionMethod: 'enhanced-fallback-template',
+        provider: 'fallback-system',
+        quality: 'template'
+      },
+      error: `Extraction failed: ${error}`
+    };
+
+    return new Response(
+      JSON.stringify(transcriptResponse),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 }
