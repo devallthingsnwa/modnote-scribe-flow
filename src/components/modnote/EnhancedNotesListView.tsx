@@ -89,13 +89,13 @@ export function EnhancedNotesListView({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <Grid3X3 className="w-4 h-4 text-gray-400" />
+                <Grid3X3 className="w-4 h-4 text-black" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <Filter className="w-4 h-4 text-gray-400" />
+                <Filter className="w-4 h-4 text-black" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <List className="w-4 h-4 text-gray-400" />
+                <List className="w-4 h-4 text-black" />
               </Button>
             </div>
             <h2 className="text-xl font-semibold text-gray-900">
