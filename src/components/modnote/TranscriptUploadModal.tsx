@@ -59,6 +59,7 @@ export function TranscriptUploadModal({ isOpen, onClose, onSuccess }: Transcript
       onSuccess();
       onClose();
     } catch (error) {
+      console.error("YouTube transcript error:", error);
       toast({
         title: "Error",
         description: "Failed to extract transcript. Please try again.",
@@ -103,6 +104,7 @@ export function TranscriptUploadModal({ isOpen, onClose, onSuccess }: Transcript
       onSuccess();
       onClose();
     } catch (error) {
+      console.error("Audio processing error:", error);
       toast({
         title: "Error",
         description: "Failed to process audio. Please try again.",
@@ -140,6 +142,7 @@ export function TranscriptUploadModal({ isOpen, onClose, onSuccess }: Transcript
       onSuccess();
       onClose();
     } catch (error) {
+      console.error("Manual transcript error:", error);
       toast({
         title: "Error",
         description: "Failed to save transcript. Please try again.",

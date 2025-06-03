@@ -54,6 +54,7 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
       onFileUploaded();
       onClose();
     } catch (error) {
+      console.error("File upload error:", error);
       toast({
         title: "Upload failed",
         description: "Failed to upload files. Please try again.",

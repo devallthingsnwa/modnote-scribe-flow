@@ -23,12 +23,19 @@ import TranscriptExtractor from "@/pages/TranscriptExtractor";
 import TestPage from "@/pages/TestPage";
 import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
+      <ThemeProvider defaultTheme="light" storageKey="app-theme">
         <Router>
           <AuthProvider>
             <Routes>
