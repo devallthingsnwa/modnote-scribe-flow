@@ -64,10 +64,7 @@ export default function ModNoteDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <ModNoteSidebar 
-        selectedSection={selectedSection}
-        onSectionChange={setSelectedSection}
-      />
+      <ModNoteSidebar />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">

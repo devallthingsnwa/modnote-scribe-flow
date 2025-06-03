@@ -66,6 +66,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       title: "How to Use This Space",
       content: "How to use spaces for hiring and other workflows. Spaces are us...",
       timestamp: "3 days ago",
+      progress: { completed: 0, total: 1 },
       tags: ["Product"]
     },
     {
@@ -74,6 +75,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
       timestamp: "12 Jun, 8:00",
       isCompleted: true,
+      progress: { completed: 1, total: 1 },
       tags: ["Meeting", "Product"]
     }
   ];
