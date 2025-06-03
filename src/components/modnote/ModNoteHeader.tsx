@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Search, Bell, Settings, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { AskAIModal } from "./AskAIModal";
 import { ShareModal } from "./ShareModal";
 import { FileUploadModal } from "./FileUploadModal";
 import { useToast } from "@/hooks/use-toast";
+import { Logo } from "@/components/Logo";
 
 interface ModNoteHeaderProps {
   onNewNote?: () => void;
@@ -90,12 +90,7 @@ export function ModNoteHeader({
         <div className="flex items-center justify-between">
           {/* Left side - Logo and Action buttons */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">M</span>
-              </div>
-              <span className="font-semibold text-lg text-gray-900">ModNote</span>
-            </div>
+            <Logo size="md" />
             
             <div className="flex items-center gap-2">
               <Button 

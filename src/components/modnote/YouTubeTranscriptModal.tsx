@@ -91,7 +91,6 @@ export function YouTubeTranscriptModal({ isOpen, onClose, onSuccess }: YouTubeTr
       await createNoteMutation.mutateAsync({
         title: extractedData.title,
         content: extractedData.content,
-        is_transcription: true,
         source_url: extractedData.url,
       });
 

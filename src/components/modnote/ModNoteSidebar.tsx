@@ -1,7 +1,7 @@
-
 import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation, Link } from "react-router-dom";
+import { Logo } from "@/components/Logo";
 
 export function ModNoteSidebar() {
   const location = useLocation();
@@ -22,12 +22,7 @@ export function ModNoteSidebar() {
     <div className="w-60 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Logo */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-            <FileText className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-semibold text-lg text-gray-900">ModNote</span>
-        </div>
+        <Logo size="md" />
       </div>
 
       {/* Navigation */}
