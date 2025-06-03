@@ -92,6 +92,7 @@ export function YouTubeTranscriptModal({ isOpen, onClose, onSuccess }: YouTubeTr
         title: extractedData.title,
         content: extractedData.content,
         source_url: extractedData.url,
+        is_transcription: true,
       });
 
       toast({

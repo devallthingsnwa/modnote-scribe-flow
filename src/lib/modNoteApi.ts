@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -160,6 +161,8 @@ export const createModNote = async (note: {
   title: string;
   content?: string | null;
   notebook_id?: string | null;
+  source_url?: string | null;
+  is_transcription?: boolean;
   is_reminder?: boolean;
   due_date?: string | null;
   reminder_date?: string | null;
