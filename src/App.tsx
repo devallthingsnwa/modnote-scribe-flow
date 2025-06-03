@@ -28,15 +28,15 @@ const queryClient = new QueryClient();
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <Router>
-          <AuthProvider>
+      <ThemeProvider defaultTheme="light" storageKey="app-theme">
+        <AuthProvider>
+          <Router>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/modnote" element={<EnhancedModNoteDashboard />} />
-              <Route path="/modnote-simple" element={<ModNoteDashboard />} />
-              <Route path="/new" element={<NewNote />} />
+              <Route path="/enhanced-dashboard" element={<EnhancedModNoteDashboard />} />
+              <Route path="/modnote" element={<ModNoteDashboard />} />
+              <Route path="/new-note" element={<NewNote />} />
               <Route path="/note/:id" element={<NotePage />} />
               <Route path="/notebooks" element={<Notebooks />} />
               <Route path="/modnote-notebooks" element={<ModNoteNotebooks />} />
@@ -49,9 +49,9 @@ function App() {
               <Route path="/test" element={<TestPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </AuthProvider>
-        </Router>
-        <Toaster />
+          </Router>
+          <Toaster />
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

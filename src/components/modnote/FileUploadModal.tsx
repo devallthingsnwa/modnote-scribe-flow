@@ -2,7 +2,10 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, File, Image, Video, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Upload, File, Image, Video, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface FileUploadModalProps {
@@ -12,35 +15,44 @@ interface FileUploadModalProps {
 }
 
 export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadModalProps) {
-  const [files, setFiles] = useState<File[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    setFiles(prev => [...prev, ...selectedFiles]);
-  };
-
-  const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(files);
   };
 
   const handleUpload = async () => {
-    if (files.length === 0) return;
+    if (selectedFiles.length === 0) {
+      toast({
+        title: "No files selected",
+        description: "Please select files to upload",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     try {
-      // Simulate file upload
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      // Simulate file upload progress
+      for (let i = 0; i <= 100; i += 10) {
+        setUploadProgress(i);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       toast({
-        title: "Files uploaded",
-        description: `${files.length} file(s) uploaded successfully`,
+        title: "Files uploaded successfully",
+        description: `${selectedFiles.length} file(s) have been uploaded and are ready to use.`,
       });
-      
+
+      setSelectedFiles([]);
       onFileUploaded();
       onClose();
-      setFiles([]);
     } catch (error) {
       toast({
         title: "Upload failed",
@@ -49,71 +61,73 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
       });
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
   const getFileIcon = (file: File) => {
-    if (file.type.startsWith('image/')) return Image;
-    if (file.type.startsWith('video/')) return Video;
-    return File;
+    if (file.type.startsWith('image/')) return <Image className="w-4 h-4 text-blue-500" />;
+    if (file.type.startsWith('video/')) return <Video className="w-4 h-4 text-purple-500" />;
+    if (file.type.includes('pdf') || file.type.includes('document')) return <FileText className="w-4 h-4 text-red-500" />;
+    return <File className="w-4 h-4 text-gray-500" />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5 text-purple-500" />
-            Add Multi Media
+            Upload Files
           </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
-          {/* File Drop Zone */}
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
-            <input
+          <div>
+            <Label htmlFor="file-upload">Select Files</Label>
+            <Input
+              id="file-upload"
               type="file"
               multiple
               onChange={handleFileSelect}
-              className="hidden"
-              id="file-upload"
-              accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+              disabled={isUploading}
+              className="cursor-pointer"
             />
-            <label htmlFor="file-upload">
-              <Button variant="outline" className="cursor-pointer" asChild>
-                <span>Choose Files</span>
-              </Button>
-            </label>
+            <p className="text-sm text-gray-500 mt-2">
+              Supported formats: Images, Videos, PDFs, Documents
+            </p>
           </div>
 
-          {/* File List */}
-          {files.length > 0 && (
+          {selectedFiles.length > 0 && (
             <div className="space-y-2">
-              <h4 className="font-medium text-sm">Selected Files</h4>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {files.map((file, index) => {
-                  const FileIcon = getFileIcon(file);
-                  return (
-                    <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-                      <FileIcon className="w-4 h-4 text-gray-500" />
-                      <span className="flex-1 text-sm truncate">{file.name}</span>
-                      <span className="text-xs text-gray-500">
-                        {(file.size / 1024 / 1024).toFixed(1)} MB
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeFile(index)}
-                        className="h-6 w-6"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
+              <Label>Selected Files ({selectedFiles.length})</Label>
+              <div className="max-h-32 overflow-y-auto space-y-2 border rounded-lg p-2">
+                {selectedFiles.map((file, index) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                    {getFileIcon(file)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {isUploading && (
+            <div className="space-y-2">
+              <Label>Upload Progress</Label>
+              <Progress value={uploadProgress} className="w-full" />
+              <p className="text-sm text-gray-600 text-center">{uploadProgress}%</p>
             </div>
           )}
 
@@ -123,17 +137,10 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
             </Button>
             <Button 
               onClick={handleUpload} 
-              disabled={files.length === 0 || isUploading}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
+              disabled={selectedFiles.length === 0 || isUploading}
+              className="bg-purple-500 hover:bg-purple-600 text-white"
             >
-              {isUploading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload ({files.length})
-                </>
-              )}
+              {isUploading ? "Uploading..." : "Upload Files"}
             </Button>
           </div>
         </div>
