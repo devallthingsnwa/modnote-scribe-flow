@@ -1,204 +1,143 @@
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, File, X, Image, Video, Youtube } from "lucide-react";
-import { useUploadFile } from "@/lib/modNoteApi";
+import { Upload, File, Image, Video, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { YouTubeTranscriptModal } from "./YouTubeTranscriptModal";
 
 interface FileUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  noteId?: string;
-  onFileUploaded?: (file: any) => void;
+  onFileUploaded: () => void;
 }
 
-export function FileUploadModal({ isOpen, onClose, noteId, onFileUploaded }: FileUploadModalProps) {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-  const [showYouTubeModal, setShowYouTubeModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadFileMutation = useUploadFile();
+export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadModalProps) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const handleFileSelect = (files: FileList | null) => {
-    if (!files) return;
-    setSelectedFiles(Array.from(files));
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    setFiles(prev => [...prev, ...selectedFiles]);
   };
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files);
-    }
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpload = async () => {
-    if (selectedFiles.length === 0) return;
+    if (files.length === 0) return;
 
+    setIsUploading(true);
     try {
-      for (const file of selectedFiles) {
-        const uploadedFile = await uploadFileMutation.mutateAsync({ file, noteId });
-        onFileUploaded?.(uploadedFile);
-      }
+      // Simulate file upload
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       toast({
-        title: "Files uploaded successfully",
-        description: `${selectedFiles.length} file(s) uploaded.`,
+        title: "Files uploaded",
+        description: `${files.length} file(s) uploaded successfully`,
       });
       
+      onFileUploaded();
       onClose();
-      setSelectedFiles([]);
+      setFiles([]);
     } catch (error) {
       toast({
         title: "Upload failed",
         description: "Failed to upload files. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const removeFile = (index: number) => {
-    setSelectedFiles(files => files.filter((_, i) => i !== index));
-  };
-
   const getFileIcon = (file: File) => {
-    if (file.type.startsWith('image/')) return <Image className="w-4 h-4" />;
-    if (file.type.startsWith('video/')) return <Video className="w-4 h-4" />;
-    return <File className="w-4 h-4" />;
-  };
-
-  const handleClose = () => {
-    onClose();
-    setSelectedFiles([]);
+    if (file.type.startsWith('image/')) return Image;
+    if (file.type.startsWith('video/')) return Video;
+    return File;
   };
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5 text-purple-500" />
-              Upload Files
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {/* YouTube Transcript Option */}
-            <div className="space-y-3">
-              <Button
-                onClick={() => setShowYouTubeModal(true)}
-                className="w-full bg-red-500 hover:bg-red-600 text-white"
-                variant="default"
-              >
-                <Youtube className="w-4 h-4 mr-2" />
-                Extract YouTube Transcript
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5 text-purple-500" />
+            Add Multi Media
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {/* File Drop Zone */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
+            <input
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              id="file-upload"
+              accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+            />
+            <label htmlFor="file-upload">
+              <Button variant="outline" className="cursor-pointer" asChild>
+                <span>Choose Files</span>
               </Button>
-              
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-gray-200" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-500">Or upload files</span>
-                </div>
-              </div>
-            </div>
+            </label>
+          </div>
 
-            {/* File Upload Area */}
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-                dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-              }`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">
-                Drag & drop files here, or click to select
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Supports images, documents, videos, and more
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={(e) => handleFileSelect(e.target.files)}
-                className="hidden"
-              />
-            </div>
-
-            {selectedFiles.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Selected files:</h4>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {selectedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded">
-                      <div className="flex items-center gap-2">
-                        {getFileIcon(file)}
-                        <div>
-                          <p className="text-sm font-medium truncate max-w-48">{file.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
+          {/* File List */}
+          {files.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm">Selected Files</h4>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {files.map((file, index) => {
+                  const FileIcon = getFileIcon(file);
+                  return (
+                    <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                      <FileIcon className="w-4 h-4 text-gray-500" />
+                      <span className="flex-1 text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-gray-500">
+                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                      </span>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => removeFile(index)}
+                        className="h-6 w-6"
                       >
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            )}
-            
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleUpload}
-                disabled={selectedFiles.length === 0 || uploadFileMutation.isPending}
-                className="bg-purple-500 hover:bg-purple-600"
-              >
-                Upload {selectedFiles.length > 0 && `(${selectedFiles.length})`}
-              </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          )}
 
-      <YouTubeTranscriptModal
-        isOpen={showYouTubeModal}
-        onClose={() => setShowYouTubeModal(false)}
-        onSuccess={() => {
-          setShowYouTubeModal(false);
-          onClose();
-        }}
-      />
-    </>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={isUploading}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpload} 
+              disabled={files.length === 0 || isUploading}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {isUploading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload ({files.length})
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

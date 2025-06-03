@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface AskAIModalProps {
@@ -14,28 +14,28 @@ interface AskAIModalProps {
 }
 
 export function AskAIModal({ isOpen, onClose, onAIResponse, context }: AskAIModalProps) {
-  const [prompt, setPrompt] = useState("");
+  const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleAskAI = async () => {
-    if (!prompt.trim()) return;
+  const handleSubmit = async () => {
+    if (!question.trim()) return;
 
     setIsLoading(true);
     try {
-      // This would integrate with your AI service (OpenAI, DeepSeek, etc.)
-      // For now, we'll simulate an AI response
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Simulate AI response for now
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const mockResponse = `Here's an AI-generated response to: "${prompt}"\n\nBased on ${context ? 'the current content' : 'your request'}, here are some suggestions:\n\n• Key insight 1\n• Key insight 2\n• Key insight 3\n\nWould you like me to elaborate on any of these points?`;
+      const response = `AI Response: Based on your question "${question}", here are some suggestions...`;
+      onAIResponse(response);
       
-      onAIResponse(mockResponse);
       toast({
         title: "AI Response Generated",
-        description: "The AI response has been added to your note.",
+        description: "The AI has provided suggestions for your question.",
       });
+      
       onClose();
-      setPrompt("");
+      setQuestion("");
     } catch (error) {
       toast({
         title: "Error",
@@ -49,46 +49,56 @@ export function AskAIModal({ isOpen, onClose, onAIResponse, context }: AskAIModa
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-green-500" />
-            Ask AI
+            Ask AI Assistant
           </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              What would you like help with?
+            </label>
+            <Textarea
+              placeholder="Ask me anything about your notes, writing, or need help with content generation..."
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              className="min-h-[100px]"
+              disabled={isLoading}
+            />
+          </div>
+          
           {context && (
-            <div className="bg-muted/50 p-3 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                AI will use your current note content as context.
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Current note context:
+              </label>
+              <p className="text-sm text-gray-700 line-clamp-3">
+                {context.substring(0, 150)}...
               </p>
             </div>
           )}
           
-          <Textarea
-            placeholder="What would you like to know or generate?"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={4}
-            className="resize-none"
-          />
-          
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isLoading}>
               Cancel
             </Button>
             <Button 
-              onClick={handleAskAI} 
-              disabled={!prompt.trim() || isLoading}
-              className="bg-green-500 hover:bg-green-600"
+              onClick={handleSubmit} 
+              disabled={!question.trim() || isLoading}
+              className="bg-green-500 hover:bg-green-600 text-white"
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Ask AI
+                </>
               )}
-              Ask AI
             </Button>
           </div>
         </div>

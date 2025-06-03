@@ -4,6 +4,7 @@ import { EnhancedModNoteHeader } from "./EnhancedModNoteHeader";
 import { EnhancedModNoteSidebar } from "./EnhancedModNoteSidebar";
 import { EnhancedNotesListView } from "./EnhancedNotesListView";
 import { EnhancedNoteEditor } from "./EnhancedNoteEditor";
+import { NotebooksListView } from "./NotebooksListView";
 import { useModNotes } from "@/lib/modNoteApi";
 
 export function EnhancedModNoteLayout() {
@@ -42,12 +43,21 @@ export function EnhancedModNoteLayout() {
     refetch();
   };
 
+  const handleSectionChange = (section: string) => {
+    setSelectedSection(section);
+    if (section === "notebooks") {
+      setSelectedNoteId(null);
+    } else {
+      setSelectedNoteId("task-3");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Enhanced Sidebar */}
       <EnhancedModNoteSidebar 
         selectedSection={selectedSection}
-        onSectionChange={setSelectedSection}
+        onSectionChange={handleSectionChange}
       />
       
       {/* Main Content Area */}
@@ -62,28 +72,35 @@ export function EnhancedModNoteLayout() {
         
         {/* Content Layout */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Notes List Panel */}
-          <div className="w-96 border-r border-gray-200 bg-white">
-            <EnhancedNotesListView
-              notes={filteredNotes}
-              selectedNoteId={selectedNoteId}
-              onNoteSelect={handleNoteSelect}
-              activeTab={activeTab}
-              onTabChange={handleTabChange}
-              notesCount={32}
-            />
-          </div>
-          
-          {/* Note Editor Panel */}
-          <div className="flex-1">
-            <EnhancedNoteEditor
-              noteId={selectedNoteId}
-              onNoteDeleted={() => {
-                setSelectedNoteId(null);
-                refetch();
-              }}
-            />
-          </div>
+          {selectedSection === "notebooks" ? (
+            /* Notebooks View */
+            <NotebooksListView />
+          ) : (
+            <>
+              {/* Notes List Panel */}
+              <div className="w-96 border-r border-gray-200 bg-white">
+                <EnhancedNotesListView
+                  notes={filteredNotes}
+                  selectedNoteId={selectedNoteId}
+                  onNoteSelect={handleNoteSelect}
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                  notesCount={32}
+                />
+              </div>
+              
+              {/* Note Editor Panel */}
+              <div className="flex-1">
+                <EnhancedNoteEditor
+                  noteId={selectedNoteId}
+                  onNoteDeleted={() => {
+                    setSelectedNoteId(null);
+                    refetch();
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
