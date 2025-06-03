@@ -49,13 +49,13 @@ export function ModNoteHeader({
           <Logo size="md" />
           
           <div className="flex items-center gap-2">
-            {/* Note Button */}
+            {/* Notes Button */}
             <Button 
               onClick={onNewNote}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 h-9"
             >
               <FileText className="w-4 h-4 mr-2" />
-              Note
+              Notes
             </Button>
             
             {/* Add Multi Media Button */}
