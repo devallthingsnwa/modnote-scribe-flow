@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { MoreHorizontal, Plus, List, Grid3X3, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,8 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import { useCreateModNote } from "@/lib/modNoteApi";
+import { useToast } from "@/hooks/use-toast";
 
 interface Notebook {
   id: string;
@@ -21,6 +22,8 @@ interface Notebook {
 }
 
 export function NotebooksListView() {
+  const { toast } = useToast();
+  const createNoteMutation = useCreateModNote();
   const [notebooks] = useState<Notebook[]>([
     {
       id: "1",
@@ -96,6 +99,29 @@ export function NotebooksListView() {
     notebook.space.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleNewNotebook = () => {
+    createNoteMutation.mutate({
+      title: "New Notebook",
+      content: "",
+    }, {
+      onSuccess: (newNote) => {
+        toast({
+          title: "Notebook created",
+          description: "New notebook has been created successfully."
+        });
+        console.log("New notebook created:", newNote.id);
+      },
+      onError: (error) => {
+        console.error("Error creating notebook:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create new notebook. Please try again.",
+          variant: "destructive"
+        });
+      }
+    });
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -105,7 +131,10 @@ export function NotebooksListView() {
           <p className="text-gray-500 text-sm">{filteredNotebooks.length} Notebooks</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleNewNotebook}
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Notebook
           </Button>
@@ -245,7 +274,10 @@ export function NotebooksListView() {
       {filteredNotebooks.length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-500 mb-4">No notebooks found</div>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleNewNotebook}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Create your first notebook
           </Button>

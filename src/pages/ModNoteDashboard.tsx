@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ModNoteHeader } from "@/components/modnote/ModNoteHeader";
 import { ModNoteSidebar } from "@/components/modnote/ModNoteSidebar";
 import { NotesListView } from "@/components/modnote/NotesListView";
@@ -9,20 +10,43 @@ import { FilesView } from "@/components/modnote/FilesView";
 import { TagsView } from "@/components/modnote/TagsView";
 import { SharedView } from "@/components/modnote/SharedView";
 import { TrashView } from "@/components/modnote/TrashView";
+import { useCreateModNote } from "@/lib/modNoteApi";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ModNoteDashboard() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedSection, setSelectedSection] = useState("notes");
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const createNoteMutation = useCreateModNote();
 
   const handleNoteSelect = (noteId: string) => {
     setSelectedNoteId(noteId);
   };
 
   const handleNewNote = () => {
-    // Create new note and open in editor
-    const newNoteId = `note-${Date.now()}`;
-    setSelectedNoteId(newNoteId);
+    // Create a new note and open it in the editor
+    createNoteMutation.mutate({
+      title: "Untitled Note",
+      content: "",
+    }, {
+      onSuccess: (newNote) => {
+        setSelectedNoteId(newNote.id);
+        toast({
+          title: "Note created",
+          description: "New note has been created successfully."
+        });
+      },
+      onError: (error) => {
+        console.error("Error creating note:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create new note. Please try again.",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   const renderMainContent = () => {
