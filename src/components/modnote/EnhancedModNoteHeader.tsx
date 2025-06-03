@@ -123,7 +123,7 @@ export function EnhancedModNoteHeader({
 
           {/* Ask AI Button */}
           <Button 
-            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 h-9 rounded-lg font-medium"
+            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 h-9 rounded-2xl font-medium"
           >
             <Mic className="w-4 h-4 mr-2" />
             Ask AI
@@ -134,7 +134,7 @@ export function EnhancedModNoteHeader({
         <div className="flex items-center gap-3">
           {/* Notification Bell */}
           <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-gray-100">
-            <Bell className="w-5 h-5 text-gray-600" />
+            <Bell className="w-6 h-6 text-gray-600" />
             {/* Notification indicator dot - can be conditionally shown */}
             <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>
           </Button>
