@@ -12,7 +12,7 @@ import { TrashView } from "@/components/modnote/TrashView";
 
 export default function ModNoteDashboard() {
   const [selectedSection, setSelectedSection] = useState("notes");
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("note-3");
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleNoteSelect = (noteId: string) => {
@@ -20,17 +20,9 @@ export default function ModNoteDashboard() {
   };
 
   const handleNewNote = () => {
+    // Create new note and open in editor
     const newNoteId = `note-${Date.now()}`;
     setSelectedNoteId(newNoteId);
-  };
-
-  const handleSectionChange = (section: string) => {
-    setSelectedSection(section);
-    if (section === "notebooks") {
-      setSelectedNoteId(null);
-    } else if (section === "notes") {
-      setSelectedNoteId("note-3");
-    }
   };
 
   const renderMainContent = () => {
@@ -72,10 +64,7 @@ export default function ModNoteDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <ModNoteSidebar 
-        selectedSection={selectedSection}
-        onSectionChange={handleSectionChange}
-      />
+      <ModNoteSidebar />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">

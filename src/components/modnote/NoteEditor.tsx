@@ -2,7 +2,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { 
   Bold, 
   Italic, 
@@ -16,10 +19,11 @@ import {
   Palette,
   MoreHorizontal,
   Play,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  Share2
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface NoteEditorProps {
   noteId: string | null;
@@ -29,9 +33,38 @@ interface NoteEditorProps {
 export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
   const [title, setTitle] = useState("Product Team Meeting");
   const [content, setContent] = useState("");
+  const [isEditing, setIsEditing] = useState(true);
 
   const insertFormatting = (format: string) => {
-    // Formatting logic here
+    const textarea = document.querySelector('#note-content') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.substring(start, end);
+    
+    let replacement = "";
+    
+    switch (format) {
+      case "bold":
+        replacement = `**${selectedText}**`;
+        break;
+      case "italic":
+        replacement = `*${selectedText}*`;
+        break;
+      case "underline":
+        replacement = `<u>${selectedText}</u>`;
+        break;
+      case "list":
+        replacement = selectedText.split('\n').map(line => line.trim() ? `• ${line}` : line).join('\n');
+        break;
+      case "checklist":
+        replacement = selectedText.split('\n').map(line => line.trim() ? `☐ ${line}` : line).join('\n');
+        break;
+    }
+    
+    const newContent = content.substring(0, start) + replacement + content.substring(end);
+    setContent(newContent);
   };
 
   if (!noteId) {
@@ -49,10 +82,16 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
     <div className="flex-1 bg-white flex flex-col">
       {/* Breadcrumb */}
       <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center text-sm text-gray-600">
-          <span>My Notebook</span>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-blue-600">Product Team Meeting</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center text-sm text-gray-600">
+            <span>My Notebook</span>
+            <ChevronRight className="w-4 h-4 mx-2" />
+            <span className="text-blue-600">Product Team Meeting</span>
+          </div>
+          <Button variant="outline" className="text-blue-600">
+            <Share2 className="w-4 h-4 mr-2" />
+            Share
+          </Button>
         </div>
       </div>
 
@@ -67,10 +106,10 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Undo/Redo */}
-          <Button variant="ghost" size="sm" onClick={() => {}}>
+          <Button variant="ghost" size="sm">
             <Undo2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => {}}>
+          <Button variant="ghost" size="sm">
             <Redo2 className="w-4 h-4" />
           </Button>
           
@@ -144,7 +183,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
 
           {/* Content */}
           <div className="space-y-4">
-            {/* Example Follow Up Actions Button */}
+            {/* Follow Up Actions Button */}
             <Card className="p-4 bg-purple-50 border-purple-200">
               <Button className="bg-purple-600 hover:bg-purple-700 text-white text-sm">
                 Follow up actions
@@ -157,7 +196,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
               </div>
             </Card>
 
-            {/* Main Content Area */}
+            {/* Main Content */}
             <div className="space-y-4">
               <h3 className="font-medium text-lg">Updates to hiring processes, maturity charts, and the company handbook.</h3>
               
@@ -188,7 +227,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
                 </div>
               </div>
 
-              {/* Table */}
+              {/* Team Member Table */}
               <div className="mt-6">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>

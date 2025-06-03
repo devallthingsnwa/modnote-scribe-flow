@@ -22,7 +22,6 @@ interface Note {
   tags: string[];
   isCompleted?: boolean;
   hasSubtasks?: boolean;
-  indicator?: string;
 }
 
 interface NotesListViewProps {
@@ -36,45 +35,42 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
   
   const mockNotes: Note[] = [
     {
-      id: "note-1",
+      id: "1",
       title: "Follow up actions",
       content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
-      timestamp: "20 minutes ago",
+      timestamp: "30 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
-      tags: [],
-      indicator: "blue"
+      tags: []
     },
     {
-      id: "note-2",
+      id: "2",
       title: "Things to do",
       content: "Prepare Monthly Product Meeting Updates",
-      timestamp: "59 minutes ago",
+      timestamp: "45 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
-      tags: [],
-      indicator: "blue"
+      tags: []
     },
     {
-      id: "note-3",
+      id: "3",
       title: "Product Team Meeting",
       content: "Updates to hiring processes, maturity charts, and the company handbook.",
       timestamp: "1 hour ago",
       dueDate: "12 Jun, 8:00",
       progress: { completed: 0, total: 1 },
-      tags: ["Meeting", "Product"],
-      indicator: "blue"
+      tags: ["Meeting", "Product"]
     },
     {
-      id: "note-4",
+      id: "4",
       title: "How to Use This Space",
       content: "How to use spaces for hiring and other workflows. Spaces are us...",
-      timestamp: "3 hours ago",
+      timestamp: "3 days ago",
       progress: { completed: 0, total: 1 },
       tags: ["Product"]
     },
     {
-      id: "note-5",
+      id: "5",
       title: "Follow up actions",
       content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
       timestamp: "12 Jun, 8:00",
@@ -94,7 +90,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
   });
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
@@ -129,7 +125,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       </div>
 
       {/* Notes List */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-3">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {filteredNotes.map((note) => {
           const isSelected = selectedNoteId === note.id;
           
@@ -147,9 +143,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
               {/* Header with Checkbox and Options */}
               <div className="flex items-start gap-3 mb-3">
                 <div className="flex items-center gap-2 mt-0.5">
-                  {note.indicator && (
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  )}
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                   {note.hasSubtasks ? (
                     <Circle className="w-4 h-4 text-blue-500" />
                   ) : (
