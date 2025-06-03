@@ -1,56 +1,57 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import NotePage from "./pages/NotePage";
-import NewNote from "./pages/NewNote";
-import NotFound from "./pages/NotFound";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings";
-import Notebooks from "./pages/Notebooks";
-import Tags from "./pages/Tags";
-import AIResearch from "./pages/AIResearch";
-import AISummarizer from "./pages/AISummarizer";
-import ModNoteDashboard from "./pages/ModNoteDashboard";
-import ModNoteNotebooks from "./pages/ModNoteNotebooks";
-import { AuthProvider } from "./hooks/useAuth";
+import { Toaster } from "@/components/ui/toaster";
+
+// Page imports
+import Index from "@/pages/Index";
+import Dashboard from "@/pages/Dashboard";
+import EnhancedModNoteDashboard from "@/pages/EnhancedModNoteDashboard";
+import ModNoteDashboard from "@/pages/ModNoteDashboard";
+import NewNote from "@/pages/NewNote";
+import NotePage from "@/pages/NotePage";
+import Notebooks from "@/pages/Notebooks";
+import ModNoteNotebooks from "@/pages/ModNoteNotebooks";
+import Tags from "@/pages/Tags";
+import Profile from "@/pages/Profile";
+import Settings from "@/pages/Settings";
+import AIResearch from "@/pages/AIResearch";
+import AISummarizer from "@/pages/AISummarizer";
+import TranscriptExtractor from "@/pages/TranscriptExtractor";
+import TestPage from "@/pages/TestPage";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+        <Router>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/modnote" element={<EnhancedModNoteDashboard />} />
+            <Route path="/modnote-simple" element={<ModNoteDashboard />} />
+            <Route path="/new" element={<NewNote />} />
+            <Route path="/note/:id" element={<NotePage />} />
+            <Route path="/notebooks" element={<Notebooks />} />
+            <Route path="/modnote-notebooks" element={<ModNoteNotebooks />} />
+            <Route path="/tags" element={<Tags />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/ai-research" element={<AIResearch />} />
+            <Route path="/ai-summarizer" element={<AISummarizer />} />
+            <Route path="/transcript-extractor" element={<TranscriptExtractor />} />
+            <Route path="/test" element={<TestPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Router>
         <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={<ModNoteDashboard />} />
-              <Route path="/notebooks" element={<ModNoteNotebooks />} />
-              <Route path="/note/:id" element={<NotePage />} />
-              <Route path="/new" element={<NewNote />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/tags" element={<Tags />} />
-              <Route path="/ai-research" element={<AIResearch />} />
-              <Route path="/ai-summarizer" element={<AISummarizer />} />
-              <Route path="/legacy-dashboard" element={<Dashboard />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
 
 export default App;
