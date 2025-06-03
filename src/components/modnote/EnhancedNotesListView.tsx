@@ -1,3 +1,4 @@
+
 import { Calendar, Clock, Circle, Grid3X3, Filter, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ export function EnhancedNotesListView({
   notesCount 
 }: EnhancedNotesListViewProps) {
   // Mock active view state - in real app this would come from props
-  const activeView = "list"; // or "grid"
+  const activeView: "list" | "grid" = "list";
   
   // Task-based notes for the Notes tab
   const taskNotes = [
