@@ -69,11 +69,16 @@ export function EnhancedModNoteHeader({
   const [transcriptModalOpen, setTranscriptModalOpen] = useState(false);
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-3">
+    <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
-        {/* Left Section - Logo Only */}
+        {/* Left Section - Logo with better styling */}
         <div className="flex items-center">
-          <Logo size="md" className="cursor-pointer" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">M</span>
+            </div>
+            <span className="text-xl font-semibold text-gray-900">ModNote</span>
+          </div>
         </div>
 
         {/* Center Section - Action Buttons */}
