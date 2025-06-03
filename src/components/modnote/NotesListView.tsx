@@ -172,7 +172,7 @@ export function NotesListView() {
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
               <span>My Notebook</span>
-              <span>></span>
+              <span>&gt;</span>
               <span className="text-gray-900">{selectedNote.title}</span>
               <Button variant="ghost" size="sm" className="ml-auto">
                 <MoreHorizontal className="w-4 h-4" />
