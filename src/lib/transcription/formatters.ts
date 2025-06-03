@@ -1,3 +1,4 @@
+
 export interface VideoMetadata {
   title: string;
   author: string;
@@ -19,18 +20,37 @@ export class TranscriptFormatter {
     metadata: VideoMetadata,
     transcript: TranscriptData
   ): string {
-    const { title, author, duration, url } = metadata;
+    const { title, url } = metadata;
+    
+    // Format the current date and time
+    const now = new Date();
+    const importDate = now.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const importTime = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
     
     let formattedContent = `# 🎥 ${title}\n\n`;
     formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Author:** ${author}\n`;
-    formattedContent += `**Duration:** ${duration}\n\n`;
+    formattedContent += `**Type:** Video Transcript\n`;
+    formattedContent += `**Imported:** ${importDate}, ${importTime}\n\n`;
     formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Raw Transcript\n\n`;
+    formattedContent += `## 📝 Transcript\n\n`;
     
     // Preserve raw transcript format with minimal cleaning
     const rawTranscript = this.preserveRawTranscriptFormat(transcript.text);
     formattedContent += rawTranscript;
+    
+    // Add personal notes section
+    formattedContent += `\n\n---\n\n`;
+    formattedContent += `## 📝 My Notes\n\n`;
+    formattedContent += `Add your personal notes and thoughts here...`;
     
     return formattedContent;
   }
@@ -56,14 +76,31 @@ export class TranscriptFormatter {
   static formatFallbackNote(url: string, videoId?: string): string {
     const title = videoId ? `YouTube Video ${videoId}` : 'YouTube Video';
     
+    // Format the current date and time
+    const now = new Date();
+    const importDate = now.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const importTime = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    
     let content = `# 🎥 ${title}\n\n`;
     content += `**Source:** ${url}\n`;
-    content += `**Author:** Unknown\n`;
-    content += `**Duration:** Unknown\n`;
+    content += `**Type:** Video Transcript\n`;
+    content += `**Imported:** ${importDate}, ${importTime}\n`;
     content += `**Status:** ⚠️ Transcript unavailable\n\n`;
     content += `---\n\n`;
-    content += `## 📝 Notes\n\n`;
-    content += `Transcript could not be extracted for this video. Add your own notes here:\n\n`;
+    content += `## 📝 Transcript\n\n`;
+    content += `Transcript could not be extracted for this video.\n\n`;
+    content += `---\n\n`;
+    content += `## 📝 My Notes\n\n`;
+    content += `Add your personal notes and thoughts here...\n\n`;
     content += `- Key points:\n`;
     content += `- Important moments:\n`;
     content += `- Personal thoughts:\n`;
