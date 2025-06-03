@@ -7,7 +7,7 @@ import { EnhancedNoteEditor } from "./EnhancedNoteEditor";
 import { useModNotes } from "@/lib/modNoteApi";
 
 export function EnhancedModNoteLayout() {
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("task-3");
   const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState("notes");
@@ -31,7 +31,11 @@ export function EnhancedModNoteLayout() {
 
   const handleTabChange = (tab: "notes" | "reminders") => {
     setActiveTab(tab);
-    setSelectedNoteId(null); // Clear selection when switching tabs
+    if (tab === "notes") {
+      setSelectedNoteId("task-3"); // Default to first task note
+    } else {
+      setSelectedNoteId(null);
+    }
   };
 
   const handleNewNote = () => {
@@ -66,7 +70,7 @@ export function EnhancedModNoteLayout() {
               onNoteSelect={handleNoteSelect}
               activeTab={activeTab}
               onTabChange={handleTabChange}
-              notesCount={filteredNotes.length}
+              notesCount={32}
             />
           </div>
           

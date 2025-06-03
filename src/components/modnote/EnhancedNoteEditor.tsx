@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { 
   ChevronRight, 
   Undo2, 
@@ -14,7 +14,8 @@ import {
   Sparkles,
   Calendar,
   Plus,
-  CheckSquare
+  CheckSquare,
+  Palette
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,15 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useUpdateModNote } from "@/lib/modNoteApi";
-import { useToast } from "@/hooks/use-toast";
 
 interface EnhancedNoteEditorProps {
   noteId: string | null;
   onNoteDeleted: () => void;
 }
 
-export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditorProps) {
+export function EnhancedNoteEditor({ noteId }: EnhancedNoteEditorProps) {
   const [title, setTitle] = useState("Product Team Meeting");
   const [content, setContent] = useState(`Updates to hiring processes, maturity charts, and the company handbook.
 
@@ -54,14 +53,9 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
 • Updates were made to maturity page charts that managers should review.
 
 • Changed language in the handbook around customer results that managers should review.`);
-  const [dueDate, setDueDate] = useState("12 Jun, 8:00");
-  const [taskProgress, setTaskProgress] = useState({ completed: 0, total: 1 });
   const [fontSize, setFontSize] = useState("15");
   
-  const updateNoteMutation = useUpdateModNote();
-  const { toast } = useToast();
-
-  const progressPercentage = taskProgress.total > 0 ? (taskProgress.completed / taskProgress.total) * 100 : 0;
+  const progressPercentage = 0; // 0/1 completed
 
   if (!noteId) {
     return (
@@ -77,11 +71,11 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
   return (
     <div className="flex-1 flex flex-col bg-white">
       {/* Breadcrumb Navigation */}
-      <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center text-sm text-gray-600">
           <span>My Notebook</span>
           <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-gray-900 font-medium">{title}</span>
+          <span className="text-gray-900 font-medium">Product Team Meeting</span>
         </div>
       </div>
 
@@ -91,7 +85,7 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           {/* Insert Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="h-8">
                 <Plus className="w-4 h-4 mr-1" />
                 Insert
               </Button>
@@ -107,10 +101,10 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           </DropdownMenu>
 
           {/* Undo/Redo */}
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Undo2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Redo2 className="w-4 h-4" />
           </Button>
 
@@ -119,7 +113,7 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           {/* AI Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="h-8">
                 <Sparkles className="w-4 h-4 mr-1" />
                 AI
               </Button>
@@ -136,7 +130,7 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
 
           {/* Font Controls */}
           <Select value="Sans Serif">
-            <SelectTrigger className="w-32 h-8">
+            <SelectTrigger className="w-28 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -159,29 +153,34 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
             </SelectContent>
           </Select>
 
+          {/* Color Picker */}
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Palette className="w-4 h-4" />
+          </Button>
+
           <div className="w-px h-6 bg-gray-300 mx-2" />
 
           {/* Format Buttons */}
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Bold className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Italic className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <Underline className="w-4 h-4" />
           </Button>
 
           <div className="w-px h-6 bg-gray-300 mx-2" />
 
           {/* Alignment */}
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <AlignLeft className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <AlignCenter className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <AlignRight className="w-4 h-4" />
           </Button>
 
@@ -190,8 +189,8 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           {/* More Options */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <MoreHorizontal className="w-4 h-4" />
+              <Button variant="ghost" size="sm" className="h-8">
+                <MoreHorizontal className="w-4 h-4 mr-1" />
                 More
               </Button>
             </DropdownMenuTrigger>
@@ -211,7 +210,7 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="text-2xl font-semibold border-none p-0 mb-6 focus-visible:ring-0"
+            className="text-2xl font-semibold border-none p-0 mb-6 focus-visible:ring-0 shadow-none"
             placeholder="Untitled"
             style={{ fontSize: '24px' }}
           />
@@ -220,46 +219,53 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="min-h-[400px] border-none p-0 resize-none focus-visible:ring-0 text-base leading-relaxed"
+            className="min-h-[300px] border-none p-0 resize-none focus-visible:ring-0 text-base leading-relaxed shadow-none mb-6"
             style={{ fontSize: `${fontSize}px` }}
           />
 
           {/* Follow up actions button */}
-          <div className="mt-6">
+          <div className="mb-6">
             <Button className="bg-purple-600 hover:bg-purple-700 text-white">
               <CheckSquare className="w-4 h-4 mr-2" />
               Follow up actions
             </Button>
           </div>
 
+          {/* Create Maturity Flow Chart */}
+          <div className="mb-6">
+            <div className="inline-block bg-gray-100 text-gray-700 px-3 py-2 rounded-md text-sm">
+              Create Maturity Flow Chart
+            </div>
+          </div>
+
           {/* YouTube Video Link */}
-          <div className="mt-6">
-            <a href="#" className="text-blue-600 hover:underline">
-              Youtube Video
+          <div className="mb-6">
+            <a href="#" className="text-blue-600 hover:underline text-sm">
+              YouTube Video
             </a>
           </div>
 
           {/* Table */}
-          <div className="mt-6 border border-gray-200 rounded-lg overflow-hidden">
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-900">Team Member</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-900">Presence</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-900 text-sm">Team Member</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-900 text-sm">Presence</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 <tr>
-                  <td className="px-4 py-3">Person Names</td>
-                  <td className="px-4 py-3">Yes</td>
+                  <td className="px-4 py-3 text-sm">Person Names</td>
+                  <td className="px-4 py-3 text-sm">Yes</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3">Person Names</td>
-                  <td className="px-4 py-3">Yes</td>
+                  <td className="px-4 py-3 text-sm">Person Names</td>
+                  <td className="px-4 py-3 text-sm">Yes</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3">Person Names</td>
-                  <td className="px-4 py-3">Yes</td>
+                  <td className="px-4 py-3 text-sm">Person Names</td>
+                  <td className="px-4 py-3 text-sm">Yes</td>
                 </tr>
               </tbody>
             </table>
@@ -274,15 +280,13 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
             {/* Due Date */}
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="w-4 h-4" />
-              <span>{dueDate}</span>
+              <span>12 Jun, 8:00</span>
             </div>
 
             {/* Progress */}
             <div className="flex items-center gap-2">
               <Progress value={progressPercentage} className="w-20 h-2" />
-              <span className="text-sm text-gray-600">
-                {taskProgress.completed}/{taskProgress.total}
-              </span>
+              <span className="text-sm text-gray-600">0/1</span>
             </div>
           </div>
 

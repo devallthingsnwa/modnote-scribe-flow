@@ -77,7 +77,7 @@ export function EnhancedModNoteHeader({
     <>
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         {/* Left Section - Logo and Action Buttons */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Logo size="md" />
           
           <div className="flex items-center gap-2">
@@ -147,12 +147,12 @@ export function EnhancedModNoteHeader({
                 <Avatar className="w-8 h-8">
                   <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
                   <AvatarFallback className="text-xs">
-                    {user?.email?.substring(0, 2).toUpperCase() || "SL"}
+                    SL
                   </AvatarFallback>
                 </Avatar>
                 <div className="text-sm">
                   <div className="font-medium text-gray-900 text-xs">
-                    {user?.email?.split('@')[0] || "Sam Lee"}
+                    Sam Lee
                   </div>
                   <div className="text-gray-500 text-xs">S.L Mobbin</div>
                 </div>

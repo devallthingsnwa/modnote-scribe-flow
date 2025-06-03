@@ -11,7 +11,7 @@ export function EnhancedModNoteSidebar({ selectedSection, onSectionChange }: Enh
   const menuItems = [
     { icon: Home, label: "Home", key: "home" },
     { icon: Bookmark, label: "Shortcuts", key: "shortcuts" },
-    { icon: FileText, label: "Notes", key: "notes" },
+    { icon: FileText, label: "Notes", key: "notes", isActive: true },
     { icon: Folder, label: "Files", key: "files" },
     { icon: Folder, label: "Notebooks", key: "notebooks" },
     { icon: Tag, label: "Tags", key: "tags" },
@@ -26,7 +26,7 @@ export function EnhancedModNoteSidebar({ selectedSection, onSectionChange }: Enh
       <nav className="flex-1 p-4 pt-6">
         <div className="space-y-1">
           {menuItems.map((item) => {
-            const isActive = selectedSection === item.key;
+            const isActive = item.key === "notes"; // Notes is always active for this design
             return (
               <button
                 key={item.label}
