@@ -1,4 +1,3 @@
-
 import { Calendar, Clock, Circle, Grid3X3, Filter, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +22,9 @@ export function EnhancedNotesListView({
   onTabChange,
   notesCount 
 }: EnhancedNotesListViewProps) {
+  // Mock active view state - in real app this would come from props
+  const activeView = "list"; // or "grid"
+  
   // Task-based notes for the Notes tab
   const taskNotes = [
     {
@@ -85,20 +87,47 @@ export function EnhancedNotesListView({
       {/* Header with Icons and Count */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-6">
-          {/* Right side - Icons and Notes count */}
-          <div className="flex items-center gap-6 ml-auto">
+          {/* Right side - Notes count and Icons */}
+          <div className="flex items-center gap-8 ml-auto">
             <h2 className="text-xl font-semibold text-black">
               {notesCount} Notes
             </h2>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <Grid3X3 className="w-4 h-4 text-black" />
+              {/* List View Icon */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn(
+                  "h-8 w-8",
+                  activeView === "list" 
+                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100" 
+                    : "text-gray-600 hover:bg-gray-100"
+                )}
+              >
+                <List className="w-4 h-4" strokeWidth={2} />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <Filter className="w-4 h-4 text-black" />
+              
+              {/* Filter Icon */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-gray-600 hover:bg-gray-100"
+              >
+                <Filter className="w-4 h-4" strokeWidth={2} />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
-                <List className="w-4 h-4 text-black" />
+              
+              {/* Grid View Icon */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn(
+                  "h-8 w-8",
+                  activeView === "grid" 
+                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100" 
+                    : "text-gray-600 hover:bg-gray-100"
+                )}
+              >
+                <Grid3X3 className="w-4 h-4" strokeWidth={2} />
               </Button>
             </div>
           </div>
