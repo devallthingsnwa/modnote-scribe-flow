@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/toaster";
 
 // Page imports
@@ -29,24 +30,26 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <Router>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/modnote" element={<EnhancedModNoteDashboard />} />
-            <Route path="/modnote-simple" element={<ModNoteDashboard />} />
-            <Route path="/new" element={<NewNote />} />
-            <Route path="/note/:id" element={<NotePage />} />
-            <Route path="/notebooks" element={<Notebooks />} />
-            <Route path="/modnote-notebooks" element={<ModNoteNotebooks />} />
-            <Route path="/tags" element={<Tags />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/ai-research" element={<AIResearch />} />
-            <Route path="/ai-summarizer" element={<AISummarizer />} />
-            <Route path="/transcript-extractor" element={<TranscriptExtractor />} />
-            <Route path="/test" element={<TestPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/modnote" element={<EnhancedModNoteDashboard />} />
+              <Route path="/modnote-simple" element={<ModNoteDashboard />} />
+              <Route path="/new" element={<NewNote />} />
+              <Route path="/note/:id" element={<NotePage />} />
+              <Route path="/notebooks" element={<Notebooks />} />
+              <Route path="/modnote-notebooks" element={<ModNoteNotebooks />} />
+              <Route path="/tags" element={<Tags />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/ai-research" element={<AIResearch />} />
+              <Route path="/ai-summarizer" element={<AISummarizer />} />
+              <Route path="/transcript-extractor" element={<TranscriptExtractor />} />
+              <Route path="/test" element={<TestPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </Router>
         <Toaster />
       </ThemeProvider>
