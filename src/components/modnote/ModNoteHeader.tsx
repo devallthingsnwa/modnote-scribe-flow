@@ -11,7 +11,11 @@ import {
   Bell,
   Share2,
   Menu,
-  MoreHorizontal
+  MoreHorizontal,
+  Grid3X3,
+  List,
+  Filter,
+  SortAsc
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -154,6 +158,41 @@ export function ModNoteHeader({
           </DropdownMenu>
         </div>
       </div>
+      
+      {/* Secondary Header for Notes Section */}
+      {isNoteEditing && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold text-gray-900">32 Notes</h1>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm">
+                <SortAsc className="w-4 h-4 mr-1" />
+                Sort
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Filter className="w-4 h-4 mr-1" />
+                Filter
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              My Notebook
+            </Badge>
+            <span className="text-gray-400">›</span>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              Product Team Meeting
+            </Badge>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

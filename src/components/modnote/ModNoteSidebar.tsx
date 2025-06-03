@@ -1,7 +1,6 @@
 
 import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 interface ModNoteSidebarProps {
   selectedSection: string;
@@ -12,7 +11,7 @@ export function ModNoteSidebar({ selectedSection, onSectionChange }: ModNoteSide
   const menuItems = [
     { icon: Home, label: "Home", key: "home" },
     { icon: Bookmark, label: "Shortcuts", key: "shortcuts" },
-    { icon: FileText, label: "Notes", key: "notes" },
+    { icon: FileText, label: "Note", key: "notes" },
     { icon: Folder, label: "Files", key: "files" },
     { icon: Folder, label: "Notebooks", key: "notebooks" },
     { icon: Tag, label: "Tags", key: "tags" },
