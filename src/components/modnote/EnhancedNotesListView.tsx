@@ -86,7 +86,7 @@ export function EnhancedNotesListView({
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-6">
           {/* Right side - Icons and Notes count */}
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-6 ml-auto">
             <h2 className="text-xl font-semibold text-black">
               {notesCount} Notes
             </h2>
