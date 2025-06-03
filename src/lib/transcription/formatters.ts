@@ -26,26 +26,30 @@ export class TranscriptFormatter {
     formattedContent += `**Author:** ${author}\n`;
     formattedContent += `**Duration:** ${duration}\n\n`;
     formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
+    formattedContent += `## 📝 Raw Transcript\n\n`;
     
-    // Clean and format transcript text
-    const cleanedTranscript = this.cleanTranscriptText(transcript.text);
-    formattedContent += cleanedTranscript;
+    // Preserve raw transcript format with minimal cleaning
+    const rawTranscript = this.preserveRawTranscriptFormat(transcript.text);
+    formattedContent += rawTranscript;
     
     return formattedContent;
   }
 
-  private static cleanTranscriptText(text: string): string {
-    // Remove timestamp brackets like [MM:SS - MM:SS] but keep the content
-    let cleaned = text.replace(/\[(\d{2}:\d{2}(?:\.\d{3})?)\s*-\s*(\d{2}:\d{2}(?:\.\d{3})?)\]\s*/g, '');
+  private static preserveRawTranscriptFormat(text: string): string {
+    // Minimal cleaning - preserve timestamp markers like [음악], [박수], etc.
+    // Keep natural word flow and comma separations
     
-    // Clean up multiple spaces and normalize
-    cleaned = cleaned.replace(/\s+/g, ' ');
+    // Remove only excessive whitespace but preserve natural breaks
+    let cleaned = text.replace(/\s{3,}/g, ' '); // Replace 3+ spaces with single space
     
-    // Remove extra whitespace at start/end
+    // Preserve timestamp markers in brackets like [음악], [박수]
+    // Keep comma-separated word format
+    // Maintain natural line breaks
+    
+    // Remove extra whitespace at start/end only
     cleaned = cleaned.trim();
     
-    // Format as continuous text with proper spacing
+    // Return as-is to preserve the raw transcript style
     return cleaned;
   }
 
