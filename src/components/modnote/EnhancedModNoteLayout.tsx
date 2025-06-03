@@ -5,10 +5,11 @@ import { EnhancedModNoteSidebar } from "./EnhancedModNoteSidebar";
 import { EnhancedNotesListView } from "./EnhancedNotesListView";
 import { EnhancedNoteEditor } from "./EnhancedNoteEditor";
 import { NotebooksListView } from "./NotebooksListView";
-import { useModNotes } from "@/lib/modNoteApi";
+import { useModNotes, useCreateModNote } from "@/lib/modNoteApi";
+import { useToast } from "@/hooks/use-toast";
 
 export function EnhancedModNoteLayout() {
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("task-3");
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState("notes");
@@ -18,13 +19,10 @@ export function EnhancedModNoteLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   const { data: notes, refetch } = useModNotes();
+  const createNoteMutation = useCreateModNote();
+  const { toast } = useToast();
 
   const filteredNotes = notes?.filter(note => {
-    if (activeTab === "reminders") {
-      return note.is_reminder || note.due_date || note.reminder_date;
-    }
-    return !note.is_reminder;
-  }).filter(note => {
     if (!searchQuery) return true;
     return note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
            note.content?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -36,23 +34,38 @@ export function EnhancedModNoteLayout() {
 
   const handleTabChange = (tab: "notes" | "reminders") => {
     setActiveTab(tab);
-    if (tab === "notes") {
-      setSelectedNoteId("task-3"); // Default to first task note
-    } else {
-      setSelectedNoteId(null);
-    }
+    setSelectedNoteId(null); // Clear selection when switching tabs
   };
 
   const handleNewNote = () => {
-    refetch();
+    createNoteMutation.mutate({
+      title: "Untitled Note",
+      content: "",
+      is_reminder: activeTab === "reminders",
+    }, {
+      onSuccess: (newNote) => {
+        setSelectedNoteId(newNote.id);
+        toast({
+          title: "Note created",
+          description: "New note has been created successfully."
+        });
+        refetch();
+      },
+      onError: (error) => {
+        console.error("Error creating note:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create new note. Please try again.",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   const handleSectionChange = (section: string) => {
     setSelectedSection(section);
     if (section === "notebooks") {
       setSelectedNoteId(null);
-    } else {
-      setSelectedNoteId("task-3");
     }
   };
 
@@ -64,7 +77,6 @@ export function EnhancedModNoteLayout() {
   };
 
   const handleBulkDelete = () => {
-    // Handle bulk delete functionality
     console.log("Bulk delete notes:", selectedNoteIds);
     setSelectedNoteIds([]);
     setIsSelectMode(false);
@@ -126,7 +138,7 @@ export function EnhancedModNoteLayout() {
                   onNoteSelect={handleNoteSelect}
                   activeTab={activeTab}
                   onTabChange={handleTabChange}
-                  notesCount={32}
+                  notesCount={filteredNotes.length}
                 />
               </div>
               
