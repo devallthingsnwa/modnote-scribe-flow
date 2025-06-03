@@ -52,6 +52,10 @@ export function EnhancedModNoteLayout() {
     }
   };
 
+  const handleNoteDeleted = () => {
+    setSelectedNoteId(null);
+  };
+
   const mockNotes = []; // Empty array since we're using the task-based data
 
   return (
@@ -60,7 +64,6 @@ export function EnhancedModNoteLayout() {
       <EnhancedModNoteSidebar 
         selectedSection={selectedSection}
         onSectionChange={handleSectionChange}
-        isCollapsed={isCollapsed}
       />
       
       {/* Main Content Area */}
@@ -103,7 +106,7 @@ export function EnhancedModNoteLayout() {
               <div className="flex-1">
                 <EnhancedNoteEditor
                   noteId={selectedNoteId}
-                  onNoteCreated={handleNoteSelect}
+                  onNoteDeleted={handleNoteDeleted}
                 />
               </div>
             </div>
