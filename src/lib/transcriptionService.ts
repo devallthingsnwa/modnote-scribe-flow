@@ -9,23 +9,24 @@ import {
   YouTubeMetadata, 
   MediaType 
 } from "./transcription/types";
+import { TranscriptFormatter } from "./transcription/formatters";
 
 export type { TranscriptionConfig, TranscriptionResult, YouTubeMetadata, MediaType };
 
 export class TranscriptionService {
   private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
   private static readonly MAX_RETRIES = 3;
-  private static readonly RETRY_DELAYS = [1000, 3000, 8000]; // Progressive delays
+  private static readonly RETRY_DELAYS = [1000, 3000, 8000];
 
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     const startTime = Date.now();
     
-    console.log(`🎯 Starting enhanced transcription with robust fallback for ${mediaType}: ${url}`);
+    console.log(`🎯 Starting enhanced transcription for ${mediaType}: ${url}`);
     
     try {
       if (mediaType === 'youtube') {
-        return await this.handleYouTubeTranscriptionWithEnhancedFallback(url, startTime);
+        return await this.handleYouTubeTranscriptionWithEnhancedFormat(url, startTime);
       }
       
       return await this.handleGeneralMediaTranscriptionWithFallback(url, startTime);
@@ -35,66 +36,56 @@ export class TranscriptionService {
     }
   }
 
-  private static async handleYouTubeTranscriptionWithEnhancedFallback(url: string, startTime: number): Promise<TranscriptionResult> {
-    console.log('🎥 Processing YouTube video with enhanced multi-strategy fallback...');
+  private static async handleYouTubeTranscriptionWithEnhancedFormat(url: string, startTime: number): Promise<TranscriptionResult> {
+    console.log('🎥 Processing YouTube video with enhanced formatting...');
     
-    const strategies = [
-      'youtube-transcript',
-      'youtube-audio-extraction', 
-      'external-providers'
-    ];
-    
-    const errors: string[] = [];
-    let retryCount = 0;
-
-    // Strategy 1: YouTube transcript extraction with retries
-    for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
-      try {
-        console.log(`🔄 YouTube transcript attempt ${attempt + 1}/${this.MAX_RETRIES}`);
+    try {
+      // Use the updated YouTube service that returns formatted content
+      const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
+      
+      if (youtubeResult.success && youtubeResult.text) {
+        console.log('✅ YouTube transcript extraction successful with enhanced format');
         
-        const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url, attempt);
+        toast({
+          title: "✅ Transcript Extracted",
+          description: "Successfully extracted and formatted YouTube transcript"
+        });
         
-        if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
-          console.log('✅ YouTube transcript extraction successful');
-          
-          toast({
-            title: "✅ Transcript Extracted",
-            description: "Successfully extracted YouTube captions"
-          });
-          
-          return {
-            ...youtubeResult,
-            metadata: {
-              ...youtubeResult.metadata,
-              retryCount: attempt,
-              strategiesAttempted: 'youtube-transcript',
-              processingTime: Date.now() - startTime,
-              successRate: 100
-            }
-          };
-        }
-        
-        if (attempt < this.MAX_RETRIES - 1) {
-          console.log(`⏳ Waiting ${this.RETRY_DELAYS[attempt]}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAYS[attempt]));
-        }
-        
-      } catch (error) {
-        console.warn(`⚠️ YouTube transcript attempt ${attempt + 1} failed:`, error);
-        errors.push(`YouTube-${attempt + 1}: ${error.message}`);
+        return {
+          success: true,
+          text: youtubeResult.text, // Already formatted by YouTubeService
+          metadata: {
+            ...youtubeResult.metadata,
+            processingTime: Date.now() - startTime,
+            successRate: 100
+          },
+          provider: 'youtube-enhanced-format'
+        };
       }
+    } catch (error) {
+      console.warn('⚠️ YouTube transcript extraction failed:', error);
     }
 
-    // Strategy 2: Audio extraction with Supadata
+    // Fallback to audio extraction if available
     const videoId = YouTubeService.extractVideoId(url);
     if (videoId) {
       try {
-        console.log('🎵 Attempting audio extraction with Supadata...');
+        console.log('🎵 Attempting audio extraction with enhanced format...');
         
         const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
         
         if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
-          console.log('✅ Audio transcription successful');
+          // Get metadata and format the result
+          const metadata = await YouTubeService.getYouTubeMetadata(videoId);
+          const formattedContent = TranscriptFormatter.formatEnhancedTranscript(
+            {
+              title: metadata.title,
+              author: metadata.author,
+              duration: metadata.duration,
+              url: url
+            },
+            { text: audioResult.text }
+          );
           
           toast({
             title: "✅ Audio Transcribed",
@@ -102,49 +93,23 @@ export class TranscriptionService {
           });
           
           return {
-            ...audioResult,
+            success: true,
+            text: formattedContent,
             metadata: {
               ...audioResult.metadata,
-              strategiesAttempted: 'youtube-transcript,audio-extraction',
               processingTime: Date.now() - startTime,
               successRate: 85
-            }
+            },
+            provider: 'youtube-audio-enhanced'
           };
         }
-        
-        errors.push(`Audio extraction: ${audioResult.error || 'Low quality result'}`);
       } catch (error) {
         console.warn('⚠️ Audio extraction failed:', error);
-        errors.push(`Audio extraction: ${error.message}`);
       }
     }
 
-    // Strategy 3: External providers with enhanced retry
-    try {
-      console.log('🌐 Trying external providers with enhanced fallback...');
-      
-      const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
-      
-      if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
-        return {
-          ...externalResult,
-          metadata: {
-            ...externalResult.metadata,
-            strategiesAttempted: strategies.join(','),
-            processingTime: Date.now() - startTime,
-            successRate: 70
-          }
-        };
-      }
-      
-      errors.push(`External providers: ${externalResult.error}`);
-    } catch (error) {
-      console.warn('⚠️ External providers failed:', error);
-      errors.push(`External providers: ${error.message}`);
-    }
-
-    // Enhanced fallback with detailed guidance
-    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+    // Final fallback with enhanced format
+    return this.createEnhancedFallbackResult(url, 'All extraction methods failed', startTime, videoId);
   }
 
   private static async handleGeneralMediaTranscriptionWithFallback(url: string, startTime: number): Promise<TranscriptionResult> {
@@ -247,71 +212,14 @@ export class TranscriptionService {
   }
 
   private static createEnhancedFallbackResult(url: string, errorDetails: string, startTime: number, videoId?: string): TranscriptionResult {
-    console.log('📝 Creating enhanced fallback result with comprehensive guidance');
+    console.log('📝 Creating enhanced fallback result with proper formatting');
     
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const fallbackContent = TranscriptFormatter.formatFallbackNote(url, videoId);
     const processingTime = Date.now() - startTime;
-    
-    let fallbackContent = `# 🎥 ${isYouTube ? 'YouTube Video' : 'Media Content'} Note\n\n`;
-    fallbackContent += `**Source:** ${url}\n`;
-    fallbackContent += `**Status:** ⚠️ Automatic transcription unavailable\n`;
-    fallbackContent += `**Created:** ${new Date().toLocaleString()}\n`;
-    fallbackContent += `**Processing Time:** ${(processingTime / 1000).toFixed(1)}s\n\n`;
-    fallbackContent += `---\n\n`;
-    
-    if (isYouTube) {
-      fallbackContent += `## 📋 About This Video\n\n`;
-      fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
-      fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
-      fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
-      fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
-      fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
-      fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
-      fallbackContent += `## 💡 Alternative Options\n\n`;
-      fallbackContent += `### 🎯 Quick Actions\n`;
-      fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
-      fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
-      fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
-      fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
-      fallbackContent += `### 🔄 Retry Later\n`;
-      fallbackContent += `- Video captions may become available later\n`;
-      fallbackContent += `- Service improvements may enable future transcription\n\n`;
-    } else {
-      fallbackContent += `## 📋 About This Content\n\n`;
-      fallbackContent += `This content could not be automatically transcribed. You can still:\n\n`;
-      fallbackContent += `- **Manual Notes**: Add your own observations and summaries\n`;
-      fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
-      fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
-    }
-    
-    fallbackContent += `## 📝 My Notes & Observations\n\n`;
-    fallbackContent += `### 🎯 Key Points\n`;
-    fallbackContent += `- [ ] Main topic/theme:\n`;
-    fallbackContent += `- [ ] Important insights:\n`;
-    fallbackContent += `- [ ] Action items:\n`;
-    fallbackContent += `- [ ] Questions raised:\n\n`;
-    
-    fallbackContent += `### ⏰ Timestamps & Moments\n`;
-    fallbackContent += `*Add specific timestamps and what happens at those moments*\n\n`;
-    fallbackContent += `- **00:00** - \n`;
-    fallbackContent += `- **05:00** - \n`;
-    fallbackContent += `- **10:00** - \n\n`;
-    
-    fallbackContent += `### 🔗 Related Resources\n`;
-    fallbackContent += `- [ ] Follow-up articles:\n`;
-    fallbackContent += `- [ ] Related videos:\n`;
-    fallbackContent += `- [ ] Tools mentioned:\n`;
-    fallbackContent += `- [ ] People referenced:\n\n`;
-    
-    fallbackContent += `### 💭 Personal Reflections\n`;
-    fallbackContent += `*Your thoughts, opinions, and how this relates to your interests*\n\n`;
-    
-    fallbackContent += `---\n\n`;
-    fallbackContent += `*Note: This content was saved automatically when transcription was unavailable. You can edit this note to add your own insights and observations.*`;
 
     toast({
       title: "📝 Smart Note Created",
-      description: "Transcription unavailable - created structured note for manual input",
+      description: "Transcript unavailable - created structured note for manual input",
       variant: "default"
     });
 
@@ -322,11 +230,8 @@ export class TranscriptionService {
         extractionMethod: 'enhanced-smart-fallback',
         isWarning: true,
         failureReason: errorDetails,
-        providersAttempted: this.PROVIDER_PRIORITY.join(', '),
-        fallbackType: isYouTube ? 'youtube-smart-template' : 'general-smart-template',
         processingTime,
         retryCount: this.MAX_RETRIES,
-        strategiesAttempted: isYouTube ? 'youtube-transcript,audio-extraction,external-providers' : 'external-providers',
         confidenceScore: 0,
         successRate: 0
       },
