@@ -12,6 +12,10 @@ export function EnhancedModNoteLayout() {
   const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState("notes");
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [activeView, setActiveView] = useState<'grid' | 'list'>('list');
+  const [isCollapsed, setIsCollapsed] = useState(false);
   
   const { data: notes, refetch } = useModNotes();
 
@@ -52,6 +56,33 @@ export function EnhancedModNoteLayout() {
     }
   };
 
+  const handleSelectModeToggle = () => {
+    setIsSelectMode(!isSelectMode);
+    if (isSelectMode) {
+      setSelectedNoteIds([]);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    // Handle bulk delete functionality
+    console.log("Bulk delete notes:", selectedNoteIds);
+    setSelectedNoteIds([]);
+    setIsSelectMode(false);
+    refetch();
+  };
+
+  const handleImport = () => {
+    console.log("Handle import");
+  };
+
+  const handleTranscriptUpload = () => {
+    refetch();
+  };
+
+  const handleFileUpload = () => {
+    refetch();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Enhanced Sidebar */}
@@ -66,8 +97,18 @@ export function EnhancedModNoteLayout() {
         <EnhancedModNoteHeader 
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          isSelectMode={isSelectMode}
+          selectedNoteIds={selectedNoteIds}
+          onSelectModeToggle={handleSelectModeToggle}
+          onBulkDelete={handleBulkDelete}
           onNewNote={handleNewNote}
-          selectedNoteId={selectedNoteId}
+          onImport={handleImport}
+          onTranscriptUpload={handleTranscriptUpload}
+          onFileUpload={handleFileUpload}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
         />
         
         {/* Content Layout */}
