@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Loader2, Upload, FileText, Image, Video, File } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FileImportFormProps {
   onContentImported: (content: {
@@ -18,6 +19,7 @@ interface FileImportFormProps {
 
 export function FileImportForm({ onContentImported, isLoading }: FileImportFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const getFileIcon = (file: File) => {
@@ -39,6 +41,51 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+    }
+  };
+
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        // Remove the data URL prefix to get just the base64 data
+        const base64Data = base64.split(',')[1];
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const extractTextWithOCR = async (file: File): Promise<string> => {
+    try {
+      console.log('🔍 Starting OCR extraction for PDF:', file.name);
+      
+      const base64Data = await convertFileToBase64(file);
+      
+      const { data, error } = await supabase.functions.invoke('pdf-ocr-extraction', {
+        body: {
+          fileData: base64Data,
+          fileName: file.name
+        }
+      });
+
+      if (error) {
+        console.error('OCR function error:', error);
+        throw new Error(`OCR extraction failed: ${error.message}`);
+      }
+
+      if (!data?.extractedText) {
+        throw new Error('No text extracted from document');
+      }
+
+      console.log('✅ OCR extraction successful');
+      return data.extractedText;
+
+    } catch (error) {
+      console.error('❌ OCR extraction error:', error);
+      throw error;
     }
   };
 
@@ -82,9 +129,42 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
       return;
     }
 
+    setIsProcessing(true);
+
     try {
-      const extractedContent = await extractTextFromFile(selectedFile);
+      let extractedContent: string;
       const title = selectedFile.name.replace(/\.[^/.]+$/, ""); // Remove file extension
+      
+      // Check if it's a PDF file
+      if (selectedFile.type === 'application/pdf') {
+        console.log('📄 PDF detected, using OCR extraction...');
+        toast({
+          title: "Processing PDF",
+          description: "Extracting text using OCR... This may take a moment.",
+        });
+        
+        try {
+          extractedContent = await extractTextWithOCR(selectedFile);
+          
+          toast({
+            title: "OCR Successful",
+            description: "Text extracted from PDF successfully!",
+          });
+        } catch (ocrError) {
+          console.error('OCR failed, falling back to basic info:', ocrError);
+          toast({
+            title: "OCR Failed",
+            description: "Couldn't extract text from PDF, but file info has been saved.",
+            variant: "destructive"
+          });
+          
+          // Fallback to basic file info
+          extractedContent = `# ${title}\n\n**File:** ${selectedFile.name}\n**Size:** ${formatFileSize(selectedFile.size)}\n**Type:** PDF Document\n\n**Note:** OCR extraction failed. You can manually add notes about this PDF here.\n\n**Error:** ${ocrError.message}`;
+        }
+      } else {
+        // Handle other file types as before
+        extractedContent = await extractTextFromFile(selectedFile);
+      }
       
       onContentImported({
         title,
@@ -104,6 +184,8 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
         description: error.message || "Failed to import file content",
         variant: "destructive"
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -122,12 +204,12 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
             id="file-upload"
             type="file"
             onChange={handleFileChange}
-            disabled={isLoading}
+            disabled={isLoading || isProcessing}
             className="cursor-pointer"
-            accept=".txt,.json,.md,.csv"
+            accept=".txt,.json,.md,.csv,.pdf"
           />
           <p className="text-sm text-gray-500">
-            Supported formats: Text files (.txt), JSON (.json), Markdown (.md), CSV (.csv)
+            Supported formats: Text files (.txt), JSON (.json), Markdown (.md), CSV (.csv), PDF (.pdf with OCR)
           </p>
         </div>
 
@@ -137,7 +219,12 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
               {getFileIcon(selectedFile)}
               <div>
                 <p className="font-medium text-sm">{selectedFile.name}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                <p className="text-xs text-gray-500">
+                  {formatFileSize(selectedFile.size)}
+                  {selectedFile.type === 'application/pdf' && (
+                    <span className="ml-2 text-blue-600">• OCR Enabled</span>
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -145,13 +232,13 @@ export function FileImportForm({ onContentImported, isLoading }: FileImportFormP
 
         <Button 
           onClick={handleImport}
-          disabled={!selectedFile || isLoading}
+          disabled={!selectedFile || isLoading || isProcessing}
           className="w-full bg-purple-500 hover:bg-purple-600 text-white"
         >
-          {isLoading ? (
+          {isProcessing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Importing...
+              {selectedFile?.type === 'application/pdf' ? 'Extracting Text...' : 'Importing...'}
             </>
           ) : (
             <>
