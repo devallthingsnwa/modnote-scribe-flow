@@ -4,96 +4,68 @@ import { EnhancedModNoteHeader } from "./EnhancedModNoteHeader";
 import { EnhancedModNoteSidebar } from "./EnhancedModNoteSidebar";
 import { EnhancedNotesListView } from "./EnhancedNotesListView";
 import { EnhancedNoteEditor } from "./EnhancedNoteEditor";
-import { NotebooksListView } from "./NotebooksListView";
-import { useModNotes } from "@/lib/modNoteApi";
 
 export function EnhancedModNoteLayout() {
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("task-3");
-  const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState("notes");
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("task-3");
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeView, setActiveView] = useState<'grid' | 'list'>('list');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  
-  const { data: notes, refetch } = useModNotes();
-
-  const filteredNotes = notes?.filter(note => {
-    if (activeTab === "reminders") {
-      return note.is_reminder || note.due_date || note.reminder_date;
-    }
-    return !note.is_reminder;
-  }).filter(note => {
-    if (!searchQuery) return true;
-    return note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           note.content?.toLowerCase().includes(searchQuery.toLowerCase());
-  }) || [];
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
 
   const handleNoteSelect = (noteId: string) => {
-    setSelectedNoteId(noteId);
-  };
-
-  const handleTabChange = (tab: "notes" | "reminders") => {
-    setActiveTab(tab);
-    if (tab === "notes") {
-      setSelectedNoteId("task-3"); // Default to first task note
+    if (isSelectMode) {
+      setSelectedNoteIds(prev => 
+        prev.includes(noteId) 
+          ? prev.filter(id => id !== noteId)
+          : [...prev, noteId]
+      );
     } else {
-      setSelectedNoteId(null);
+      setSelectedNoteId(noteId);
     }
   };
 
   const handleNewNote = () => {
-    refetch();
-  };
-
-  const handleSectionChange = (section: string) => {
-    setSelectedSection(section);
-    if (section === "notebooks") {
-      setSelectedNoteId(null);
-    } else {
-      setSelectedNoteId("task-3");
-    }
+    const newNoteId = `note-${Date.now()}`;
+    setSelectedNoteId(newNoteId);
   };
 
   const handleSelectModeToggle = () => {
     setIsSelectMode(!isSelectMode);
-    if (isSelectMode) {
-      setSelectedNoteIds([]);
-    }
+    setSelectedNoteIds([]);
   };
 
   const handleBulkDelete = () => {
-    // Handle bulk delete functionality
-    console.log("Bulk delete notes:", selectedNoteIds);
+    // Handle bulk delete logic here
     setSelectedNoteIds([]);
     setIsSelectMode(false);
-    refetch();
   };
 
-  const handleImport = () => {
-    console.log("Handle import");
+  const handleSectionChange = (section: string) => {
+    setSelectedSection(section);
+    if (section === "notes") {
+      setSelectedNoteId("task-3");
+    } else {
+      setSelectedNoteId(null);
+    }
   };
 
-  const handleTranscriptUpload = () => {
-    refetch();
-  };
-
-  const handleFileUpload = () => {
-    refetch();
-  };
+  const mockNotes = []; // Empty array since we're using the task-based data
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Enhanced Sidebar */}
+    <div className="min-h-screen bg-gray-50 flex w-full">
+      {/* Sidebar */}
       <EnhancedModNoteSidebar 
         selectedSection={selectedSection}
         onSectionChange={handleSectionChange}
+        isCollapsed={isCollapsed}
       />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        {/* Enhanced Header */}
+        {/* Header */}
         <EnhancedModNoteHeader 
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -102,30 +74,27 @@ export function EnhancedModNoteLayout() {
           onSelectModeToggle={handleSelectModeToggle}
           onBulkDelete={handleBulkDelete}
           onNewNote={handleNewNote}
-          onImport={handleImport}
-          onTranscriptUpload={handleTranscriptUpload}
-          onFileUpload={handleFileUpload}
+          onImport={() => {}}
+          onTranscriptUpload={() => {}}
+          onFileUpload={() => {}}
           activeView={activeView}
           onViewChange={setActiveView}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
         />
         
-        {/* Content Layout */}
+        {/* Content */}
         <div className="flex-1 flex overflow-hidden">
-          {selectedSection === "notebooks" ? (
-            /* Notebooks View */
-            <NotebooksListView />
-          ) : (
-            <>
+          {selectedSection === "notes" ? (
+            <div className="flex flex-1 overflow-hidden">
               {/* Notes List Panel */}
               <div className="w-96 border-r border-gray-200 bg-white">
                 <EnhancedNotesListView
-                  notes={filteredNotes}
+                  notes={mockNotes}
                   selectedNoteId={selectedNoteId}
                   onNoteSelect={handleNoteSelect}
                   activeTab={activeTab}
-                  onTabChange={handleTabChange}
+                  onTabChange={setActiveTab}
                   notesCount={32}
                 />
               </div>
@@ -134,13 +103,17 @@ export function EnhancedModNoteLayout() {
               <div className="flex-1">
                 <EnhancedNoteEditor
                   noteId={selectedNoteId}
-                  onNoteDeleted={() => {
-                    setSelectedNoteId(null);
-                    refetch();
-                  }}
+                  onNoteCreated={handleNoteSelect}
                 />
               </div>
-            </>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-white">
+              <div className="text-center text-gray-500">
+                <div className="text-lg font-medium mb-2">Select {selectedSection}</div>
+                <p className="text-sm">Choose an item from the sidebar</p>
+              </div>
+            </div>
           )}
         </div>
       </div>
