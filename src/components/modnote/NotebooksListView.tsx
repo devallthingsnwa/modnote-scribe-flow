@@ -151,7 +151,7 @@ export function NotebooksListView() {
           description: "Your new note has been created successfully."
         });
         // Navigate to the new note page for editing
-        navigate(`/new-note`);
+        navigate(`/note/${newNote.id}`);
       },
       onError: (error) => {
         toast({
