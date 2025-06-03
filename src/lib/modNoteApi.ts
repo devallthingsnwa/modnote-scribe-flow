@@ -68,12 +68,10 @@ export function useCreateModNote() {
 
       const { data, error } = await supabase
         .from("notes")
-        .insert([
-          {
-            ...note,
-            user_id: session.session.user.id,
-          },
-        ])
+        .insert({
+          ...note,
+          user_id: session.session.user.id,
+        })
         .select()
         .single();
 
@@ -147,7 +145,15 @@ export function useSearchNotes(query: string) {
         });
 
       if (error) throw error;
-      return data as ModNote[];
+      
+      // Transform the search results to match ModNote interface
+      return (data || []).map((result: any) => ({
+        ...result,
+        user_id: session.session.user.id,
+        is_transcription: result.is_transcription || false,
+        is_reminder: result.is_reminder || false,
+        task_progress: result.task_progress || { total: 0, completed: 0 }
+      })) as ModNote[];
     },
     enabled: !!query.trim(),
   });
