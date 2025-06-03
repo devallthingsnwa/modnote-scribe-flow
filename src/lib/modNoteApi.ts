@@ -66,12 +66,23 @@ export function useCreateModNote() {
         throw new Error("User not authenticated");
       }
 
+      // Map to the exact database schema
+      const noteData = {
+        title: note.title || "Untitled",
+        content: note.content || null,
+        user_id: session.session.user.id,
+        thumbnail: note.thumbnail || null,
+        source_url: note.source_url || null,
+        is_transcription: note.is_transcription || false,
+        is_reminder: note.is_reminder || false,
+        due_date: note.due_date || null,
+        reminder_date: note.reminder_date || null,
+        task_progress: note.task_progress || { total: 0, completed: 0 },
+      };
+
       const { data, error } = await supabase
         .from("notes")
-        .insert({
-          ...note,
-          user_id: session.session.user.id,
-        })
+        .insert(noteData)
         .select()
         .single();
 
@@ -148,11 +159,19 @@ export function useSearchNotes(query: string) {
       
       // Transform the search results to match ModNote interface
       return (data || []).map((result: any) => ({
-        ...result,
+        id: result.id,
+        title: result.title,
+        content: result.content,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
         user_id: session.session.user.id,
         is_transcription: result.is_transcription || false,
         is_reminder: result.is_reminder || false,
-        task_progress: result.task_progress || { total: 0, completed: 0 }
+        task_progress: result.task_progress || { total: 0, completed: 0 },
+        thumbnail: null,
+        source_url: null,
+        due_date: null,
+        reminder_date: null,
       })) as ModNote[];
     },
     enabled: !!query.trim(),
