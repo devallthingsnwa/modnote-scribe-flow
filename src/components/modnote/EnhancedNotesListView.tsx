@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ModNote } from "@/lib/modNoteApi";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useState } from "react";
 
 interface EnhancedNotesListViewProps {
   notes: ModNote[];
@@ -23,8 +24,8 @@ export function EnhancedNotesListView({
   onTabChange,
   notesCount 
 }: EnhancedNotesListViewProps) {
-  // Mock active view state - in real app this would come from props
-  const activeView: "list" | "grid" = "list";
+  // Active view state - properly managed with useState
+  const [activeView, setActiveView] = useState<"list" | "grid">("list");
   
   // Task-based notes for the Notes tab
   const taskNotes = [
@@ -98,6 +99,7 @@ export function EnhancedNotesListView({
               <Button 
                 variant="ghost" 
                 size="icon" 
+                onClick={() => setActiveView("list")}
                 className={cn(
                   "h-8 w-8",
                   activeView === "list" 
@@ -121,6 +123,7 @@ export function EnhancedNotesListView({
               <Button 
                 variant="ghost" 
                 size="icon" 
+                onClick={() => setActiveView("grid")}
                 className={cn(
                   "h-8 w-8",
                   activeView === "grid" 
