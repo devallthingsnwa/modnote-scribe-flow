@@ -1,7 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { 
   Bold, 
   Italic, 
@@ -17,16 +18,8 @@ import {
   Play,
   ChevronRight
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface NoteEditorProps {
   noteId: string | null;
@@ -36,6 +29,10 @@ interface NoteEditorProps {
 export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
   const [title, setTitle] = useState("Product Team Meeting");
   const [content, setContent] = useState("");
+
+  const insertFormatting = (format: string) => {
+    // Formatting logic here
+  };
 
   if (!noteId) {
     return (
@@ -70,10 +67,10 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Undo/Redo */}
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => {}}>
             <Undo2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => {}}>
             <Redo2 className="w-4 h-4" />
           </Button>
           
@@ -87,51 +84,36 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Font Controls */}
-          <Select defaultValue="normal">
-            <SelectTrigger className="w-32 h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">Normal Text</SelectItem>
-              <SelectItem value="h1">Heading 1</SelectItem>
-              <SelectItem value="h2">Heading 2</SelectItem>
-            </SelectContent>
-          </Select>
+          <select className="text-sm border border-gray-200 rounded px-2 py-1">
+            <option>Normal Text</option>
+            <option>Heading 1</option>
+            <option>Heading 2</option>
+          </select>
           
-          <Select defaultValue="sans">
-            <SelectTrigger className="w-28 h-8 text-sm ml-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sans">Sans Serif</SelectItem>
-              <SelectItem value="serif">Serif</SelectItem>
-              <SelectItem value="mono">Monospace</SelectItem>
-            </SelectContent>
-          </Select>
+          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
+            <option>Sans Serif</option>
+            <option>Serif</option>
+            <option>Monospace</option>
+          </select>
           
-          <Select defaultValue="15">
-            <SelectTrigger className="w-16 h-8 text-sm ml-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="12">12</SelectItem>
-              <SelectItem value="14">14</SelectItem>
-              <SelectItem value="15">15</SelectItem>
-              <SelectItem value="16">16</SelectItem>
-              <SelectItem value="18">18</SelectItem>
-            </SelectContent>
-          </Select>
+          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
+            <option>15</option>
+            <option>12</option>
+            <option>14</option>
+            <option>16</option>
+            <option>18</option>
+          </select>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Text Formatting */}
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting("bold")}>
             <Bold className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting("italic")}>
             <Italic className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting("underline")}>
             <Underline className="w-4 h-4" />
           </Button>
           

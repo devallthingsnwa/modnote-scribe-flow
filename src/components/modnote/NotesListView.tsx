@@ -22,6 +22,7 @@ interface Note {
   tags: string[];
   isCompleted?: boolean;
   hasSubtasks?: boolean;
+  indicator?: string;
 }
 
 interface NotesListViewProps {
@@ -41,7 +42,8 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       timestamp: "20 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
-      tags: []
+      tags: [],
+      indicator: "blue"
     },
     {
       id: "note-2",
@@ -50,7 +52,8 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       timestamp: "59 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
-      tags: []
+      tags: [],
+      indicator: "blue"
     },
     {
       id: "note-3",
@@ -59,7 +62,8 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       timestamp: "1 hour ago",
       dueDate: "12 Jun, 8:00",
       progress: { completed: 0, total: 1 },
-      tags: ["Meeting", "Product"]
+      tags: ["Meeting", "Product"],
+      indicator: "blue"
     },
     {
       id: "note-4",
@@ -90,7 +94,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
@@ -125,7 +129,7 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       </div>
 
       {/* Notes List */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-3">
         {filteredNotes.map((note) => {
           const isSelected = selectedNoteId === note.id;
           
@@ -143,7 +147,9 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
               {/* Header with Checkbox and Options */}
               <div className="flex items-start gap-3 mb-3">
                 <div className="flex items-center gap-2 mt-0.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  {note.indicator && (
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  )}
                   {note.hasSubtasks ? (
                     <Circle className="w-4 h-4 text-blue-500" />
                   ) : (

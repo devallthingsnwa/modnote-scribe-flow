@@ -28,6 +28,8 @@ export default function ModNoteDashboard() {
     setSelectedSection(section);
     if (section === "notebooks") {
       setSelectedNoteId(null);
+    } else if (section === "notes") {
+      setSelectedNoteId("note-3");
     }
   };
 
