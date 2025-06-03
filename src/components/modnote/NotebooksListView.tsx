@@ -42,6 +42,9 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { ShareModal } from "./ShareModal";
+import { useCreateNote } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Notebook {
   id: string;
@@ -122,11 +125,47 @@ export function NotebooksListView() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  
+  const createNoteMutation = useCreateNote();
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const filteredNotebooks = notebooks.filter(notebook =>
     notebook.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     notebook.space.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleNewNote = () => {
+    setIsCreatingNote(true);
+    createNoteMutation.mutate({
+      note: {
+        title: "Untitled Note",
+        content: ""
+      },
+      tagIds: []
+    }, {
+      onSuccess: (newNote) => {
+        toast({
+          title: "Note created",
+          description: "Your new note has been created successfully."
+        });
+        // Navigate to the new note page for editing
+        navigate(`/note/${newNote.id}`);
+      },
+      onError: (error) => {
+        toast({
+          title: "Error creating note",
+          description: "There was an error creating your note. Please try again.",
+          variant: "destructive"
+        });
+        console.error("Create note error:", error);
+      },
+      onSettled: () => {
+        setIsCreatingNote(false);
+      }
+    });
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -322,9 +361,13 @@ export function NotebooksListView() {
             <p className="text-gray-500 text-sm">{filteredNotebooks.length} Notebooks</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button 
+              onClick={handleNewNote}
+              disabled={isCreatingNote}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               <Plus className="w-4 h-4 mr-2" />
-              New Notebook
+              {isCreatingNote ? "Creating..." : "New Notebook"}
             </Button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -411,9 +454,13 @@ export function NotebooksListView() {
         {filteredNotebooks.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-500 mb-4">No notebooks found</div>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button 
+              onClick={handleNewNote}
+              disabled={isCreatingNote}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               <Plus className="w-4 h-4 mr-2" />
-              Create your first notebook
+              {isCreatingNote ? "Creating..." : "Create your first notebook"}
             </Button>
           </div>
         )}
