@@ -38,7 +38,6 @@ export function ModNoteHeader({
   const [showAIModal, setShowAIModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showMultiMediaModal, setShowMultiMediaModal] = useState(false);
   
   const createNoteMutation = useCreateModNote();
   const { data: searchResults } = useSearchNotes(searchQuery);
@@ -108,7 +107,7 @@ export function ModNoteHeader({
                 Note
               </Button>
               <Button 
-                onClick={() => setShowMultiMediaModal(true)}
+                onClick={() => setShowUploadModal(true)}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-sm rounded-md h-8"
               >
                 <Plus className="w-4 h-4 mr-1" />
@@ -226,12 +225,10 @@ export function ModNoteHeader({
       <FileUploadModal
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
-      />
-      
-      <FileUploadModal
-        isOpen={showMultiMediaModal}
-        onClose={() => setShowMultiMediaModal(false)}
-        noteId={selectedNoteId}
+        onFileUploaded={() => {
+          // Refresh notes list or handle success
+          onNewNote?.();
+        }}
       />
     </>
   );
