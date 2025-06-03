@@ -2,6 +2,7 @@
 import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ interface EnhancedModNoteSidebarProps {
 }
 
 export function EnhancedModNoteSidebar({ selectedSection, onSectionChange }: EnhancedModNoteSidebarProps) {
+  const navigate = useNavigate();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showGetStartedModal, setShowGetStartedModal] = useState(false);
   const [showTrashModal, setShowTrashModal] = useState(false);
@@ -22,23 +24,27 @@ export function EnhancedModNoteSidebar({ selectedSection, onSectionChange }: Enh
   const { toast } = useToast();
 
   const menuItems = [
-    { icon: Home, label: "Home", key: "home" },
+    { icon: Home, label: "Home", key: "home", route: "/dashboard" },
     { icon: Bookmark, label: "Shortcuts", key: "shortcuts" },
     { icon: FileText, label: "Notes", key: "notes", isActive: true },
     { icon: Folder, label: "Files", key: "files" },
     { icon: Folder, label: "Notebooks", key: "notebooks" },
-    { icon: Tag, label: "Tags", key: "tags" },
+    { icon: Tag, label: "Tags", key: "tags", route: "/tags" },
     { icon: Share2, label: "Shared With Me", key: "shared" },
     { icon: Trash2, label: "Trash", key: "trash" },
     { icon: UserPlus, label: "Invite Users", key: "invite" },
   ];
 
-  const handleMenuClick = (key: string) => {
+  const handleMenuClick = (key: string, route?: string) => {
     if (key === "trash") {
       setShowTrashModal(true);
     } else if (key === "invite") {
       setShowInviteModal(true);
+    } else if (route) {
+      // Navigate to external routes
+      navigate(route);
     } else {
+      // Handle internal section changes
       onSectionChange(key);
     }
   };
@@ -91,11 +97,11 @@ export function EnhancedModNoteSidebar({ selectedSection, onSectionChange }: Enh
         <nav className="flex-1 p-4 pt-6">
           <div className="space-y-1">
             {menuItems.map((item) => {
-              const isActive = item.key === "notes"; // Notes is always active for this design
+              const isActive = selectedSection === item.key || item.key === "notes";
               return (
                 <button
                   key={item.label}
-                  onClick={() => handleMenuClick(item.key)}
+                  onClick={() => handleMenuClick(item.key, item.route)}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
                     isActive
