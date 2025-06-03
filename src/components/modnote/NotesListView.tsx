@@ -1,98 +1,232 @@
 
 import { useState } from "react";
-import { useModNotes } from "@/lib/modNoteApi";
-import { NoteCard } from "../NoteCard";
-import { PlusCircle, Upload } from "lucide-react";
+import { Calendar, Clock, Circle, MoreHorizontal, CheckSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { YouTubeTranscriptModal } from "./YouTubeTranscriptModal";
-import { FileUploadModal } from "./FileUploadModal";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-export function NotesListView() {
-  const { data: notes, isLoading, error } = useModNotes();
-  const [showYouTubeModal, setShowYouTubeModal] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: string;
+  progress: { completed: number; total: number };
+  dueDate?: string;
+  tags: string[];
+  isCompleted?: boolean;
+  hasSubtasks?: boolean;
+}
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+interface NotesListViewProps {
+  selectedNoteId: string | null;
+  onNoteSelect: (noteId: string) => void;
+  searchQuery: string;
+}
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Failed to load notes</p>
-          <Button onClick={() => window.location.reload()}>Try Again</Button>
-        </div>
-      </div>
-    );
-  }
+export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: NotesListViewProps) {
+  const [activeTab, setActiveTab] = useState<"notes" | "reminders">("notes");
+  
+  const mockNotes: Note[] = [
+    {
+      id: "1",
+      title: "Follow up actions",
+      content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
+      timestamp: "30 minutes ago",
+      progress: { completed: 0, total: 1 },
+      hasSubtasks: true,
+      tags: []
+    },
+    {
+      id: "2",
+      title: "Things to do",
+      content: "Prepare Monthly Product Meeting Updates",
+      timestamp: "45 minutes ago",
+      progress: { completed: 0, total: 1 },
+      hasSubtasks: true,
+      tags: []
+    },
+    {
+      id: "3",
+      title: "Product Team Meeting",
+      content: "Updates to hiring processes, maturity charts, and the company handbook.",
+      timestamp: "1 hour ago",
+      dueDate: "12 Jun, 8:00",
+      progress: { completed: 0, total: 1 },
+      tags: ["Meeting", "Product"]
+    },
+    {
+      id: "4",
+      title: "How to Use This Space",
+      content: "How to use spaces for hiring and other workflows. Spaces are us...",
+      timestamp: "3 days ago",
+      tags: ["Product"]
+    },
+    {
+      id: "5",
+      title: "Follow up actions",
+      content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
+      timestamp: "12 Jun, 8:00",
+      isCompleted: true,
+      tags: ["Meeting", "Product"]
+    }
+  ];
+
+  const filteredNotes = mockNotes.filter(note => {
+    if (activeTab === "reminders") {
+      return note.dueDate || note.tags.includes("Meeting");
+    }
+    return !searchQuery || 
+           note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           note.content.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
-    <div className="p-6">
-      {/* Content Section */}
-      <div className="max-w-7xl mx-auto">
-        {notes && notes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                id={note.id}
-                title={note.title}
-                content={note.content || ""}
-                date={new Date(note.updated_at)}
-                tags={[]}
-                thumbnail={note.thumbnail || undefined}
-                onClick={() => {}}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <PlusCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-            <p className="text-gray-500 mb-6">Get started by creating your first note or importing content.</p>
-            <div className="flex justify-center gap-4">
-              <Button
-                onClick={() => setShowYouTubeModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import from YouTube
-              </Button>
-              <Button
-                onClick={() => setShowUploadModal(true)}
-                variant="outline"
-              >
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Upload File
-              </Button>
-            </div>
-          </div>
-        )}
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+          32 Notes
+        </h2>
+        
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab("notes")}
+            className={cn(
+              "px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+              activeTab === "notes"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            Notes
+          </button>
+          <button
+            onClick={() => setActiveTab("reminders")}
+            className={cn(
+              "px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+              activeTab === "reminders"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+          >
+            Reminders
+          </button>
+        </div>
       </div>
 
-      {/* Modals */}
-      <YouTubeTranscriptModal
-        isOpen={showYouTubeModal}
-        onClose={() => setShowYouTubeModal(false)}
-        onSuccess={() => {
-          setShowYouTubeModal(false);
-          window.location.reload();
-        }}
-      />
-
-      <FileUploadModal
-        isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
-        onFileUploaded={() => {
-          setShowUploadModal(false);
-          window.location.reload();
-        }}
-      />
+      {/* Notes List */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {filteredNotes.map((note) => {
+          const isSelected = selectedNoteId === note.id;
+          
+          return (
+            <div
+              key={note.id}
+              onClick={() => onNoteSelect(note.id)}
+              className={cn(
+                "p-4 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
+                isSelected
+                  ? "bg-blue-50 border-blue-200"
+                  : "bg-white border-gray-200 hover:bg-gray-50"
+              )}
+            >
+              {/* Header with Checkbox and Options */}
+              <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  {note.hasSubtasks ? (
+                    <Circle className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <Checkbox 
+                      checked={note.isCompleted}
+                      className="rounded"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className={cn(
+                    "font-medium mb-2 text-sm",
+                    note.isCompleted ? "text-gray-500 line-through" : "text-gray-900"
+                  )}>
+                    {note.title}
+                  </h3>
+                  <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed mb-3">
+                    {note.content}
+                  </p>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem>Edit</DropdownMenuItem>
+                    <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                    <DropdownMenuItem>Share</DropdownMenuItem>
+                    <DropdownMenuItem>Delete</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              
+              {/* Progress Bar */}
+              {note.progress && (
+                <div className="mb-3 ml-6">
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div 
+                      className="bg-blue-500 h-1.5 rounded-full transition-all"
+                      style={{ 
+                        width: `${(note.progress.completed / note.progress.total) * 100}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Footer */}
+              <div className="flex items-center justify-between ml-6">
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <Clock className="w-3 h-3" />
+                  <span>{note.timestamp}</span>
+                  
+                  {note.dueDate && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>{note.dueDate}</span>
+                    </div>
+                  )}
+                </div>
+                
+                {note.tags.length > 0 && (
+                  <div className="flex gap-1">
+                    {note.tags.map((tag, index) => (
+                      <Badge 
+                        key={index}
+                        variant="outline" 
+                        className={cn(
+                          "text-xs px-2 py-0.5",
+                          tag === "Meeting" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-green-50 text-green-700 border-green-200"
+                        )}
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
