@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -50,6 +49,27 @@ export interface ModFile {
   created_at: string;
 }
 
+// Helper function to convert database note to ModNote
+const convertToModNote = (dbNote: any): ModNote => {
+  return {
+    id: dbNote.id,
+    title: dbNote.title,
+    content: dbNote.content,
+    notebook_id: dbNote.notebook_id,
+    created_at: dbNote.created_at,
+    updated_at: dbNote.updated_at,
+    thumbnail: dbNote.thumbnail,
+    source_url: dbNote.source_url,
+    is_transcription: dbNote.is_transcription,
+    due_date: dbNote.due_date,
+    reminder_date: dbNote.reminder_date,
+    task_progress: dbNote.task_progress ? (typeof dbNote.task_progress === 'string' ? JSON.parse(dbNote.task_progress) : dbNote.task_progress) : { completed: 0, total: 0 },
+    is_reminder: dbNote.is_reminder,
+    shared_permissions: dbNote.shared_permissions ? (Array.isArray(dbNote.shared_permissions) ? dbNote.shared_permissions : []) : [],
+    user_id: dbNote.user_id
+  };
+};
+
 // Notes API
 export const fetchModNotes = async (): Promise<ModNote[]> => {
   const { data, error } = await supabase
@@ -62,7 +82,7 @@ export const fetchModNotes = async (): Promise<ModNote[]> => {
     throw error;
   }
   
-  return data || [];
+  return (data || []).map(convertToModNote);
 };
 
 export const fetchReminderNotes = async () => {
@@ -81,7 +101,23 @@ export const fetchReminderNotes = async () => {
     throw error;
   }
 
-  return data || [];
+  return (data || []).map((note: any) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    notebook_id: null,
+    created_at: note.created_at,
+    updated_at: note.updated_at,
+    thumbnail: null,
+    source_url: null,
+    is_transcription: false,
+    due_date: note.due_date,
+    reminder_date: note.reminder_date,
+    task_progress: note.task_progress ? (typeof note.task_progress === 'string' ? JSON.parse(note.task_progress) : note.task_progress) : { completed: 0, total: 0 },
+    is_reminder: true,
+    shared_permissions: [],
+    user_id: user.id
+  }));
 };
 
 export const searchModNotes = async (searchTerm: string) => {
@@ -101,7 +137,23 @@ export const searchModNotes = async (searchTerm: string) => {
     throw error;
   }
 
-  return data || [];
+  return (data || []).map((note: any) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    notebook_id: null,
+    created_at: note.created_at,
+    updated_at: note.updated_at,
+    thumbnail: null,
+    source_url: null,
+    is_transcription: false,
+    due_date: null,
+    reminder_date: null,
+    task_progress: { completed: 0, total: 0 },
+    is_reminder: false,
+    shared_permissions: [],
+    user_id: user.id
+  }));
 };
 
 export const createModNote = async (note: {
@@ -133,7 +185,7 @@ export const createModNote = async (note: {
     throw error;
   }
   
-  return data;
+  return convertToModNote(data);
 };
 
 export const updateModNote = async (id: string, updates: Partial<ModNote>): Promise<ModNote> => {
@@ -152,7 +204,7 @@ export const updateModNote = async (id: string, updates: Partial<ModNote>): Prom
     throw error;
   }
   
-  return data;
+  return convertToModNote(data);
 };
 
 export const shareNote = async (noteId: string, userEmails: string[], permissions: string) => {
@@ -173,7 +225,7 @@ export const shareNote = async (noteId: string, userEmails: string[], permission
     throw error;
   }
   
-  return data;
+  return convertToModNote(data);
 };
 
 // Files API

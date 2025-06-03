@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Search, Bell, Settings, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +31,7 @@ export function ModNoteHeader({
   onAIResponse,
   currentNoteContent 
 }: ModNoteHeaderProps) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [showAIModal, setShowAIModal] = useState(false);
@@ -79,7 +78,7 @@ export function ModNoteHeader({
 
   const handleSignOut = async () => {
     try {
-      await user?.signOut?.();
+      await signOut();
     } catch (error) {
       console.error("Sign out error:", error);
     }
