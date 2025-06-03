@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { MoreHorizontal, Plus, Search } from "lucide-react";
+import { MoreHorizontal, Plus, Search, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,14 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 interface Notebook {
   id: string;
@@ -97,6 +105,29 @@ export function NotebooksListView() {
 
   return (
     <div className="p-6">
+      {/* Breadcrumb Navigation */}
+      <div className="mb-4">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink 
+                href="#" 
+                className="flex items-center gap-1 text-gray-600 hover:text-gray-900"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                My Notebook
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage className="text-gray-900 font-medium">
+                Product Team Meeting
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
