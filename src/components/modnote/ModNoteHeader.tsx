@@ -2,27 +2,27 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   Search,
   Plus,
   Upload,
+  Mic,
   FileText,
-  Sparkles,
   Bell,
   Share2,
-  ChevronDown,
-  MoreVertical
+  Menu,
+  MoreHorizontal
 } from "lucide-react";
+import { Logo } from "@/components/Logo";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { FileUploadModal } from "./FileUploadModal";
-import { AIAssistantModal } from "./AIAssistantModal";
+import { Badge } from "@/components/ui/badge";
 
 interface ModNoteHeaderProps {
   searchQuery: string;
@@ -37,42 +37,44 @@ export function ModNoteHeader({
   onNewNote,
   isNoteEditing = false
 }: ModNoteHeaderProps) {
-  const [fileUploadOpen, setFileUploadOpen] = useState(false);
-  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3">
       <div className="flex items-center justify-between">
-        {/* Left Section */}
+        {/* Left Section - Logo and Primary Actions */}
         <div className="flex items-center gap-4">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">M</span>
-            </div>
-            <span className="font-semibold text-gray-900">ModNote</span>
-          </div>
+          <Logo size="md" />
           
-          {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            <Button onClick={onNewNote} className="bg-blue-600 hover:bg-blue-700 text-white">
+            {/* Note Button */}
+            <Button 
+              onClick={onNewNote}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 h-9"
+            >
               <FileText className="w-4 h-4 mr-2" />
               Note
             </Button>
             
-            <Button variant="outline" onClick={() => setFileUploadOpen(true)}>
+            {/* Add Multi Media Button */}
+            <Button 
+              variant="outline"
+              className="border-gray-300 hover:bg-gray-50 px-4 py-2 h-9"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Multi Media
             </Button>
             
-            <Button variant="outline" onClick={() => setFileUploadOpen(true)}>
+            {/* Upload Button */}
+            <Button 
+              variant="outline"
+              className="border-purple-300 text-purple-600 hover:bg-purple-50 px-4 py-2 h-9"
+            >
               <Upload className="w-4 h-4 mr-2" />
               Upload
             </Button>
           </div>
         </div>
 
-        {/* Center Section - Search */}
+        {/* Center Section - Search Bar */}
         <div className="flex-1 max-w-md mx-8">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -80,73 +82,78 @@ export function ModNoteHeader({
               placeholder="Type to search"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10"
+              className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             />
           </div>
         </div>
 
-        {/* Right Section */}
+        {/* Right Section - AI, Notifications, Profile, Share */}
         <div className="flex items-center gap-3">
-          <Button
+          {/* Ask AI Button */}
+          <Button 
             variant="outline"
-            onClick={() => setAiAssistantOpen(true)}
-            className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:from-purple-600 hover:to-blue-600"
+            className="bg-green-50 border-green-300 text-green-700 hover:bg-green-100 px-4 py-2 h-9"
           >
-            <Sparkles className="w-4 h-4 mr-2" />
+            <Mic className="w-4 h-4 mr-2" />
             Ask AI
           </Button>
           
+          {/* Notification Bell */}
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="w-5 h-5 text-gray-600" />
+          </Button>
+          
+          {/* Share Button (only when editing a note) */}
           {isNoteEditing && (
-            <Button variant="outline">
+            <Button 
+              variant="outline"
+              className="border-gray-300 hover:bg-gray-50 px-4 py-2 h-9"
+            >
               <Share2 className="w-4 h-4 mr-2" />
               Share
             </Button>
           )}
           
-          <Button variant="ghost" size="icon">
-            <Bell className="w-4 h-4" />
-          </Button>
-          
-          {/* User Profile Dropdown */}
+          {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 px-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src="/api/placeholder/32/32" />
-                  <AvatarFallback>SL</AvatarFallback>
-                </Avatar>
-                <div className="text-left">
-                  <div className="text-sm font-medium">Sam Lee</div>
-                  <div className="text-xs text-gray-500">S.L Mobbin</div>
+              <Button variant="ghost" className="p-0 h-auto hover:bg-transparent">
+                <div className="flex items-center gap-2">
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-blue-100 text-blue-700 text-sm">SL</AvatarFallback>
+                  </Avatar>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-900">Sam Lee</div>
+                    <div className="text-xs text-gray-500">S.L Mobbin</div>
+                  </div>
                 </div>
-                <ChevronDown className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-              <DropdownMenuItem>Account Management</DropdownMenuItem>
-              <DropdownMenuItem>Preferences</DropdownMenuItem>
+              <DropdownMenuItem>Account Settings</DropdownMenuItem>
+              <DropdownMenuItem>Workspace Settings</DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem>Sign Out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <Button variant="ghost" size="icon">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
+          {/* More Options */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="w-5 h-5 text-gray-600" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem>Help Center</DropdownMenuItem>
+              <DropdownMenuItem>Keyboard Shortcuts</DropdownMenuItem>
+              <DropdownMenuItem>What's New</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-
-      {/* Modals */}
-      <FileUploadModal
-        isOpen={fileUploadOpen}
-        onClose={() => setFileUploadOpen(false)}
-        onFileUploaded={() => setFileUploadOpen(false)}
-      />
-      
-      <AIAssistantModal
-        isOpen={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-      />
     </header>
   );
 }

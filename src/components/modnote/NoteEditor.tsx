@@ -1,11 +1,7 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { 
   Bold, 
   Italic, 
@@ -19,11 +15,18 @@ import {
   Palette,
   MoreHorizontal,
   Play,
-  ChevronRight,
-  ChevronDown,
-  Share2
+  ChevronRight
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface NoteEditorProps {
   noteId: string | null;
@@ -33,39 +36,6 @@ interface NoteEditorProps {
 export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
   const [title, setTitle] = useState("Product Team Meeting");
   const [content, setContent] = useState("");
-  const [isEditing, setIsEditing] = useState(true);
-
-  const insertFormatting = (format: string) => {
-    const textarea = document.querySelector('#note-content') as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    
-    let replacement = "";
-    
-    switch (format) {
-      case "bold":
-        replacement = `**${selectedText}**`;
-        break;
-      case "italic":
-        replacement = `*${selectedText}*`;
-        break;
-      case "underline":
-        replacement = `<u>${selectedText}</u>`;
-        break;
-      case "list":
-        replacement = selectedText.split('\n').map(line => line.trim() ? `• ${line}` : line).join('\n');
-        break;
-      case "checklist":
-        replacement = selectedText.split('\n').map(line => line.trim() ? `☐ ${line}` : line).join('\n');
-        break;
-    }
-    
-    const newContent = content.substring(0, start) + replacement + content.substring(end);
-    setContent(newContent);
-  };
 
   if (!noteId) {
     return (
@@ -82,16 +52,10 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
     <div className="flex-1 bg-white flex flex-col">
       {/* Breadcrumb */}
       <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center text-sm text-gray-600">
-            <span>My Notebook</span>
-            <ChevronRight className="w-4 h-4 mx-2" />
-            <span className="text-blue-600">Product Team Meeting</span>
-          </div>
-          <Button variant="outline" className="text-blue-600">
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
-          </Button>
+        <div className="flex items-center text-sm text-gray-600">
+          <span>My Notebook</span>
+          <ChevronRight className="w-4 h-4 mx-2" />
+          <span className="text-blue-600">Product Team Meeting</span>
         </div>
       </div>
 
@@ -123,36 +87,51 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Font Controls */}
-          <select className="text-sm border border-gray-200 rounded px-2 py-1">
-            <option>Normal Text</option>
-            <option>Heading 1</option>
-            <option>Heading 2</option>
-          </select>
+          <Select defaultValue="normal">
+            <SelectTrigger className="w-32 h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">Normal Text</SelectItem>
+              <SelectItem value="h1">Heading 1</SelectItem>
+              <SelectItem value="h2">Heading 2</SelectItem>
+            </SelectContent>
+          </Select>
           
-          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
-            <option>Sans Serif</option>
-            <option>Serif</option>
-            <option>Monospace</option>
-          </select>
+          <Select defaultValue="sans">
+            <SelectTrigger className="w-28 h-8 text-sm ml-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sans">Sans Serif</SelectItem>
+              <SelectItem value="serif">Serif</SelectItem>
+              <SelectItem value="mono">Monospace</SelectItem>
+            </SelectContent>
+          </Select>
           
-          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
-            <option>15</option>
-            <option>12</option>
-            <option>14</option>
-            <option>16</option>
-            <option>18</option>
-          </select>
+          <Select defaultValue="15">
+            <SelectTrigger className="w-16 h-8 text-sm ml-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">12</SelectItem>
+              <SelectItem value="14">14</SelectItem>
+              <SelectItem value="15">15</SelectItem>
+              <SelectItem value="16">16</SelectItem>
+              <SelectItem value="18">18</SelectItem>
+            </SelectContent>
+          </Select>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Text Formatting */}
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("bold")}>
+          <Button variant="ghost" size="sm">
             <Bold className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("italic")}>
+          <Button variant="ghost" size="sm">
             <Italic className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("underline")}>
+          <Button variant="ghost" size="sm">
             <Underline className="w-4 h-4" />
           </Button>
           
@@ -183,7 +162,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
 
           {/* Content */}
           <div className="space-y-4">
-            {/* Follow Up Actions Button */}
+            {/* Example Follow Up Actions Button */}
             <Card className="p-4 bg-purple-50 border-purple-200">
               <Button className="bg-purple-600 hover:bg-purple-700 text-white text-sm">
                 Follow up actions
@@ -196,7 +175,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
               </div>
             </Card>
 
-            {/* Main Content */}
+            {/* Main Content Area */}
             <div className="space-y-4">
               <h3 className="font-medium text-lg">Updates to hiring processes, maturity charts, and the company handbook.</h3>
               
@@ -227,7 +206,7 @@ export function NoteEditor({ noteId, onNoteCreated }: NoteEditorProps) {
                 </div>
               </div>
 
-              {/* Team Member Table */}
+              {/* Table */}
               <div className="mt-6">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>

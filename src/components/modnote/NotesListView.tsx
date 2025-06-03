@@ -35,25 +35,25 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
   
   const mockNotes: Note[] = [
     {
-      id: "1",
+      id: "note-1",
       title: "Follow up actions",
       content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
-      timestamp: "30 minutes ago",
+      timestamp: "20 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
       tags: []
     },
     {
-      id: "2",
+      id: "note-2",
       title: "Things to do",
       content: "Prepare Monthly Product Meeting Updates",
-      timestamp: "45 minutes ago",
+      timestamp: "59 minutes ago",
       progress: { completed: 0, total: 1 },
       hasSubtasks: true,
       tags: []
     },
     {
-      id: "3",
+      id: "note-3",
       title: "Product Team Meeting",
       content: "Updates to hiring processes, maturity charts, and the company handbook.",
       timestamp: "1 hour ago",
@@ -62,15 +62,15 @@ export function NotesListView({ selectedNoteId, onNoteSelect, searchQuery }: Not
       tags: ["Meeting", "Product"]
     },
     {
-      id: "4",
+      id: "note-4",
       title: "How to Use This Space",
       content: "How to use spaces for hiring and other workflows. Spaces are us...",
-      timestamp: "3 days ago",
+      timestamp: "3 hours ago",
       progress: { completed: 0, total: 1 },
       tags: ["Product"]
     },
     {
-      id: "5",
+      id: "note-5",
       title: "Follow up actions",
       content: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
       timestamp: "12 Jun, 8:00",
