@@ -23,10 +23,10 @@ export function EnhancedNotesListView({
   onTabChange,
   notesCount 
 }: EnhancedNotesListViewProps) {
-  // Mock data for task-based notes (in real app, this would come from your API)
+  // Mock data for task-based notes - these would come from your API in a real app
   const taskNotes = [
     {
-      id: "1",
+      id: "task-1",
       title: "Follow up actions",
       description: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...",
       time: "30 minutes ago",
@@ -35,7 +35,7 @@ export function EnhancedNotesListView({
       progress: { completed: 0, total: 1 }
     },
     {
-      id: "2", 
+      id: "task-2", 
       title: "Things to do",
       description: "Prepare Monthly Product Meeting Updates",
       time: "45 minutes ago",
@@ -44,7 +44,7 @@ export function EnhancedNotesListView({
       progress: { completed: 0, total: 1 }
     },
     {
-      id: "3",
+      id: "task-3",
       title: "Product Team Meeting", 
       description: "Updates to hiring processes, maturity charts, and the company handbook.",
       time: "1 hour ago",
@@ -55,7 +55,7 @@ export function EnhancedNotesListView({
       progress: { completed: 0, total: 1 }
     },
     {
-      id: "4",
+      id: "task-4",
       title: "How to Use This Space",
       description: "How to use spaces for hiring and other workflows. Spaces are us...",
       time: "3 days ago", 
@@ -64,7 +64,7 @@ export function EnhancedNotesListView({
       hasSubtasks: false
     },
     {
-      id: "5",
+      id: "task-5",
       title: "Follow up actions",
       description: "Confirm accuracy of or update maturity flow chart view created by Josh. Check updates to maturity...", 
       time: "12 Jun, 8:00",
@@ -74,12 +74,16 @@ export function EnhancedNotesListView({
     }
   ];
 
+  // Filter notes based on active tab
+  const displayNotes = activeTab === "notes" ? taskNotes : notes;
+  const displayCount = activeTab === "notes" ? taskNotes.length : notes.length;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with Count and Tabs */}
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          {activeTab === "notes" ? taskNotes.length : notesCount} {activeTab === "notes" ? "Notes" : "Notes"}
+          {displayCount} {activeTab === "notes" ? "Notes" : "Reminders"}
         </h2>
         
         {/* Tabs */}
@@ -113,7 +117,7 @@ export function EnhancedNotesListView({
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-3">
           {activeTab === "notes" ? (
-            // Task-based Notes View
+            // Task-based Notes View for Notes Tab
             taskNotes.map((note) => {
               const isSelected = selectedNoteId === note.id;
               
@@ -122,7 +126,7 @@ export function EnhancedNotesListView({
                   key={note.id}
                   onClick={() => onNoteSelect(note.id)}
                   className={cn(
-                    "p-4 rounded-lg border cursor-pointer transition-all",
+                    "p-4 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
                     isSelected
                       ? "bg-blue-50 border-blue-200"
                       : "bg-white border-gray-200 hover:bg-gray-50"
@@ -137,6 +141,7 @@ export function EnhancedNotesListView({
                         <Checkbox 
                           checked={note.isCompleted}
                           className="rounded-full"
+                          onClick={(e) => e.stopPropagation()}
                         />
                       )}
                     </div>
@@ -214,7 +219,7 @@ export function EnhancedNotesListView({
               );
             })
           ) : (
-            // Original Reminders View
+            // Original Reminders View for Reminders Tab
             notes.map((note) => {
               const isSelected = selectedNoteId === note.id;
               const taskProgress = note.task_progress || { completed: 0, total: 0 };
@@ -224,7 +229,7 @@ export function EnhancedNotesListView({
                   key={note.id}
                   onClick={() => onNoteSelect(note.id)}
                   className={cn(
-                    "p-4 rounded-lg border cursor-pointer transition-all",
+                    "p-4 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
                     isSelected
                       ? "bg-blue-50 border-blue-200"
                       : "bg-white border-gray-200 hover:bg-gray-50"
@@ -299,7 +304,7 @@ export function EnhancedNotesListView({
             })
           )}
           
-          {((activeTab === "notes" && taskNotes.length === 0) || (activeTab === "reminders" && notes.length === 0)) && (
+          {displayNotes.length === 0 && (
             <div className="text-center py-12">
               <CheckSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">

@@ -29,6 +29,11 @@ export function EnhancedModNoteLayout() {
     setSelectedNoteId(noteId);
   };
 
+  const handleTabChange = (tab: "notes" | "reminders") => {
+    setActiveTab(tab);
+    setSelectedNoteId(null); // Clear selection when switching tabs
+  };
+
   const handleNewNote = () => {
     refetch();
   };
@@ -60,7 +65,7 @@ export function EnhancedModNoteLayout() {
               selectedNoteId={selectedNoteId}
               onNoteSelect={handleNoteSelect}
               activeTab={activeTab}
-              onTabChange={setActiveTab}
+              onTabChange={handleTabChange}
               notesCount={filteredNotes.length}
             />
           </div>
