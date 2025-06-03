@@ -39,11 +39,6 @@ export function Dashboard() {
     refetch();
   };
 
-  const handleNewNote = () => {
-    // Navigate to new note page
-    window.location.href = "/new";
-  };
-
   const onBulkDelete = () => {
     handleBulkDelete();
     refetch();
@@ -78,7 +73,6 @@ export function Dashboard() {
             notes={filteredNotes}
             selectedNoteId={selectedNoteId}
             onNoteSelect={onNoteSelect}
-            onNewNote={handleNewNote}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             isSelectMode={isSelectMode}
