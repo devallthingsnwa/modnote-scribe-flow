@@ -85,8 +85,11 @@ export function EnhancedNotesListView({
       {/* Header with Icons and Count */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-6">
-          {/* Left side - Icons and Notes count */}
-          <div className="flex items-center gap-4">
+          {/* Right side - Icons and Notes count */}
+          <div className="flex items-center gap-4 ml-auto">
+            <h2 className="text-xl font-semibold text-black">
+              {notesCount} Notes
+            </h2>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-gray-100">
                 <Grid3X3 className="w-4 h-4 text-black" />
@@ -98,9 +101,6 @@ export function EnhancedNotesListView({
                 <List className="w-4 h-4 text-black" />
               </Button>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {notesCount} Notes
-            </h2>
           </div>
         </div>
         
