@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { 
   FileText, 
@@ -110,7 +111,7 @@ export function NotesListView() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-gray-50">
       <ModNoteHeader 
         selectedNoteId={selectedNote?.id}
         selectedNoteTitle={selectedNote?.title}
@@ -120,66 +121,82 @@ export function NotesListView() {
       
       <div className="flex h-full">
         {/* Notes List */}
-        <div className="w-1/2 border-r border-gray-200">
-          <div className="p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">
-                  {currentNotes.length} {viewMode === "notes" ? "Notes" : "Reminders"}
-                </h1>
+        <div className="w-96 border-r border-gray-200 bg-white">
+          <div className="p-4">
+            {/* Header with count and controls */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-medium text-blue-600">{currentNotes.length}</span>
+                <span className="text-lg font-medium text-gray-900">
+                  {viewMode === "notes" ? "Notes" : "Reminders"}
+                </span>
               </div>
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <Filter className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <MoreHorizontal className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <Grid3X3 className="w-4 h-4" />
-                </Button>
-                <select className="text-sm border border-gray-300 rounded px-3 py-1">
-                  <option>My Notebook</option>
-                </select>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="text-sm">
-                      {selectedNote?.title || "Select Note"}
-                      <ChevronDown className="w-4 h-4 ml-2" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {currentNotes.map((note) => (
-                      <DropdownMenuItem key={note.id} onClick={() => handleNoteSelect(note)}>
-                        {note.title}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button className="bg-teal-500 hover:bg-teal-600 text-white">
-                  Share
                 </Button>
               </div>
             </div>
 
+            {/* Notebook selector and action buttons */}
+            <div className="flex items-center justify-between mb-4">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="text-sm h-8">
+                    📓 My Notebook
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem>My Notebook</DropdownMenuItem>
+                  <DropdownMenuItem>Work Notes</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="text-sm h-8">
+                    📝 Product Team Meeting
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {currentNotes.map((note) => (
+                    <DropdownMenuItem key={note.id} onClick={() => handleNoteSelect(note)}>
+                      {note.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Button className="bg-teal-500 hover:bg-teal-600 text-white h-8 text-sm">
+                Share
+              </Button>
+            </div>
+
             {/* Tabs */}
-            <div className="flex items-center gap-8 mb-6 border-b border-gray-200">
+            <div className="flex items-center gap-6 mb-4 border-b border-gray-200">
               <button 
-                className={`pb-3 border-b-2 font-medium ${
+                className={`pb-2 border-b-2 font-medium text-sm ${
                   viewMode === "notes" 
                     ? "border-blue-600 text-blue-600" 
-                    : "border-transparent text-gray-500"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
                 onClick={() => setViewMode("notes")}
               >
                 Notes
               </button>
               <button 
-                className={`pb-3 border-b-2 font-medium ${
+                className={`pb-2 border-b-2 font-medium text-sm ${
                   viewMode === "reminders" 
                     ? "border-blue-600 text-blue-600" 
-                    : "border-transparent text-gray-500"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
                 onClick={() => setViewMode("reminders")}
               >
@@ -188,11 +205,11 @@ export function NotesListView() {
             </div>
 
             {/* Notes List */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {currentNotes.map((note) => (
                 <div 
                   key={note.id} 
-                  className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                  className={`border rounded-lg p-3 cursor-pointer transition-colors ${
                     selectedNote?.id === note.id ? 'bg-blue-50 border-blue-200' : 'border-gray-200 hover:bg-gray-50'
                   }`}
                   onClick={() => handleNoteSelect(note)}
@@ -200,14 +217,14 @@ export function NotesListView() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-medium text-gray-900">{note.title}</h3>
+                        <h3 className="font-medium text-gray-900 text-sm">{note.title}</h3>
                         {note.is_transcription && <Play className="w-3 h-3 text-blue-500" />}
                         {note.is_reminder && <CheckSquare className="w-3 h-3 text-green-500" />}
                       </div>
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                      <p className="text-gray-600 text-xs mb-2 line-clamp-2">
                         {note.content || "No content"}
                       </p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
                         <span>{formatDistanceToNow(new Date(note.updated_at), { addSuffix: true })}</span>
                         {note.task_progress && (
                           <span className="text-blue-600">{getTaskProgress(note)}</span>
@@ -234,30 +251,33 @@ export function NotesListView() {
         </div>
 
         {/* Note Editor */}
-        <div className="w-1/2 bg-white">
+        <div className="flex-1 bg-white">
           {selectedNote ? (
-            <div className="p-6 h-full">
-              {/* Breadcrumb */}
-              <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-                <span>My Notebook</span>
+            <div className="p-6 h-full flex flex-col">
+              {/* Breadcrumb and actions */}
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
+                <span>📓 My Notebook</span>
                 <span>&gt;</span>
-                <span className="text-gray-900">{selectedNote.title}</span>
-                <Button variant="ghost" size="sm" className="ml-auto">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-                <Button className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4">
-                  Share
-                </Button>
+                <span className="text-gray-900">📝 {selectedNote.title}</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+                  <Button className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4 h-8">
+                    Share
+                  </Button>
+                </div>
               </div>
 
-              {/* Enhanced Toolbar */}
-              <div className="flex items-center gap-2 p-3 border border-gray-200 rounded mb-4 bg-gray-50">
-                <Button variant="ghost" size="sm">
+              {/* Toolbar */}
+              <div className="flex items-center gap-2 p-3 border border-gray-200 rounded mb-6 bg-gray-50 flex-wrap">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Plus className="w-4 h-4" />
                 </Button>
+                
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">Insert</Button>
+                    <Button variant="ghost" size="sm" className="h-8">Insert</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     <DropdownMenuItem><List className="w-4 h-4 mr-2" />Bullet List</DropdownMenuItem>
@@ -270,10 +290,10 @@ export function NotesListView() {
                 
                 <div className="w-px h-6 bg-gray-300"></div>
                 
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Undo className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Redo className="w-4 h-4" />
                 </Button>
                 
@@ -281,7 +301,7 @@ export function NotesListView() {
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">AI</Button>
+                    <Button variant="ghost" size="sm" className="h-8">AI</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     <DropdownMenuItem>Summarize</DropdownMenuItem>
@@ -292,32 +312,32 @@ export function NotesListView() {
                 
                 <div className="w-px h-6 bg-gray-300"></div>
                 
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Bold className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Italic className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Underline className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <Palette className="w-4 h-4" />
                 </Button>
                 
                 <div className="w-px h-6 bg-gray-300"></div>
                 
-                <select className="text-sm border-0 bg-transparent">
+                <select className="text-sm border-0 bg-transparent h-8">
                   <option>Normal Text</option>
                   <option>Heading 1</option>
                   <option>Heading 2</option>
                 </select>
-                <select className="text-sm border-0 bg-transparent">
+                <select className="text-sm border-0 bg-transparent h-8">
                   <option>Sans Serif</option>
                   <option>Serif</option>
                   <option>Mono</option>
                 </select>
-                <select className="text-sm border-0 bg-transparent">
+                <select className="text-sm border-0 bg-transparent h-8">
                   <option>15</option>
                   <option>12</option>
                   <option>14</option>
@@ -325,13 +345,13 @@ export function NotesListView() {
                   <option>18</option>
                 </select>
                 
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="h-8">
                   <AlignLeft className="w-4 h-4" />
                 </Button>
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">More</Button>
+                    <Button variant="ghost" size="sm" className="h-8">More</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     <DropdownMenuItem>Highlight</DropdownMenuItem>
@@ -341,11 +361,11 @@ export function NotesListView() {
                 </DropdownMenu>
               </div>
 
-              <div className="mb-6">
+              {/* Note Content */}
+              <div className="flex-1">
                 <h2 className="text-xl font-semibold mb-4">{selectedNote.title}</h2>
                 
-                {/* Note Content Editor */}
-                <div className="min-h-96">
+                <div className="flex-1">
                   <textarea
                     value={noteContent}
                     onChange={(e) => {

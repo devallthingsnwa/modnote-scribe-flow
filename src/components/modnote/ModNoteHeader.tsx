@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Search, Bell, Settings, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,29 +89,39 @@ export function ModNoteHeader({
     <>
       <header className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex items-center justify-between">
-          {/* Left side - Action buttons */}
-          <div className="flex items-center gap-3">
-            <Button 
-              onClick={handleNewNote}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded-md"
-              disabled={createNoteMutation.isPending}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Note
-            </Button>
-            <Button 
-              onClick={() => setShowMultiMediaModal(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-sm rounded-md"
-            >
-              Add Multi Media
-            </Button>
-            <Button 
-              onClick={() => setShowUploadModal(true)}
-              className="bg-purple-400 hover:bg-purple-500 text-white px-4 py-2 text-sm rounded-md"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Upload
-            </Button>
+          {/* Left side - Logo and Action buttons */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+                <span className="text-white font-bold text-sm">M</span>
+              </div>
+              <span className="font-semibold text-lg text-gray-900">ModNote</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={handleNewNote}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded-md h-8"
+                disabled={createNoteMutation.isPending}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Note
+              </Button>
+              <Button 
+                onClick={() => setShowMultiMediaModal(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-sm rounded-md h-8"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add Multi Media
+              </Button>
+              <Button 
+                onClick={() => setShowUploadModal(true)}
+                className="bg-purple-400 hover:bg-purple-500 text-white px-4 py-2 text-sm rounded-md h-8"
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Upload
+              </Button>
+            </div>
           </div>
 
           {/* Center - Search */}
@@ -121,7 +132,7 @@ export function ModNoteHeader({
                 placeholder="Type to search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-md"
+                className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-md h-8"
               />
               
               {/* Search Results Dropdown */}
@@ -151,30 +162,30 @@ export function ModNoteHeader({
           <div className="flex items-center gap-3">
             <Button 
               onClick={() => setShowAIModal(true)}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm rounded-md"
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm rounded-md h-8"
             >
-              <Sparkles className="w-4 h-4 mr-2" />
+              <Sparkles className="w-4 h-4 mr-1" />
               Ask AI
             </Button>
-            <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700">
-              <Bell className="w-5 h-5" />
+            <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700 h-8 w-8">
+              <Bell className="w-4 h-4" />
             </Button>
             
             {/* User Profile Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
-                  <Avatar className="w-8 h-8">
+                  <Avatar className="w-7 h-7">
                     <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
-                    <AvatarFallback>{user?.email?.substring(0, 2).toUpperCase() || "SL"}</AvatarFallback>
+                    <AvatarFallback className="text-xs">{user?.email?.substring(0, 2).toUpperCase() || "SL"}</AvatarFallback>
                   </Avatar>
                   <div className="text-sm">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 text-xs">
                       {user?.email?.split('@')[0] || "Sam Lee"}
                     </div>
                     <div className="text-gray-500 text-xs">ModNote User</div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                  <ChevronDown className="w-3 h-3 text-gray-400" />
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -187,7 +198,7 @@ export function ModNoteHeader({
             
             <Button 
               onClick={handleShare}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 text-sm rounded-md ml-2"
+              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 text-sm rounded-md h-8"
             >
               Share
             </Button>
