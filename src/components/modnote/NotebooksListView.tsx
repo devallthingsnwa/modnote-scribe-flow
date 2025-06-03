@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { MoreHorizontal, Plus, List, Grid3X3, Search } from "lucide-react";
+import { MoreHorizontal, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -108,20 +107,6 @@ export function NotebooksListView() {
           <Button className="bg-blue-600 hover:bg-blue-700 text-white">
             <Plus className="w-4 h-4 mr-2" />
             New Notebook
-          </Button>
-          <Button 
-            variant={viewMode === "list" ? "default" : "outline"} 
-            size="icon"
-            onClick={() => setViewMode("list")}
-          >
-            <List className="w-4 h-4" />
-          </Button>
-          <Button 
-            variant={viewMode === "grid" ? "default" : "outline"} 
-            size="icon"
-            onClick={() => setViewMode("grid")}
-          >
-            <Grid3X3 className="w-4 h-4" />
           </Button>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
