@@ -24,7 +24,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  Share2
+  Share2,
+  Settings
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { FileUploadModal } from "./FileUploadModal";
@@ -70,87 +71,72 @@ export function EnhancedModNoteHeader({
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3">
       <div className="flex items-center justify-between">
-        {/* Left Section - Logo and Primary Actions */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggleCollapse}
-            className="p-1 h-8 w-8"
-          >
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </Button>
-          
-          <Logo size="md" />
-          
-          <div className="flex items-center gap-2">
-            {/* Notes Button */}
-            <Button 
-              onClick={onNewNote}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 h-9"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Notes
-            </Button>
-            
-            {/* Add Multi Media Button */}
-            <Button 
-              variant="outline"
-              className="border-gray-300 hover:bg-gray-50 px-4 py-2 h-9"
-              onClick={() => setTranscriptModalOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Multi Media
-            </Button>
-            
-            {/* Upload Button */}
-            <Button 
-              variant="outline"
-              className="border-purple-300 text-purple-600 hover:bg-purple-50 px-4 py-2 h-9"
-              onClick={() => setFileUploadModalOpen(true)}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Upload
-            </Button>
-          </div>
+        {/* Left Section - Logo Only */}
+        <div className="flex items-center">
+          <Logo size="md" className="cursor-pointer" />
         </div>
 
-        {/* Center Section - Search Bar */}
-        <div className="flex-1 max-w-md mx-8">
+        {/* Center Section - Action Buttons */}
+        <div className="flex items-center gap-3">
+          {/* Note Button */}
+          <Button 
+            onClick={onNewNote}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 h-9 rounded-lg font-medium"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Note
+          </Button>
+          
+          {/* Add Multi Media Button */}
+          <Button 
+            variant="outline"
+            className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600 px-4 py-2 h-9 rounded-lg font-medium"
+            onClick={() => setTranscriptModalOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Multi Media
+          </Button>
+          
+          {/* Upload Button */}
+          <Button 
+            variant="outline"
+            className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600 px-4 py-2 h-9 rounded-lg font-medium"
+            onClick={() => setFileUploadModalOpen(true)}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload
+          </Button>
+        </div>
+
+        {/* Center-Right Section - Search and AI */}
+        <div className="flex items-center gap-4">
+          {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Type to search"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              className="pl-10 w-64 border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-lg h-9"
             />
           </div>
-        </div>
 
-        {/* Right Section - AI, Notifications, Profile, Share */}
-        <div className="flex items-center gap-3">
           {/* Ask AI Button */}
           <Button 
-            variant="outline"
-            className="bg-green-50 border-green-300 text-green-700 hover:bg-green-100 px-4 py-2 h-9"
+            className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-4 py-2 h-9 rounded-lg font-medium"
           >
             <Mic className="w-4 h-4 mr-2" />
             Ask AI
           </Button>
-          
+        </div>
+
+        {/* Right Section - Notifications and Profile */}
+        <div className="flex items-center gap-3">
           {/* Notification Bell */}
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg hover:bg-gray-100">
             <Bell className="w-5 h-5 text-gray-600" />
-          </Button>
-          
-          {/* Share Button */}
-          <Button 
-            variant="outline"
-            className="border-gray-300 hover:bg-gray-50 px-4 py-2 h-9"
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
+            {/* Notification indicator dot - can be conditionally shown */}
+            <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></div>
           </Button>
           
           {/* Profile Dropdown */}
@@ -160,7 +146,7 @@ export function EnhancedModNoteHeader({
                 <div className="flex items-center gap-2">
                   <Avatar className="w-8 h-8">
                     <AvatarImage src="" />
-                    <AvatarFallback className="bg-blue-100 text-blue-700 text-sm">SL</AvatarFallback>
+                    <AvatarFallback className="bg-blue-100 text-blue-700 text-sm font-medium">SL</AvatarFallback>
                   </Avatar>
                   <div className="text-left">
                     <div className="text-sm font-medium text-gray-900">Sam Lee</div>
@@ -178,23 +164,10 @@ export function EnhancedModNoteHeader({
             </DropdownMenuContent>
           </DropdownMenu>
           
-          {/* View Toggle Buttons */}
-          <div className="flex items-center gap-2 ml-4 border-l border-gray-200 pl-4">
-            <Button
-              variant={activeView === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => onViewChange('grid')}
-            >
-              <Grid3X3 className="w-4 h-4" />
-            </Button>
-            <Button
-              variant={activeView === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => onViewChange('list')}
-            >
-              <List className="w-4 h-4" />
-            </Button>
-          </div>
+          {/* Settings Icon */}
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-gray-100">
+            <Settings className="w-5 h-5 text-gray-600" />
+          </Button>
         </div>
       </div>
       
