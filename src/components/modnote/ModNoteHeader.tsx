@@ -1,8 +1,14 @@
 
-import { Search, Bell, Settings, Plus, Upload, Sparkles } from "lucide-react";
+import { Search, Bell, Settings, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 
 export function ModNoteHeader() {
@@ -46,16 +52,30 @@ export function ModNoteHeader() {
           <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700">
             <Bell className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-2">
-            <Avatar className="w-8 h-8">
-              <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
-              <AvatarFallback>{user?.email?.substring(0, 2).toUpperCase() || "SL"}</AvatarFallback>
-            </Avatar>
-            <div className="text-sm">
-              <div className="font-medium text-gray-900">Sam Lee</div>
-              <div className="text-gray-500 text-xs">S.L Mobbin</div>
-            </div>
-          </div>
+          
+          {/* User Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
+                  <AvatarFallback>{user?.email?.substring(0, 2).toUpperCase() || "SL"}</AvatarFallback>
+                </Avatar>
+                <div className="text-sm">
+                  <div className="font-medium text-gray-900">Sam Lee</div>
+                  <div className="text-gray-500 text-xs">S.L Mobbin</div>
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem>Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem>Workspace Settings</DropdownMenuItem>
+              <DropdownMenuItem>Account</DropdownMenuItem>
+              <DropdownMenuItem>Sign Out</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
           <Button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 text-sm rounded-md ml-2">
             Share
           </Button>

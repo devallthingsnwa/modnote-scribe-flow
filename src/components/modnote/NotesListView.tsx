@@ -1,6 +1,29 @@
 
 import { useState } from "react";
-import { FileText, Calendar, User, Share, MoreHorizontal, Play, CheckSquare, Filter, Grid3X3, ChevronDown, Bold, Italic, Underline, Palette, AlignLeft, Plus } from "lucide-react";
+import { 
+  FileText, 
+  Calendar, 
+  User, 
+  Share, 
+  MoreHorizontal, 
+  Play, 
+  CheckSquare, 
+  Filter, 
+  Grid3X3, 
+  ChevronDown, 
+  Bold, 
+  Italic, 
+  Underline, 
+  Palette, 
+  AlignLeft, 
+  Plus,
+  Undo,
+  Redo,
+  List,
+  Table,
+  Link,
+  Image
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -182,13 +205,48 @@ export function NotesListView() {
               </Button>
             </div>
 
-            {/* Toolbar */}
-            <div className="flex items-center gap-4 p-3 border border-gray-200 rounded mb-4">
+            {/* Enhanced Toolbar */}
+            <div className="flex items-center gap-2 p-3 border border-gray-200 rounded mb-4 bg-gray-50">
               <Button variant="ghost" size="sm">
                 <Plus className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm">Insert</Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">Insert</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem><List className="w-4 h-4 mr-2" />Bullet List</DropdownMenuItem>
+                  <DropdownMenuItem><CheckSquare className="w-4 h-4 mr-2" />Checklist</DropdownMenuItem>
+                  <DropdownMenuItem><Table className="w-4 h-4 mr-2" />Table</DropdownMenuItem>
+                  <DropdownMenuItem><Link className="w-4 h-4 mr-2" />Link</DropdownMenuItem>
+                  <DropdownMenuItem><Image className="w-4 h-4 mr-2" />Image</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
               <div className="w-px h-6 bg-gray-300"></div>
+              
+              <Button variant="ghost" size="sm">
+                <Undo className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Redo className="w-4 h-4" />
+              </Button>
+              
+              <div className="w-px h-6 bg-gray-300"></div>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">AI</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem>Summarize</DropdownMenuItem>
+                  <DropdownMenuItem>Improve Writing</DropdownMenuItem>
+                  <DropdownMenuItem>Generate Ideas</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <div className="w-px h-6 bg-gray-300"></div>
+              
               <Button variant="ghost" size="sm">
                 <Bold className="w-4 h-4" />
               </Button>
@@ -201,20 +259,41 @@ export function NotesListView() {
               <Button variant="ghost" size="sm">
                 <Palette className="w-4 h-4" />
               </Button>
+              
               <div className="w-px h-6 bg-gray-300"></div>
+              
               <select className="text-sm border-0 bg-transparent">
                 <option>Normal Text</option>
+                <option>Heading 1</option>
+                <option>Heading 2</option>
               </select>
               <select className="text-sm border-0 bg-transparent">
                 <option>Sans Serif</option>
+                <option>Serif</option>
+                <option>Mono</option>
               </select>
               <select className="text-sm border-0 bg-transparent">
                 <option>15</option>
+                <option>12</option>
+                <option>14</option>
+                <option>16</option>
+                <option>18</option>
               </select>
+              
               <Button variant="ghost" size="sm">
                 <AlignLeft className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm">More</Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">More</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem>Highlight</DropdownMenuItem>
+                  <DropdownMenuItem>Strikethrough</DropdownMenuItem>
+                  <DropdownMenuItem>Code Block</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <div className="mb-6">
@@ -273,9 +352,17 @@ export function NotesListView() {
                   </table>
                 </div>
 
+                {/* Task Progress */}
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-blue-800">Task Progress: 0/1</span>
+                    <span className="text-blue-600">12 Jun, 8:00</span>
+                  </div>
+                </div>
+
                 {/* Tags and Metadata */}
-                <div className="flex items-center gap-2 mt-6">
-                  <span className="text-sm text-blue-600">12 Jan, 6:00</span>
+                <div className="flex items-center gap-2 mt-6 flex-wrap">
+                  <span className="text-sm text-blue-600">12 Jun, 8:00</span>
                   <div className="w-2 h-2 bg-black rounded-full"></div>
                   <Badge className="bg-blue-100 text-blue-800 text-xs">Meeting</Badge>
                   <Badge className="bg-purple-100 text-purple-800 text-xs">Product</Badge>
