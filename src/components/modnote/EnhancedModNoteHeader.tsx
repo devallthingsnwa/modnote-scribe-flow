@@ -15,6 +15,7 @@ import { useCreateModNote } from "@/lib/modNoteApi";
 import { AskAIModal } from "./AskAIModal";
 import { ShareModal } from "./ShareModal";
 import { FileUploadModal } from "./FileUploadModal";
+import { TranscriptUploadModal } from "./TranscriptUploadModal";
 import { useToast } from "@/hooks/use-toast";
 import { Logo } from "@/components/Logo";
 
@@ -35,7 +36,8 @@ export function EnhancedModNoteHeader({
   const { toast } = useToast();
   const [showAIModal, setShowAIModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showFileUploadModal, setShowFileUploadModal] = useState(false);
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false);
   
   const createNoteMutation = useCreateModNote();
 
@@ -84,28 +86,28 @@ export function EnhancedModNoteHeader({
             {/* Note Button */}
             <Button 
               onClick={handleNewNote}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded-md h-9"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
               disabled={createNoteMutation.isPending}
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4 mr-1" />
               Note
             </Button>
             
-            {/* Add Multi Media Button */}
+            {/* Add Multi Media Button - For attaching media to notes */}
             <Button 
-              onClick={() => setShowUploadModal(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-sm rounded-md h-9"
+              onClick={() => setShowFileUploadModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4 mr-1" />
               Add Multi Media
             </Button>
             
-            {/* Upload Button */}
+            {/* Upload Button - For transcript extraction */}
             <Button 
-              onClick={() => setShowUploadModal(true)}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 text-sm rounded-md h-9"
+              onClick={() => setShowTranscriptModal(true)}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
             >
-              <Upload className="w-4 h-4 mr-2" />
+              <Upload className="w-4 h-4 mr-1" />
               Upload
             </Button>
           </div>
@@ -119,42 +121,42 @@ export function EnhancedModNoteHeader({
               placeholder="Type to search"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-md h-9 w-full"
+              className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-md h-8 w-full text-sm"
             />
           </div>
         </div>
 
         {/* Right Section - AI, Notifications, User Profile, Share */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Ask AI Button */}
           <Button 
             onClick={() => setShowAIModal(true)}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 text-sm rounded-md h-9"
+            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 text-sm rounded-md h-8"
           >
-            <Sparkles className="w-4 h-4 mr-2" />
+            <Sparkles className="w-4 h-4 mr-1" />
             Ask AI
           </Button>
           
           {/* Notification Bell */}
-          <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700 h-9 w-9">
+          <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700 h-8 w-8">
             <Bell className="w-4 h-4" />
           </Button>
           
           {/* User Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
-                <Avatar className="w-8 h-8">
+              <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded-lg">
+                <Avatar className="w-7 h-7">
                   <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
                   <AvatarFallback className="text-xs">
                     SL
                   </AvatarFallback>
                 </Avatar>
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900 text-xs">
+                <div className="text-xs">
+                  <div className="font-medium text-gray-900">
                     Sam Lee
                   </div>
-                  <div className="text-gray-500 text-xs">S.L Mobbin</div>
+                  <div className="text-gray-500">S.L Mobbin</div>
                 </div>
                 <ChevronDown className="w-3 h-3 text-gray-400" />
               </div>
@@ -170,7 +172,7 @@ export function EnhancedModNoteHeader({
           {/* Share Button */}
           <Button 
             onClick={handleShare}
-            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 text-sm rounded-md h-9"
+            className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 text-sm rounded-md h-8"
           >
             Share
           </Button>
@@ -193,10 +195,18 @@ export function EnhancedModNoteHeader({
         />
       )}
       
+      {/* File Upload Modal - For adding media to notes */}
       <FileUploadModal
-        isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
+        isOpen={showFileUploadModal}
+        onClose={() => setShowFileUploadModal(false)}
         onFileUploaded={onNewNote}
+      />
+      
+      {/* Transcript Upload Modal - For extracting transcripts */}
+      <TranscriptUploadModal
+        isOpen={showTranscriptModal}
+        onClose={() => setShowTranscriptModal(false)}
+        onSuccess={onNewNote}
       />
     </>
   );
