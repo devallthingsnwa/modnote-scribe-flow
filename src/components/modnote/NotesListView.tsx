@@ -33,7 +33,7 @@ export function NotesListView() {
 
   return (
     <div className="p-6">
-      {/* Content Section - No duplicate header here */}
+      {/* Content Section */}
       <div className="max-w-7xl mx-auto">
         {notes && notes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -43,10 +43,10 @@ export function NotesListView() {
                 id={note.id}
                 title={note.title}
                 content={note.content || ""}
-                updatedAt={note.updated_at}
-                sourceUrl={note.source_url}
-                isTranscription={note.is_transcription}
-                thumbnail={note.thumbnail}
+                date={new Date(note.updated_at)}
+                tags={[]}
+                thumbnail={note.thumbnail || undefined}
+                onClick={() => {}}
               />
             ))}
           </div>
