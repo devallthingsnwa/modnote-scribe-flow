@@ -5,8 +5,8 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { NotesListPanel } from "@/components/NotesListPanel";
 import { NoteContentPanel } from "@/components/NoteContentPanel";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { DashboardSelectionHandler } from "@/components/dashboard/DashboardSelectionHandler";
-import { DashboardImportHandler } from "@/components/dashboard/DashboardImportHandler";
+import { useDashboardSelection } from "@/components/dashboard/DashboardSelectionHandler";
+import { useDashboardImportHandler } from "@/components/dashboard/DashboardImportHandler";
 import { useNotes } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -21,12 +21,31 @@ export function Dashboard() {
     note.content?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
-  const handleNoteSelect = (noteId: string) => {
-    setSelectedNoteId(noteId);
+  const { handleImport } = useDashboardImportHandler({ refetch });
+  const {
+    isSelectMode,
+    selectedNoteIds,
+    handleSelectModeToggle,
+    handleBulkDelete,
+    handleNoteSelect
+  } = useDashboardSelection();
+
+  const onNoteSelect = (noteId: string) => {
+    handleNoteSelect(noteId, setSelectedNoteId, () => {}, false);
   };
 
   const handleNoteDeleted = () => {
     setSelectedNoteId(null);
+    refetch();
+  };
+
+  const handleNewNote = () => {
+    // Navigate to new note page
+    window.location.href = "/new";
+  };
+
+  const onBulkDelete = () => {
+    handleBulkDelete();
     refetch();
   };
 
@@ -36,8 +55,7 @@ export function Dashboard() {
       
       <div className="flex-1 flex flex-col">
         <DashboardHeader 
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onImportClick={() => {}}
         />
         
         {/* ModNote Interface Link */}
@@ -59,7 +77,14 @@ export function Dashboard() {
           <NotesListPanel
             notes={filteredNotes}
             selectedNoteId={selectedNoteId}
-            onNoteSelect={handleNoteSelect}
+            onNoteSelect={onNoteSelect}
+            onNewNote={handleNewNote}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            isSelectMode={isSelectMode}
+            selectedNoteIds={selectedNoteIds}
+            onSelectModeToggle={handleSelectModeToggle}
+            onBulkDelete={onBulkDelete}
           />
           
           <NoteContentPanel
@@ -69,13 +94,6 @@ export function Dashboard() {
           />
         </div>
       </div>
-
-      <DashboardSelectionHandler 
-        notes={filteredNotes}
-        onNoteSelect={handleNoteSelect}
-      />
-      
-      <DashboardImportHandler onImportComplete={refetch} />
     </DashboardLayout>
   );
 }
