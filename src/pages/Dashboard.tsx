@@ -41,10 +41,6 @@ export default function Dashboard() {
     handleNoteSelect(noteId, setSelectedNoteId, setShowNoteContent, isMobile);
   };
 
-  const handleNewNote = () => {
-    navigate("/new");
-  };
-
   const onImport = async (note: {
     title: string;
     content: string;
@@ -115,7 +111,6 @@ export default function Dashboard() {
                   notes={filteredNotes}
                   selectedNoteId={selectedNoteId}
                   onNoteSelect={onNoteSelect}
-                  onNewNote={handleNewNote}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   isLoading={isLoading}
@@ -146,7 +141,6 @@ export default function Dashboard() {
               notes={filteredNotes}
               selectedNoteId={selectedNoteId}
               onNoteSelect={onNoteSelect}
-              onNewNote={handleNewNote}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               isLoading={isLoading}
