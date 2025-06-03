@@ -1,7 +1,7 @@
 
 import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 
 export function ModNoteSidebar() {
   const location = useLocation();
@@ -36,9 +36,9 @@ export function ModNoteSidebar() {
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
-              <a
+              <Link
                 key={item.label}
-                href={item.path}
+                to={item.path}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                   isActive
@@ -53,7 +53,7 @@ export function ModNoteSidebar() {
                     {item.count}
                   </span>
                 )}
-              </a>
+              </Link>
             );
           })}
         </div>
