@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { 
   Bold, 
   Italic, 
@@ -18,11 +20,23 @@ import {
   Palette,
   MoreHorizontal,
   Play,
-  ChevronRight
+  ChevronDown,
+  ChevronRight,
+  Bookmark,
+  Share2,
+  Grid3X3,
+  Filter,
+  RotateCcw,
+  Calendar,
+  NotebookPen
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface EnhancedNoteEditorProps {
   noteId: string | null;
@@ -68,41 +82,6 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
     }
   };
 
-  const insertFormatting = (format: string) => {
-    const textarea = document.querySelector('#note-content') as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-    
-    let replacement = "";
-    
-    switch (format) {
-      case "bold":
-        replacement = `**${selectedText}**`;
-        break;
-      case "italic":
-        replacement = `*${selectedText}*`;
-        break;
-      case "underline":
-        replacement = `<u>${selectedText}</u>`;
-        break;
-      case "list":
-        replacement = selectedText.split('\n').map(line => line.trim() ? `• ${line}` : line).join('\n');
-        break;
-      case "checklist":
-        replacement = selectedText.split('\n').map(line => line.trim() ? `☐ ${line}` : line).join('\n');
-        break;
-      case "table":
-        replacement = `\n| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| Data 1   | Data 2   | Data 3   |\n`;
-        break;
-    }
-    
-    const newContent = content.substring(0, start) + replacement + content.substring(end);
-    setContent(newContent);
-  };
-
   if (!noteId) {
     return (
       <div className="flex-1 bg-white flex items-center justify-center">
@@ -127,181 +106,222 @@ export function EnhancedNoteEditor({ noteId, onNoteDeleted }: EnhancedNoteEditor
 
   return (
     <div className="flex-1 bg-white flex flex-col">
-      {/* Breadcrumb */}
-      <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center text-sm text-gray-600">
-          <span>My Notebook</span>
-          <ChevronRight className="w-4 h-4 mx-2" />
-          <span className="text-blue-600">Product Team Meeting</span>
+      {/* Top Navigation Bar */}
+      <div className="px-6 py-3 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between">
+          {/* Left Section - Navigation and Actions */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Grid3X3 className="w-4 h-4 text-gray-400" />
+              <Filter className="w-4 h-4 text-gray-400" />
+              <List className="w-4 h-4 text-gray-400" />
+              <RotateCcw className="w-4 h-4 text-gray-400" />
+            </div>
+            
+            {/* Breadcrumb */}
+            <div className="flex items-center text-sm text-gray-600">
+              <NotebookPen className="w-4 h-4 mr-1" />
+              <span>My Notebook</span>
+              <ChevronRight className="w-4 h-4 mx-2" />
+              <span className="text-blue-600">Product Team Meeting</span>
+            </div>
+          </div>
+
+          {/* Right Section - Share and More */}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Share2 className="w-4 h-4" />
+              Share
+            </Button>
+            <Button variant="ghost" size="sm">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Editor Toolbar */}
       <div className="px-6 py-3 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-1">
-          {/* Insert Dropdown */}
-          <Button variant="ghost" size="sm" className="text-sm">
-            Insert
-          </Button>
+          {/* Insert Button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-sm gap-1">
+                Insert
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>Table</DropdownMenuItem>
+              <DropdownMenuItem>Image</DropdownMenuItem>
+              <DropdownMenuItem>Link</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Undo/Redo */}
-          <Button variant="ghost" size="sm" onClick={() => {}}>
+          <Button variant="ghost" size="sm">
             <Undo2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => {}}>
+          <Button variant="ghost" size="sm">
             <Redo2 className="w-4 h-4" />
           </Button>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
-          {/* AI Tools */}
-          <Button variant="ghost" size="sm" className="text-sm bg-purple-50 text-purple-700 hover:bg-purple-100">
+          {/* AI Button */}
+          <Button variant="ghost" size="sm" className="text-sm bg-purple-50 text-purple-700 hover:bg-purple-100 px-3">
             AI
           </Button>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
-          {/* Font Controls */}
-          <select className="text-sm border border-gray-200 rounded px-2 py-1">
+          {/* Text Style Dropdown */}
+          <select className="text-sm border border-gray-200 rounded px-3 py-1 bg-white">
             <option>Normal Text</option>
             <option>Heading 1</option>
             <option>Heading 2</option>
+            <option>Heading 3</option>
           </select>
           
-          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
+          {/* Font Family */}
+          <select className="text-sm border border-gray-200 rounded px-3 py-1 ml-2 bg-white">
             <option>Sans Serif</option>
             <option>Serif</option>
             <option>Monospace</option>
           </select>
           
-          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2">
+          {/* Font Size */}
+          <select className="text-sm border border-gray-200 rounded px-2 py-1 ml-2 bg-white">
             <option>15</option>
             <option>12</option>
             <option>14</option>
             <option>16</option>
             <option>18</option>
+            <option>20</option>
           </select>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
           {/* Text Formatting */}
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("bold")}>
+          <Button variant="ghost" size="sm">
             <Bold className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("italic")}>
+          <Button variant="ghost" size="sm">
             <Italic className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => insertFormatting("underline")}>
+          <Button variant="ghost" size="sm">
             <Underline className="w-4 h-4" />
           </Button>
           
+          {/* Text Color */}
           <Button variant="ghost" size="sm">
-            <Palette className="w-4 h-4" />
+            <div className="w-4 h-4 border-b-2 border-red-500">A</div>
           </Button>
           
           <Separator orientation="vertical" className="h-6 mx-2" />
           
-          {/* More Options */}
-          <Button variant="ghost" size="sm">
-            <MoreHorizontal className="w-4 h-4" />
-            <span className="ml-1 text-sm">More</span>
+          {/* More Button */}
+          <Button variant="ghost" size="sm" className="gap-1">
+            More
+            <ChevronDown className="w-3 h-3" />
           </Button>
         </div>
       </div>
 
       {/* Note Content */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        <div className="max-w-4xl">
-          {/* Title */}
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="text-2xl font-semibold border-none p-0 mb-6 bg-transparent focus:ring-0 focus:border-none"
-            placeholder="Note title..."
-          />
+      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+        <div className="max-w-4xl mx-auto bg-white rounded-lg p-8 shadow-sm">
+          {/* Note Title */}
+          <h1 className="text-2xl font-semibold text-gray-900 mb-6">
+            Product Team Meeting
+          </h1>
 
           {/* Content */}
-          <div className="space-y-4">
-            {/* Example Follow Up Actions Button */}
+          <div className="space-y-6">
+            <p className="text-gray-700 leading-relaxed">
+              Updates to hiring processes, maturity charts, and the company handbook.
+            </p>
+            
+            {/* Bullet Points */}
+            <ul className="space-y-3 text-gray-700">
+              <li className="flex items-start gap-3">
+                <span className="text-gray-400 mt-2">•</span>
+                <span>Adding a third PM team led by Alex and hiring Dove Herschovits as the new APM for monitoring.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-gray-400 mt-2">•</span>
+                <span>Created new maturity views including a flow chart showing maturity over time, which needs accuracy confirmation.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-gray-400 mt-2">•</span>
+                <span>Updates were made to maturity page charts that managers should review.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-gray-400 mt-2">•</span>
+                <span>Changed language in the handbook around customer results that managers should review.</span>
+              </li>
+            </ul>
+
+            {/* Follow up actions Card */}
             <Card className="p-4 bg-purple-50 border-purple-200">
-              <Button className="bg-purple-600 hover:bg-purple-700 text-white text-sm">
+              <Button className="bg-purple-600 hover:bg-purple-700 text-white text-sm mb-3">
                 Follow up actions
               </Button>
-              <div className="mt-3">
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <div className="w-4 h-4 border border-gray-400 rounded"></div>
-                  <span>Create Maturity Flow Chart</span>
-                </div>
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <div className="w-4 h-4 border border-gray-400 rounded"></div>
+                <span>Create Maturity Flow Chart</span>
               </div>
             </Card>
 
-            {/* Main Content Area */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-lg">Updates to hiring processes, maturity charts, and the company handbook.</h3>
-              
-              <ul className="space-y-2 text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className="text-gray-400 mt-1">•</span>
-                  <span>Adding a third PM team led by Alex and hiring Dove Herschovits as the new APM for monitoring.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gray-400 mt-1">•</span>
-                  <span>Created new maturity views including a flow chart showing maturity over time, which needs accuracy confirmation.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gray-400 mt-1">•</span>
-                  <span>Updates were made to maturity page charts that managers should review.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gray-400 mt-1">•</span>
-                  <span>Changed language in the handbook around customer results that managers should review.</span>
-                </li>
-              </ul>
-
-              {/* YouTube Video Placeholder */}
-              <div className="my-6">
-                <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <Play className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">YouTube Video</p>
-                </div>
+            {/* YouTube Video Placeholder */}
+            <div className="my-6">
+              <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <Play className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500 text-sm">Youtube Video</p>
               </div>
+            </div>
 
-              {/* Table */}
-              <div className="mt-6">
-                <table className="w-full border-collapse border border-gray-300">
-                  <thead>
-                    <tr className="bg-purple-100">
-                      <th className="border border-gray-300 px-4 py-2 text-left font-medium">Team Member</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-medium">Presence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="border border-gray-300 px-4 py-2">Person Names</td>
-                      <td className="border border-gray-300 px-4 py-2">Yes</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 px-4 py-2">Person Names</td>
-                      <td className="border border-gray-300 px-4 py-2">Yes</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-300 px-4 py-2">Person Names</td>
-                      <td className="border border-gray-300 px-4 py-2">Yes</td>
-                    </tr>
-                  </tbody>
-                </table>
+            {/* Team Member Table */}
+            <div className="mt-6">
+              <table className="w-full border-collapse border border-gray-300 rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-purple-100">
+                    <th className="border border-gray-300 px-4 py-3 text-left font-medium text-gray-800">Team Member</th>
+                    <th className="border border-gray-300 px-4 py-3 text-left font-medium text-gray-800">Presence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-white">
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Person Names</td>
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Yes</td>
+                  </tr>
+                  <tr className="bg-gray-50">
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Person Names</td>
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Yes</td>
+                  </tr>
+                  <tr className="bg-white">
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Person Names</td>
+                    <td className="border border-gray-300 px-4 py-3 text-gray-700">Yes</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer with Date and Tags */}
+            <div className="flex items-center gap-4 mt-8 pt-6 border-t border-gray-200">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Calendar className="w-4 h-4" />
+                <span>12 Jun, 8:00</span>
               </div>
-
-              {/* Tags and Metadata */}
-              <div className="flex items-center gap-4 mt-6 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span>12 Jun, 8:00</span>
-                  <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Meeting</Badge>
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Product</Badge>
-                </div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                  Meeting
+                </Badge>
+                <Badge className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
+                  Product
+                </Badge>
               </div>
             </div>
           </div>
