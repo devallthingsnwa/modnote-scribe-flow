@@ -7,18 +7,20 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Upload, File, Image, Video, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFileUpload } from "@/hooks/useFiles";
 
 interface FileUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onFileUploaded: () => void;
+  noteId?: string;
 }
 
-export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadModalProps) {
+export function FileUploadModal({ isOpen, onClose, onFileUploaded, noteId }: FileUploadModalProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+  const fileUploadMutation = useFileUpload();
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -35,14 +37,19 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(0);
-
     try {
-      // Simulate file upload progress
-      for (let i = 0; i <= 100; i += 10) {
-        setUploadProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 100));
+      setUploadProgress(0);
+      const totalFiles = selectedFiles.length;
+      
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        
+        await fileUploadMutation.mutateAsync({
+          file,
+          noteId
+        });
+        
+        setUploadProgress(((i + 1) / totalFiles) * 100);
       }
 
       toast({
@@ -57,11 +64,10 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
       console.error("File upload error:", error);
       toast({
         title: "Upload failed",
-        description: "Failed to upload files. Please try again.",
+        description: error.message || "Failed to upload files. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsUploading(false);
       setUploadProgress(0);
     }
   };
@@ -80,6 +86,8 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  const isUploading = fileUploadMutation.isPending;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -103,7 +111,7 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
               className="cursor-pointer"
             />
             <p className="text-sm text-gray-500 mt-2">
-              Supported formats: Images, Videos, PDFs, Documents
+              Supported formats: Images, Videos, PDFs, Documents, Audio
             </p>
           </div>
 
@@ -128,7 +136,7 @@ export function FileUploadModal({ isOpen, onClose, onFileUploaded }: FileUploadM
             <div className="space-y-2">
               <Label>Upload Progress</Label>
               <Progress value={uploadProgress} className="w-full" />
-              <p className="text-sm text-gray-600 text-center">{uploadProgress}%</p>
+              <p className="text-sm text-gray-600 text-center">{uploadProgress.toFixed(0)}%</p>
             </div>
           )}
 

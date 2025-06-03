@@ -1,213 +1,175 @@
-
 import { useState } from "react";
-import { Search, Bell, Plus, Upload, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/hooks/useAuth";
-import { useCreateModNote } from "@/lib/modNoteApi";
-import { AskAIModal } from "./AskAIModal";
-import { ShareModal } from "./ShareModal";
+  Search,
+  Plus,
+  Upload,
+  Mic,
+  FileText,
+  Grid3X3,
+  List,
+  CheckSquare,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Menu
+} from "lucide-react";
 import { FileUploadModal } from "./FileUploadModal";
 import { TranscriptUploadModal } from "./TranscriptUploadModal";
-import { useToast } from "@/hooks/use-toast";
-import { Logo } from "@/components/Logo";
+import { FileManagerShortcut } from "@/components/files/FileManagerShortcut";
 
 interface EnhancedModNoteHeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  isSelectMode: boolean;
+  selectedNoteIds: string[];
+  onSelectModeToggle: () => void;
+  onBulkDelete: () => void;
   onNewNote: () => void;
-  selectedNoteId: string | null;
+  onImport: () => void;
+  onTranscriptUpload: () => void;
+  onFileUpload: () => void;
+  activeView: 'grid' | 'list';
+  onViewChange: (view: 'grid' | 'list') => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-export function EnhancedModNoteHeader({ 
+export function EnhancedModNoteHeader({
   searchQuery,
   onSearchChange,
+  isSelectMode,
+  selectedNoteIds,
+  onSelectModeToggle,
+  onBulkDelete,
   onNewNote,
-  selectedNoteId
+  onImport,
+  onTranscriptUpload,
+  onFileUpload,
+  activeView,
+  onViewChange,
+  isCollapsed,
+  onToggleCollapse,
 }: EnhancedModNoteHeaderProps) {
-  const { user, signOut } = useAuth();
-  const { toast } = useToast();
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showFileUploadModal, setShowFileUploadModal] = useState(false);
-  const [showTranscriptModal, setShowTranscriptModal] = useState(false);
-  
-  const createNoteMutation = useCreateModNote();
-
-  const handleNewNote = async () => {
-    try {
-      await createNoteMutation.mutateAsync({
-        title: "Untitled Note",
-        content: "",
-      });
-      
-      toast({
-        title: "New note created",
-        description: "Your new note is ready for editing.",
-      });
-      
-      onNewNote();
-    } catch (error) {
-      toast({
-        title: "Error creating note",
-        description: "Failed to create a new note. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleShare = () => {
-    if (!selectedNoteId) {
-      toast({
-        title: "No note selected",
-        description: "Please select a note to share.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setShowShareModal(true);
-  };
+  const [fileUploadModalOpen, setFileUploadModalOpen] = useState(false);
+  const [transcriptModalOpen, setTranscriptModalOpen] = useState(false);
 
   return (
-    <>
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        {/* Left Section - Logo and Action Buttons */}
+    <header className="border-b p-4 bg-background">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Logo size="md" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleCollapse}
+            className="p-1 h-8 w-8"
+          >
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </Button>
           
-          <div className="flex items-center gap-2">
-            {/* Note Button */}
-            <Button 
-              onClick={handleNewNote}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
-              disabled={createNoteMutation.isPending}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Note
-            </Button>
-            
-            {/* Add Multi Media Button - For attaching media to notes */}
-            <Button 
-              onClick={() => setShowFileUploadModal(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add Multi Media
-            </Button>
-            
-            {/* Upload Button - For transcript extraction */}
-            <Button 
-              onClick={() => setShowTranscriptModal(true)}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 text-sm rounded-md h-8"
-            >
-              <Upload className="w-4 h-4 mr-1" />
-              Upload
-            </Button>
-          </div>
+          <h1 className="text-xl font-semibold">ModNote</h1>
         </div>
 
-        {/* Center Section - Search Bar */}
-        <div className="flex-1 max-w-md mx-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Type to search"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10 bg-gray-50 border-gray-200 focus:bg-white rounded-md h-8 w-full text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Right Section - AI, Notifications, User Profile, Share */}
         <div className="flex items-center gap-2">
-          {/* Ask AI Button */}
-          <Button 
-            onClick={() => setShowAIModal(true)}
-            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 text-sm rounded-md h-8"
+          <Button
+            variant={activeView === 'grid' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onViewChange('grid')}
           >
-            <Sparkles className="w-4 h-4 mr-1" />
-            Ask AI
+            <Grid3X3 className="w-4 h-4" />
           </Button>
-          
-          {/* Notification Bell */}
-          <Button variant="ghost" size="icon" className="text-gray-500 hover:text-gray-700 h-8 w-8">
-            <Bell className="w-4 h-4" />
-          </Button>
-          
-          {/* User Profile Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1.5 rounded-lg">
-                <Avatar className="w-7 h-7">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.email}`} />
-                  <AvatarFallback className="text-xs">
-                    SL
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-xs">
-                  <div className="font-medium text-gray-900">
-                    Sam Lee
-                  </div>
-                  <div className="text-gray-500">S.L Mobbin</div>
-                </div>
-                <ChevronDown className="w-3 h-3 text-gray-400" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-              <DropdownMenuItem>Workspace Settings</DropdownMenuItem>
-              <DropdownMenuItem>Account</DropdownMenuItem>
-              <DropdownMenuItem onClick={signOut}>Sign Out</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {/* Share Button */}
-          <Button 
-            onClick={handleShare}
-            className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 text-sm rounded-md h-8"
+          <Button
+            variant={activeView === 'list' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onViewChange('list')}
           >
-            Share
+            <List className="w-4 h-4" />
           </Button>
         </div>
-      </header>
-
-      {/* Modals */}
-      <AskAIModal
-        isOpen={showAIModal}
-        onClose={() => setShowAIModal(false)}
-        onAIResponse={() => {}}
-      />
+      </div>
       
-      {selectedNoteId && (
-        <ShareModal
-          isOpen={showShareModal}
-          onClose={() => setShowShareModal(false)}
-          noteId={selectedNoteId}
-          noteTitle="Selected Note"
-        />
+      <div className="flex items-center justify-between gap-4 mt-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search notes..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onNewNote}
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Note
+          </Button>
+          
+          <FileManagerShortcut onFileUploaded={() => {}} />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTranscriptModalOpen(true)}
+            className="gap-2"
+          >
+            <Mic className="w-4 h-4" />
+            Transcript
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSelectModeToggle}
+            className="gap-2"
+          >
+            <CheckSquare className="w-4 h-4" />
+            Select
+          </Button>
+        </div>
+      </div>
+      
+      {isSelectMode && selectedNoteIds.length > 0 && (
+        <div className="flex items-center justify-between mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">{selectedNoteIds.length} selected</Badge>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onBulkDelete}
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Selected
+          </Button>
+        </div>
       )}
-      
-      {/* File Upload Modal - For adding media to notes */}
+
       <FileUploadModal
-        isOpen={showFileUploadModal}
-        onClose={() => setShowFileUploadModal(false)}
-        onFileUploaded={onNewNote}
+        isOpen={fileUploadModalOpen}
+        onClose={() => setFileUploadModalOpen(false)}
+        onFileUploaded={() => {
+          setFileUploadModalOpen(false);
+          if (onFileUpload) onFileUpload();
+        }}
       />
-      
-      {/* Transcript Upload Modal - For extracting transcripts */}
+
       <TranscriptUploadModal
-        isOpen={showTranscriptModal}
-        onClose={() => setShowTranscriptModal(false)}
-        onSuccess={onNewNote}
+        isOpen={transcriptModalOpen}
+        onClose={() => setTranscriptModalOpen(false)}
+        onSuccess={() => {
+          setTranscriptModalOpen(false);
+          if (onTranscriptUpload) onTranscriptUpload();
+        }}
       />
-    </>
+    </header>
   );
 }

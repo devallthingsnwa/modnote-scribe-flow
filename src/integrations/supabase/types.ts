@@ -18,6 +18,8 @@ export type Database = {
           name: string
           note_id: string | null
           size: number | null
+          storage_path: string | null
+          uploaded_at: string | null
           user_id: string
         }
         Insert: {
@@ -28,6 +30,8 @@ export type Database = {
           name: string
           note_id?: string | null
           size?: number | null
+          storage_path?: string | null
+          uploaded_at?: string | null
           user_id: string
         }
         Update: {
@@ -38,6 +42,8 @@ export type Database = {
           name?: string
           note_id?: string | null
           size?: number | null
+          storage_path?: string | null
+          uploaded_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -211,6 +217,16 @@ export type Database = {
           created_at: string
           updated_at: string
         }[]
+      }
+      handle_file_upload: {
+        Args: {
+          file_name: string
+          file_size: number
+          mime_type: string
+          storage_path: string
+          note_id?: string
+        }
+        Returns: string
       }
       search_notes: {
         Args: { search_term: string; user_uuid: string }
