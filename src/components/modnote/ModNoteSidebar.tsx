@@ -1,5 +1,5 @@
 
-import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus } from "lucide-react";
+import { Home, Bookmark, FileText, Folder, Tag, Share2, Trash2, UserPlus, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation, Link } from "react-router-dom";
 
@@ -19,7 +19,7 @@ export function ModNoteSidebar() {
   ];
 
   return (
-    <div className="w-60 bg-white border-r border-gray-200 flex flex-col">
+    <div className="w-60 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Logo */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
@@ -62,9 +62,7 @@ export function ModNoteSidebar() {
       {/* Get Started */}
       <div className="p-4 border-t border-gray-200">
         <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg">
-          <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center">
-            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          </div>
+          <Play className="w-4 h-4" />
           Get Started
         </button>
       </div>

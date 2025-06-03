@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { FileText, Calendar, User, Share, MoreHorizontal, Play, CheckSquare } from "lucide-react";
+import { FileText, Calendar, User, Share, MoreHorizontal, Play, CheckSquare, Filter, Grid3X3, ChevronDown, Bold, Italic, Underline, Palette, AlignLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -20,6 +20,7 @@ interface Note {
   shared: boolean;
   hasVideo?: boolean;
   hasChecklist?: boolean;
+  completedTasks?: string;
 }
 
 export function NotesListView() {
@@ -29,7 +30,7 @@ export function NotesListView() {
       title: "Follow up actions",
       preview: "Confirm accuracy of YE update quarterly. New chart view created by Josh. Check update to maturity...",
       tags: [],
-      lastModified: "5 minutes ago",
+      lastModified: "20 minutes ago",
       author: "Josh",
       shared: false,
       hasChecklist: true
@@ -38,17 +39,18 @@ export function NotesListView() {
       id: "2", 
       title: "Things to do",
       preview: "Prepare Monthly Product Meeting Updates",
-      tags: [],
-      lastModified: "2 minutes ago",
+      tags: ["Product"],
+      lastModified: "78 minutes ago",
       author: "Josh",
-      shared: false
+      shared: false,
+      completedTasks: "0/1"
     },
     {
       id: "3",
       title: "Product Team Meeting",
       preview: "Updates to hiring processes, maturity charts, and the company handbook.",
       tags: ["Meeting", "Product"],
-      lastModified: "6 minutes ago",
+      lastModified: "1 hour ago",
       author: "Josh",
       shared: false,
       hasVideo: true
@@ -57,8 +59,8 @@ export function NotesListView() {
       id: "4",
       title: "How to Use This Space",
       preview: "Use this space for living and other workflow Spaces are set...",
-      tags: [],
-      lastModified: "2 minutes ago",
+      tags: ["Product"],
+      lastModified: "2 hour ago",
       author: "Josh",
       shared: false
     },
@@ -86,39 +88,44 @@ export function NotesListView() {
               <h1 className="text-2xl font-semibold text-gray-900">32 Notes</h1>
             </div>
             <div className="flex items-center gap-4">
-              <select className="text-sm border border-gray-300 rounded px-3 py-1">
-                <option>My Notebook</option>
-              </select>
-              <select className="text-sm border border-gray-300 rounded px-3 py-1">
-                <option>Product Team Meeting</option>
-              </select>
+              <Button variant="ghost" size="sm">
+                <Filter className="w-4 h-4" />
+              </Button>
               <Button variant="ghost" size="sm">
                 <MoreHorizontal className="w-4 h-4" />
               </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button variant="ghost" size="sm">
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <select className="text-sm border border-gray-300 rounded px-3 py-1">
+                <option>My Notebook</option>
+              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="text-sm">
+                    Product Team Meeting
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem>Product Team Meeting</DropdownMenuItem>
+                  <DropdownMenuItem>All Notes</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button className="bg-teal-500 hover:bg-teal-600 text-white">
                 Share
               </Button>
             </div>
           </div>
 
-          {/* Toolbar */}
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" className="text-blue-600">
-                <FileText className="w-4 h-4 mr-2" />
-                Notes
-              </Button>
-              <span className="text-sm text-gray-500">Reminders</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>Normal Text</span>
-              <span>Sans Serif</span>
-              <span>16</span>
-              <Button variant="ghost" size="sm">B</Button>
-              <Button variant="ghost" size="sm">I</Button>
-              <Button variant="ghost" size="sm">U</Button>
-              <Button variant="ghost" size="sm">More</Button>
-            </div>
+          {/* Tabs */}
+          <div className="flex items-center gap-8 mb-6 border-b border-gray-200">
+            <button className="pb-3 border-b-2 border-blue-600 text-blue-600 font-medium">
+              Notes
+            </button>
+            <button className="pb-3 text-gray-500">
+              Reminders
+            </button>
           </div>
 
           {/* Notes List */}
@@ -140,19 +147,9 @@ export function NotesListView() {
                     </div>
                     <p className="text-gray-600 text-sm mb-3 line-clamp-2">{note.preview}</p>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {note.lastModified}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {note.author}
-                      </span>
-                      {note.shared && (
-                        <span className="flex items-center gap-1">
-                          <Share className="w-3 h-3" />
-                          Shared
-                        </span>
+                      <span>{note.lastModified}</span>
+                      {note.completedTasks && (
+                        <span className="text-blue-600">{note.completedTasks}</span>
                       )}
                       {note.tags.map((tag) => (
                         <Badge key={tag} variant="outline" className="text-xs">
@@ -161,18 +158,6 @@ export function NotesListView() {
                       ))}
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem>Edit</DropdownMenuItem>
-                      <DropdownMenuItem>Share</DropdownMenuItem>
-                      <DropdownMenuItem>Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
             ))}
@@ -184,6 +169,54 @@ export function NotesListView() {
       <div className="w-1/2 bg-white">
         {selectedNote ? (
           <div className="p-6 h-full">
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+              <span>My Notebook</span>
+              <span>></span>
+              <span className="text-gray-900">{selectedNote.title}</span>
+              <Button variant="ghost" size="sm" className="ml-auto">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+              <Button className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4">
+                Share
+              </Button>
+            </div>
+
+            {/* Toolbar */}
+            <div className="flex items-center gap-4 p-3 border border-gray-200 rounded mb-4">
+              <Button variant="ghost" size="sm">
+                <Plus className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">Insert</Button>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <Button variant="ghost" size="sm">
+                <Bold className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Italic className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Underline className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Palette className="w-4 h-4" />
+              </Button>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <select className="text-sm border-0 bg-transparent">
+                <option>Normal Text</option>
+              </select>
+              <select className="text-sm border-0 bg-transparent">
+                <option>Sans Serif</option>
+              </select>
+              <select className="text-sm border-0 bg-transparent">
+                <option>15</option>
+              </select>
+              <Button variant="ghost" size="sm">
+                <AlignLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">More</Button>
+            </div>
+
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-4">{selectedNote.title}</h2>
               
@@ -195,7 +228,7 @@ export function NotesListView() {
                 
                 {/* Bullet Points */}
                 <ul className="list-disc list-inside space-y-2 text-gray-700">
-                  <li>Adding a third PM team lead by Alex and hiring Dove Henriksdvs as the new APM for monitoring.</li>
+                  <li>Adding a third PM team led by Alex and hiring Dove Henriksdvs as the new APM for monitoring.</li>
                   <li>Created new maturity views including a flow chart showing maturity over time, which needs accuracy confirmation.</li>
                   <li>Updates were made to maturity page charts that managers should review.</li>
                   <li>Changed language in the handbook around customer results that managers should review.</li>
@@ -240,7 +273,7 @@ export function NotesListView() {
                   </table>
                 </div>
 
-                {/* Tags */}
+                {/* Tags and Metadata */}
                 <div className="flex items-center gap-2 mt-6">
                   <span className="text-sm text-blue-600">12 Jan, 6:00</span>
                   <div className="w-2 h-2 bg-black rounded-full"></div>
