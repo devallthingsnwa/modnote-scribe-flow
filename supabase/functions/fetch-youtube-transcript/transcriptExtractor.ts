@@ -119,9 +119,9 @@ export class TranscriptExtractor {
       console.warn("Fallback methods extraction failed:", error);
     }
     
-    // Strategy 3: Final fallback with structured response
-    console.log("Creating structured fallback response...");
-    return this.createStructuredFallbackResponse(videoId, options);
+    // Strategy 3: Final fallback with raw response
+    console.log("Creating raw fallback response...");
+    return this.createRawFallbackResponse(videoId, options);
   }
 
   private async formatTranscriptResponse(response: Response, videoId: string): Promise<Response> {
@@ -145,12 +145,10 @@ export class TranscriptExtractor {
           console.warn("Failed to fetch video metadata:", error);
         }
 
-        // Format transcript with exact structure - preserve raw transcript content
-        const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl);
-        
+        // Return clean transcript without any formatting
         const transcriptResponse: TranscriptResponse = {
           success: true,
-          transcript: formattedTranscript,
+          transcript: data.transcript, // Raw transcript content only
           metadata: {
             ...data.metadata,
             videoId,
@@ -174,87 +172,28 @@ export class TranscriptExtractor {
       return response;
     }
   }
-
-  private formatTranscriptContent(transcript: string, title: string, videoUrl: string): string {
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-
-    // Clean up the transcript text but preserve its original structure
-    let cleanTranscript = transcript;
-    
-    // Remove any existing markdown formatting that might interfere
-    cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove existing headers
-    cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold metadata lines
-    cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
-    cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
-    cleanTranscript = cleanTranscript.trim();
-
-    let formattedContent = `# 🎥 "${title}"\n\n`;
-    formattedContent += `**Source:** ${videoUrl}\n`;
-    formattedContent += `**Type:** Video Transcript\n`;
-    formattedContent += `**Imported:** ${currentDate}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${cleanTranscript}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 My Notes\n\n`;
-    formattedContent += `Add your personal notes and thoughts here...\n`;
-
-    return formattedContent;
-  }
   
-  private createStructuredFallbackResponse(videoId: string, options: TranscriptOptions): Response {
-    console.log("Creating structured fallback response for video:", videoId);
+  private createRawFallbackResponse(videoId: string, options: TranscriptOptions): Response {
+    console.log("Creating raw fallback response for video:", videoId);
     
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const fallbackTitle = `YouTube Video ${videoId}`;
     
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
+    // Raw fallback content without markdown formatting
+    const fallbackTranscript = `This video's transcript could not be automatically extracted. This may be because:
+- The video doesn't have captions available
+- The video is private or restricted
+- Captions are disabled by the creator
+- The video is a live stream
 
-    let fallbackTranscript = `# 🎥 "${fallbackTitle}"\n\n`;
-    fallbackTranscript += `**Source:** ${videoUrl}\n`;
-    fallbackTranscript += `**Type:** Video Note\n`;
-    fallbackTranscript += `**Imported:** ${currentDate}\n`;
-    fallbackTranscript += `**Status:** ⚠️ Transcript unavailable\n\n`;
-    fallbackTranscript += `---\n\n`;
-    fallbackTranscript += `## 📝 Transcript\n\n`;
-    fallbackTranscript += `This video's transcript could not be automatically extracted. This may be because:\n`;
-    fallbackTranscript += `- The video doesn't have captions available\n`;
-    fallbackTranscript += `- The video is private or restricted\n`;
-    fallbackTranscript += `- Captions are disabled by the creator\n`;
-    fallbackTranscript += `- The video is a live stream\n\n`;
-    fallbackTranscript += `You can:\n`;
-    fallbackTranscript += `1. Visit the video directly to check for captions\n`;
-    fallbackTranscript += `2. Add your own notes about this video below\n`;
-    fallbackTranscript += `3. Try again later as captions may become available\n\n`;
-    fallbackTranscript += `---\n\n`;
-    fallbackTranscript += `## 📝 My Notes\n\n`;
-    fallbackTranscript += `Add your personal notes and observations about this video here:\n\n`;
-    fallbackTranscript += `### Key Points\n`;
-    fallbackTranscript += `- \n\n`;
-    fallbackTranscript += `### Timestamps & Moments\n`;
-    fallbackTranscript += `- 00:00 - \n`;
-    fallbackTranscript += `- \n\n`;
-    fallbackTranscript += `### Summary\n\n`;
+You can:
+1. Visit the video directly to check for captions
+2. Add your own notes about this video
+3. Try again later as captions may become available`;
 
     const transcriptResponse: TranscriptResponse = {
       success: true,
-      transcript: fallbackTranscript,
+      transcript: fallbackTranscript, // Raw fallback content
       metadata: {
         videoId,
         title: fallbackTitle,
@@ -262,7 +201,7 @@ export class TranscriptExtractor {
         language: options.language || 'en',
         duration: 0,
         segmentCount: 0,
-        extractionMethod: 'structured-fallback',
+        extractionMethod: 'raw-fallback',
         provider: 'fallback-system',
         quality: 'template'
       }
@@ -281,21 +220,15 @@ export class TranscriptExtractor {
     console.log("Creating enhanced fallback response due to error:", error);
     
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
+    
+    // Raw error fallback content
+    const fallbackTranscript = `Automatic transcript extraction was not successful. You can manually add your notes and observations about this video.
 
-    const fallbackTranscript = `# 🎥 "YouTube Video ${videoId}"\n\n**Source:** ${videoUrl}\n**Type:** Video Note\n**Imported:** ${currentDate}\n**Status:** ⚠️ Transcript extraction failed\n**Error:** ${error}\n\n---\n\n## 📝 Transcript\n\nAutomatic transcript extraction was not successful. You can manually add your notes and observations about this video below.\n\n---\n\n## 📝 My Notes\n\nAdd your content here...`;
+Error details: ${error}`;
 
     const transcriptResponse: TranscriptResponse = {
       success: true,
-      transcript: fallbackTranscript,
+      transcript: fallbackTranscript, // Raw error content
       metadata: {
         videoId,
         title: `YouTube Video ${videoId}`,
