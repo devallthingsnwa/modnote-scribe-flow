@@ -13,320 +13,220 @@ import {
 export type { TranscriptionConfig, TranscriptionResult, YouTubeMetadata, MediaType };
 
 export class TranscriptionService {
-  private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
-  private static readonly MAX_RETRIES = 3;
-  private static readonly RETRY_DELAYS = [1000, 3000, 8000];
+  private static readonly PROVIDER_PRIORITY = ['youtube-transcript', 'external-providers'] as const;
+  private static readonly MAX_RETRIES = 2; // Reduced for faster processing
+  private static readonly RETRY_DELAYS = [2000, 5000]; // Shorter delays
 
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     const startTime = Date.now();
     
-    console.log(`🎯 Starting enhanced transcription with robust fallback for ${mediaType}: ${url}`);
+    console.log(`🚀 Starting optimized transcription for ${mediaType}: ${url}`);
     
     try {
       if (mediaType === 'youtube') {
-        return await this.handleYouTubeTranscriptionWithEnhancedFallback(url, startTime);
+        return await this.handleOptimizedYouTubeTranscription(url, startTime);
       }
       
-      return await this.handleGeneralMediaTranscriptionWithFallback(url, startTime);
+      return await this.handleGeneralMediaTranscriptionOptimized(url, startTime);
     } catch (error) {
       console.error('❌ Unexpected error in transcription service:', error);
-      return this.createEnhancedFallbackResult(url, error.message, startTime);
+      return this.createOptimizedFallbackResult(url, error.message, startTime);
     }
   }
 
-  private static async handleYouTubeTranscriptionWithEnhancedFallback(url: string, startTime: number): Promise<TranscriptionResult> {
-    console.log('🎥 Processing YouTube video with enhanced multi-strategy fallback...');
+  private static async handleOptimizedYouTubeTranscription(url: string, startTime: number): Promise<TranscriptionResult> {
+    console.log('🎥 Processing YouTube video with optimized extraction...');
     
-    const strategies = [
-      'youtube-transcript',
-      'youtube-audio-extraction', 
-      'external-providers'
-    ];
-    
-    const errors: string[] = [];
-    let retryCount = 0;
-
-    // Strategy 1: YouTube transcript extraction with retries
-    for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
-      try {
-        console.log(`🔄 YouTube transcript attempt ${attempt + 1}/${this.MAX_RETRIES}`);
-        
-        const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url, attempt);
-        
-        if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
-          console.log('✅ YouTube transcript extraction successful');
-          
-          // Get metadata for proper formatting
-          const videoId = YouTubeService.extractVideoId(url);
-          const metadata = videoId ? await this.getYouTubeMetadata(videoId) : {};
-          
-          // Format the transcript with the exact format requested
-          const formattedText = this.formatTranscriptContentExact(youtubeResult.text, url, metadata);
-          
-          toast({
-            title: "✅ Transcript Extracted",
-            description: "Successfully extracted YouTube captions"
-          });
-          
-          return {
-            ...youtubeResult,
-            text: formattedText,
-            metadata: {
-              ...youtubeResult.metadata,
-              retryCount: attempt,
-              strategiesAttempted: 'youtube-transcript',
-              processingTime: Date.now() - startTime,
-              successRate: 100
-            }
-          };
-        }
-        
-        if (attempt < this.MAX_RETRIES - 1) {
-          console.log(`⏳ Waiting ${this.RETRY_DELAYS[attempt]}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAYS[attempt]));
-        }
-        
-      } catch (error) {
-        console.warn(`⚠️ YouTube transcript attempt ${attempt + 1} failed:`, error);
-        errors.push(`YouTube-${attempt + 1}: ${error.message}`);
-      }
-    }
-
-    // Strategy 2: Audio extraction with Supadata
     const videoId = YouTubeService.extractVideoId(url);
-    if (videoId) {
-      try {
-        console.log('🎵 Attempting audio extraction with Supadata...');
-        
-        const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
-        
-        if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
-          console.log('✅ Audio transcription successful');
-          
-          const metadata = await this.getYouTubeMetadata(videoId);
-          const formattedText = this.formatTranscriptContentExact(audioResult.text, url, metadata);
-          
-          toast({
-            title: "✅ Audio Transcribed",
-            description: "Successfully transcribed via audio extraction"
-          });
-          
-          return {
-            ...audioResult,
-            text: formattedText,
-            metadata: {
-              ...audioResult.metadata,
-              strategiesAttempted: 'youtube-transcript,audio-extraction',
-              processingTime: Date.now() - startTime,
-              successRate: 85
-            }
-          };
-        }
-        
-        errors.push(`Audio extraction: ${audioResult.error || 'Low quality result'}`);
-      } catch (error) {
-        console.warn('⚠️ Audio extraction failed:', error);
-        errors.push(`Audio extraction: ${error.message}`);
-      }
+    if (!videoId) {
+      throw new Error('Invalid YouTube URL format');
     }
 
-    // Strategy 3: External providers with enhanced retry
+    // Parallel processing: Get metadata while attempting transcript
+    const [transcriptResult, metadata] = await Promise.allSettled([
+      this.fastYouTubeTranscript(url),
+      this.getYouTubeMetadata(videoId)
+    ]);
+
+    const metadataValue = metadata.status === 'fulfilled' ? metadata.value : {};
+    
+    if (transcriptResult.status === 'fulfilled' && transcriptResult.value.success) {
+      const result = transcriptResult.value;
+      const formattedText = this.formatTranscriptContentOptimized(result.text, url, metadataValue);
+      
+      console.log('✅ Optimized YouTube transcript extraction successful');
+      
+      toast({
+        title: "✅ Transcript Extracted",
+        description: "Successfully extracted YouTube captions"
+      });
+      
+      return {
+        ...result,
+        text: formattedText,
+        metadata: {
+          ...result.metadata,
+          processingTime: Date.now() - startTime,
+          successRate: 100
+        }
+      };
+    }
+
+    // Quick fallback for better user experience
+    console.log('📝 Creating smart fallback note...');
+    return this.createOptimizedFallbackResult(url, 'Transcript not available', startTime, videoId, metadataValue);
+  }
+
+  private static async fastYouTubeTranscript(url: string): Promise<TranscriptionResult> {
     try {
-      console.log('🌐 Trying external providers with enhanced fallback...');
+      const videoId = YouTubeService.extractVideoId(url);
+      if (!videoId) {
+        throw new Error('Invalid YouTube URL');
+      }
+
+      console.log(`🎯 Fast YouTube transcript extraction for: ${videoId}`);
       
-      const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
-      
-      if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
-        const metadata = videoId ? await this.getYouTubeMetadata(videoId) : {};
-        const formattedText = this.formatTranscriptContentExact(externalResult.text, url, metadata);
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('fetch-youtube-transcript', {
+          body: { 
+            videoId,
+            options: {
+              includeTimestamps: false,
+              language: 'auto',
+              format: 'text',
+              qualityLevel: 'high',
+              fastMode: true // New optimization flag
+            }
+          }
+        }),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Fast transcript timeout')), 30000) // Reduced timeout
+        )
+      ]);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success && data?.transcript && data.transcript.length > 20) {
+        console.log(`✅ Fast transcript extracted: ${data.transcript.length} chars`);
         
         return {
-          ...externalResult,
-          text: formattedText,
+          success: true,
+          text: data.transcript,
           metadata: {
-            ...externalResult.metadata,
-            strategiesAttempted: strategies.join(','),
-            processingTime: Date.now() - startTime,
-            successRate: 70
-          }
+            ...data.metadata,
+            extractionMethod: 'fast-youtube-transcript',
+            qualityScore: 90
+          },
+          provider: 'youtube-transcript-optimized'
         };
+      } else {
+        throw new Error('No transcript data received');
       }
-      
-      errors.push(`External providers: ${externalResult.error}`);
     } catch (error) {
-      console.warn('⚠️ External providers failed:', error);
-      errors.push(`External providers: ${error.message}`);
+      console.error(`❌ Fast YouTube transcript failed:`, error);
+      
+      return {
+        success: false,
+        error: error.message || 'YouTube transcript extraction failed',
+        provider: 'youtube-transcript-optimized'
+      };
     }
-
-    // Enhanced fallback with detailed guidance
-    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
   }
 
-  private static formatTranscriptContentExact(transcript: string, url: string, metadata: YouTubeMetadata): string {
-    const videoId = YouTubeService.extractVideoId(url);
-    
-    // Extract title from metadata or create default
-    const title = metadata.title || `YouTube Video ${videoId}`;
-    const author = metadata.author || 'Unknown';
-    const duration = metadata.duration || 'Unknown';
-    
-    // Clean the transcript - extract only the raw content
-    let cleanTranscript = transcript;
-    
-    // Remove any existing markdown formatting
-    cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove headers
-    cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold lines
-    cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
-    cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
-    cleanTranscript = cleanTranscript.replace(/^Add your personal notes.*$/gm, ''); // Remove default notes
-    cleanTranscript = cleanTranscript.trim();
-
-    // Format exactly as requested
-    let formattedContent = `# 🎥 ${title}\n\n`;
-    formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Author:** ${author}\n`;
-    formattedContent += `**Duration:** ${duration}\n`;
-    formattedContent += `**Type:** Video Transcript\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${cleanTranscript}`;
-
-    return formattedContent;
-  }
-
-  private static async handleGeneralMediaTranscriptionWithFallback(url: string, startTime: number): Promise<TranscriptionResult> {
-    console.log('🎵 Processing general media with enhanced fallback...');
+  private static async handleGeneralMediaTranscriptionOptimized(url: string, startTime: number): Promise<TranscriptionResult> {
+    console.log('🎵 Processing general media with optimized approach...');
     
     try {
-      const result = await this.tryExternalProvidersWithEnhancedRetry(url);
+      const result = await ExternalProviderService.callTranscriptionAPI('podsqueeze', url, {
+        include_metadata: true,
+        timeout: 30000 // Reduced timeout
+      });
       
       return {
         ...result,
         metadata: {
           ...result.metadata,
-          strategiesAttempted: 'external-providers',
+          strategiesAttempted: 'external-providers-optimized',
           processingTime: Date.now() - startTime,
           successRate: result.success ? 90 : 0
         }
       };
     } catch (error) {
       console.warn('⚠️ General media transcription failed:', error);
-      return this.createEnhancedFallbackResult(url, error.message, startTime);
+      return this.createOptimizedFallbackResult(url, error.message, startTime);
     }
   }
 
-  private static async tryExternalProvidersWithEnhancedRetry(url: string): Promise<TranscriptionResult> {
-    const errors: string[] = [];
-    const providersAttempted: string[] = [];
+  private static formatTranscriptContentOptimized(transcript: string, url: string, metadata: YouTubeMetadata): string {
+    const videoId = YouTubeService.extractVideoId(url);
     
-    for (const provider of this.PROVIDER_PRIORITY) {
-      console.log(`🔄 Attempting transcription with ${provider}...`);
-      providersAttempted.push(provider);
-      
-      for (let retry = 0; retry < 2; retry++) {
-        try {
-          const result = await ExternalProviderService.callTranscriptionAPI(provider, url, {
-            include_metadata: true,
-            include_timestamps: true,
-            language: 'auto',
-            timeout: 60000
-          });
-          
-          if (result.success && result.text && result.text.length > 50) {
-            console.log(`✅ Transcription successful with ${provider} (attempt ${retry + 1})`);
-            
-            toast({
-              title: "✅ Transcription Complete",
-              description: `Successfully transcribed using ${provider.charAt(0).toUpperCase() + provider.slice(1)}`
-            });
-            
-            return {
-              ...result,
-              metadata: {
-                ...result.metadata,
-                retryCount: retry,
-                providersAttempted: providersAttempted.join(','),
-                confidenceScore: this.calculateConfidenceScore(result.text, provider)
-              }
-            };
-          }
-          
-          const errorMsg = `${provider} (attempt ${retry + 1}): ${result.error || 'Insufficient content'}`;
-          errors.push(errorMsg);
-          
-          if (retry === 0) {
-            console.log(`⏳ Retrying ${provider} in 2 seconds...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-          
-        } catch (error) {
-          const errorMsg = `${provider} (attempt ${retry + 1}): ${error.message}`;
-          errors.push(errorMsg);
-          console.error(`❌ ${provider} attempt ${retry + 1} failed:`, error);
-          
-          if (retry === 0 && error.message.includes('timeout')) {
-            console.log(`⏳ Retrying ${provider} with extended timeout...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
-          }
-        }
-      }
-    }
+    const title = metadata.title || `YouTube Video ${videoId}`;
+    const author = metadata.author || 'Unknown';
+    const duration = metadata.duration || 'Unknown';
+    
+    // Clean and optimize transcript text
+    let cleanTranscript = transcript
+      .replace(/^#+\s*.*$/gm, '')
+      .replace(/^\*\*.*\*\*$/gm, '')
+      .replace(/^---+$/gm, '')
+      .replace(/^##\s*.*$/gm, '')
+      .replace(/^Add your personal notes.*$/gm, '')
+      .trim();
 
-    throw new Error(`All providers failed: ${errors.join('; ')}`);
+    // Format with exact structure requested
+    return `# 🎥 ${title}
+
+**Source:** ${url}
+**Author:** ${author}
+**Duration:** ${duration}
+**Type:** Video Transcript
+
+---
+
+## 📝 Transcript
+
+${cleanTranscript}`;
   }
 
-  private static calculateConfidenceScore(text: string, provider: string): number {
-    let score = 50;
-    
-    if (text.length > 1000) score += 20;
-    else if (text.length > 500) score += 10;
-    
-    if (provider === 'podsqueeze') score += 15;
-    else if (provider === 'whisper') score += 10;
-    
-    if (text.includes('.') && text.includes(',')) score += 10;
-    if (text.match(/[A-Z]/g)?.length > 10) score += 5;
-    
-    return Math.min(100, score);
-  }
-
-  private static createEnhancedFallbackResult(url: string, errorDetails: string, startTime: number, videoId?: string): TranscriptionResult {
-    console.log('📝 Creating enhanced fallback result with comprehensive guidance');
+  private static createOptimizedFallbackResult(url: string, errorDetails: string, startTime: number, videoId?: string, metadata?: YouTubeMetadata): TranscriptionResult {
+    console.log('📝 Creating optimized fallback result');
     
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    let fallbackContent = `# 🎥 "${isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content'}"\n\n`;
-    fallbackContent += `**Source:** ${url}\n`;
-    fallbackContent += `**Author:** Unknown\n`;
-    fallbackContent += `**Duration:** Unknown\n`;
-    fallbackContent += `**Type:** Video Note\n\n`;
-    fallbackContent += `---\n\n`;
-    fallbackContent += `## 📝 Transcript\n\n`;
+    const title = metadata?.title || (isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content');
+    const author = metadata?.author || 'Unknown';
+    const duration = metadata?.duration || 'Unknown';
     
-    if (isYouTube) {
-      fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
-      fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
-      fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
-      fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
-      fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
-      fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
-      fallbackContent += `### 💡 Alternative Options\n\n`;
-      fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
-      fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
-      fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
-      fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
-    } else {
-      fallbackContent += `This content could not be automatically transcribed. You can still:\n\n`;
-      fallbackContent += `- **Manual Notes**: Add your own observations and summaries\n`;
-      fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
-      fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
-    }
+    let fallbackContent = `# 🎥 ${title}
+
+**Source:** ${url}
+**Author:** ${author}
+**Duration:** ${duration}
+**Type:** Video Note
+
+---
+
+## 📝 Transcript
+
+This video transcript could not be automatically extracted. You can:
+
+1. **Check YouTube Captions**: Visit the video and look for the CC button
+2. **Manual Notes**: Add your own summary and key points below
+3. **Copy Captions**: If available, copy from YouTube and paste here
+
+---
+
+## 📝 My Notes
+
+Add your notes and observations here...`;
 
     toast({
       title: "📝 Smart Note Created",
-      description: "Transcription unavailable - created structured note for manual input",
+      description: "Transcript unavailable - note ready for manual input",
       variant: "default"
     });
 
@@ -334,18 +234,13 @@ export class TranscriptionService {
       success: true,
       text: fallbackContent,
       metadata: {
-        extractionMethod: 'enhanced-smart-fallback',
+        extractionMethod: 'optimized-smart-fallback',
         isWarning: true,
         failureReason: errorDetails,
-        providersAttempted: this.PROVIDER_PRIORITY.join(', '),
-        fallbackType: isYouTube ? 'youtube-smart-template' : 'general-smart-template',
         processingTime,
-        retryCount: this.MAX_RETRIES,
-        strategiesAttempted: isYouTube ? 'youtube-transcript,audio-extraction,external-providers' : 'external-providers',
-        confidenceScore: 0,
         successRate: 0
       },
-      provider: 'smart-fallback-system'
+      provider: 'smart-fallback-optimized'
     };
   }
 

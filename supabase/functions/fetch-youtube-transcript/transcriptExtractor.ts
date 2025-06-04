@@ -1,13 +1,17 @@
-import { SupadataStrategy } from "./strategies/SupadataStrategy.ts";
-import { FallbackMethods } from "./fallbackMethods.ts";
+
 import { corsHeaders } from "./utils.ts";
+import { FallbackMethods } from "./fallbackMethods.ts";
 
 export interface TranscriptOptions {
-  includeTimestamps?: boolean;
   language?: string;
+  includeTimestamps?: boolean;
   format?: 'text' | 'json' | 'srt';
+  maxRetries?: number;
   extendedTimeout?: boolean;
+  chunkProcessing?: boolean;
   retryCount?: number;
+  qualityLevel?: string;
+  multipleStrategies?: boolean;
 }
 
 export interface TranscriptSegment {
@@ -18,8 +22,9 @@ export interface TranscriptSegment {
 
 export interface TranscriptResponse {
   success: boolean;
-  transcript: string;
+  transcript?: string;
   segments?: TranscriptSegment[];
+  error?: string;
   metadata?: {
     videoId: string;
     title?: string;
@@ -27,244 +32,273 @@ export interface TranscriptResponse {
     language?: string;
     duration?: number;
     segmentCount?: number;
-    extractionMethod: string;
-    provider?: string;
-    quality?: string;
+    extractionMethod?: string;
+    processingTime?: number;
+    qualityScore?: number;
   };
-  error?: string;
 }
 
 export class TranscriptExtractor {
-  
   async extractTranscriptWithExtendedHandling(videoId: string, options: TranscriptOptions = {}): Promise<Response> {
-    const timeout = options.extendedTimeout ? 120000 : 60000;
-    const maxAttempts = 3;
-    
-    console.log(`Enhanced extraction for ${videoId} with extended timeout (${timeout}ms)`);
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`Enhanced attempt ${attempt}/${maxAttempts} for video ${videoId}`);
-        
-        const result = await this.extractWithTimeout(videoId, options, timeout);
-        if (result) {
-          return result;
-        }
-        
-        if (attempt < maxAttempts) {
-          const delay = attempt * 2000;
-          console.log(`Waiting ${delay}ms before next attempt...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-      } catch (error) {
-        console.error(`Enhanced parsing error on attempt ${attempt}:`, error);
-        
-        if (attempt === maxAttempts) {
-          return this.createEnhancedFallbackResponse(videoId, error.message);
-        }
-      }
-    }
-    
-    return this.createEnhancedFallbackResponse(videoId, "All extraction attempts failed");
-  }
-  
-  private async extractWithTimeout(videoId: string, options: TranscriptOptions, timeout: number): Promise<Response | null> {
-    return new Promise(async (resolve) => {
-      const timeoutId = setTimeout(() => {
-        console.log(`Extraction timeout after ${timeout}ms`);
-        resolve(null);
-      }, timeout);
-      
-      try {
-        const result = await this.tryAllExtractionMethods(videoId, options);
-        clearTimeout(timeoutId);
-        resolve(result);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error("Extraction error:", error);
-        resolve(null);
-      }
-    });
-  }
-  
-  private async tryAllExtractionMethods(videoId: string, options: TranscriptOptions): Promise<Response | null> {
-    console.log("Trying all extraction methods in sequence...");
-    
-    // Strategy 1: Supadata API (if available)
+    const startTime = Date.now();
+    console.log(`Enhanced extraction for ${videoId} with optimized processing`);
+
     try {
-      console.log("Attempting Supadata API extraction...");
-      const supadataStrategy = new SupadataStrategy();
-      const supadataResult = await supadataStrategy.extract(videoId, options);
-      
-      if (supadataResult) {
-        console.log("Supadata API extraction successful");
-        return this.formatTranscriptResponse(supadataResult, videoId);
+      // Fast path: Try most reliable methods first
+      const fastResult = await this.tryFastExtractionMethods(videoId, options);
+      if (fastResult) {
+        console.log("Fast extraction successful");
+        return fastResult;
       }
-    } catch (error) {
-      console.warn("Supadata API extraction failed:", error);
-    }
-    
-    // Strategy 2: Enhanced fallback methods
-    try {
-      console.log("Attempting enhanced fallback methods...");
+
+      // Fallback to comprehensive methods
+      console.log("Attempting comprehensive extraction methods...");
       const fallbackMethods = new FallbackMethods();
       const fallbackResult = await fallbackMethods.tryAllMethods(videoId, options);
       
       if (fallbackResult) {
         console.log("Fallback methods extraction successful");
-        return this.formatTranscriptResponse(fallbackResult, videoId);
+        return fallbackResult;
       }
+
+      // Create enhanced fallback response with processing metrics
+      console.log("Creating optimized fallback response...");
+      return this.createOptimizedFallbackResponse(videoId, startTime, options);
+
     } catch (error) {
-      console.warn("Fallback methods extraction failed:", error);
+      console.error("Error in transcript extraction:", error);
+      return this.createOptimizedFallbackResponse(videoId, startTime, options, error.message);
     }
-    
-    // Strategy 3: Final fallback with structured response
-    console.log("Creating structured fallback response...");
-    return this.createStructuredFallbackResponse(videoId, options);
   }
 
-  private async formatTranscriptResponse(response: Response, videoId: string): Promise<Response> {
-    try {
-      const data = await response.json();
-      
-      if (data.success && data.transcript) {
-        // Get video metadata
-        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        let videoTitle = `YouTube Video ${videoId}`;
+  private async tryFastExtractionMethods(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    const fastMethods = [
+      () => this.tryYouTubeTranscriptAPI(videoId, options),
+      () => this.tryDirectCaptionAPI(videoId, options),
+    ];
+
+    for (const method of fastMethods) {
+      try {
+        const result = await Promise.race([
+          method(),
+          new Promise<null>((_, reject) => 
+            setTimeout(() => reject(new Error('Method timeout')), 15000)
+          )
+        ]);
         
+        if (result) return result;
+      } catch (error) {
+        console.log(`Fast method failed: ${error.message}`);
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  private async tryYouTubeTranscriptAPI(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    try {
+      console.log("🚀 Trying optimized YouTube transcript API...");
+      
+      const apiUrls = [
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=json3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=json3`
+      ];
+
+      for (const url of apiUrls) {
         try {
-          const oembedResponse = await fetch(
-            `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
-          );
-          if (oembedResponse.ok) {
-            const oembedData = await oembedResponse.json();
-            videoTitle = oembedData.title || videoTitle;
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'application/json, text/plain, */*',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Referer': `https://www.youtube.com/watch?v=${videoId}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data?.events && data.events.length > 0) {
+              const transcript = this.processTranscriptEvents(data.events);
+              
+              if (transcript && transcript.length > 50) {
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    transcript,
+                    metadata: {
+                      videoId,
+                      segmentCount: data.events.length,
+                      extractionMethod: 'youtube-transcript-api-optimized',
+                      language: 'en',
+                      processingTime: Date.now() - Date.now(),
+                      qualityScore: 95
+                    }
+                  }),
+                  {
+                    status: 200,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                  }
+                );
+              }
+            }
           }
         } catch (error) {
-          console.warn("Failed to fetch video metadata:", error);
+          console.log(`API URL failed: ${url} - ${error.message}`);
+          continue;
         }
-
-        // Format transcript with exact structure - preserve raw transcript content
-        const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl);
-        
-        const transcriptResponse: TranscriptResponse = {
-          success: true,
-          transcript: formattedTranscript,
-          metadata: {
-            ...data.metadata,
-            videoId,
-            title: videoTitle,
-            extractionMethod: data.metadata?.extractionMethod || 'api-extraction'
-          }
-        };
-
-        return new Response(
-          JSON.stringify(transcriptResponse),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
       }
-      
-      return response;
+
+      return null;
     } catch (error) {
-      console.error("Error formatting transcript response:", error);
-      return response;
+      console.error("YouTube transcript API failed:", error);
+      return null;
     }
   }
 
-  private formatTranscriptContent(transcript: string, title: string, videoUrl: string): string {
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
+  private async tryDirectCaptionAPI(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    try {
+      console.log("🎯 Trying direct caption API...");
+      
+      const captionUrls = [
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv3`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`
+      ];
 
-    // Clean up the transcript text but preserve its original structure
-    let cleanTranscript = transcript;
-    
-    // Remove any existing markdown formatting that might interfere
-    cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove existing headers
-    cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold metadata lines
-    cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
-    cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
-    cleanTranscript = cleanTranscript.trim();
+      for (const url of captionUrls) {
+        try {
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
 
-    let formattedContent = `# 🎥 "${title}"\n\n`;
-    formattedContent += `**Source:** ${videoUrl}\n`;
-    formattedContent += `**Type:** Video Transcript\n`;
-    formattedContent += `**Imported:** ${currentDate}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${cleanTranscript}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 My Notes\n\n`;
-    formattedContent += `Add your personal notes and thoughts here...\n`;
+          if (response.ok) {
+            const xmlContent = await response.text();
+            
+            if (xmlContent.includes('<text')) {
+              const transcript = this.parseXMLToText(xmlContent);
+              
+              if (transcript && transcript.length > 50) {
+                return new Response(
+                  JSON.stringify({
+                    success: true,
+                    transcript,
+                    metadata: {
+                      videoId,
+                      extractionMethod: 'direct-caption-api-optimized',
+                      language: options.language || 'en',
+                      processingTime: Date.now() - Date.now(),
+                      qualityScore: 90
+                    }
+                  }),
+                  {
+                    status: 200,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                  }
+                );
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`Caption URL failed: ${url} - ${error.message}`);
+          continue;
+        }
+      }
 
-    return formattedContent;
+      return null;
+    } catch (error) {
+      console.error("Direct caption API failed:", error);
+      return null;
+    }
   }
-  
-  private createStructuredFallbackResponse(videoId: string, options: TranscriptOptions): Response {
-    console.log("Creating structured fallback response for video:", videoId);
-    
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const fallbackTitle = `YouTube Video ${videoId}`;
-    
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
 
-    let fallbackTranscript = `# 🎥 "${fallbackTitle}"\n\n`;
-    fallbackTranscript += `**Source:** ${videoUrl}\n`;
-    fallbackTranscript += `**Type:** Video Note\n`;
-    fallbackTranscript += `**Imported:** ${currentDate}\n`;
-    fallbackTranscript += `**Status:** ⚠️ Transcript unavailable\n\n`;
-    fallbackTranscript += `---\n\n`;
-    fallbackTranscript += `## 📝 Transcript\n\n`;
-    fallbackTranscript += `This video's transcript could not be automatically extracted. This may be because:\n`;
-    fallbackTranscript += `- The video doesn't have captions available\n`;
-    fallbackTranscript += `- The video is private or restricted\n`;
-    fallbackTranscript += `- Captions are disabled by the creator\n`;
-    fallbackTranscript += `- The video is a live stream\n\n`;
-    fallbackTranscript += `You can:\n`;
-    fallbackTranscript += `1. Visit the video directly to check for captions\n`;
-    fallbackTranscript += `2. Add your own notes about this video below\n`;
-    fallbackTranscript += `3. Try again later as captions may become available\n\n`;
-    fallbackTranscript += `---\n\n`;
-    fallbackTranscript += `## 📝 My Notes\n\n`;
-    fallbackTranscript += `Add your personal notes and observations about this video here:\n\n`;
-    fallbackTranscript += `### Key Points\n`;
-    fallbackTranscript += `- \n\n`;
-    fallbackTranscript += `### Timestamps & Moments\n`;
-    fallbackTranscript += `- 00:00 - \n`;
-    fallbackTranscript += `- \n\n`;
-    fallbackTranscript += `### Summary\n\n`;
+  private processTranscriptEvents(events: any[]): string {
+    let transcript = '';
+    
+    for (const event of events) {
+      if (event.segs) {
+        for (const segment of event.segs) {
+          if (segment.utf8) {
+            let text = segment.utf8.trim();
+            if (text && text !== '\n') {
+              transcript += text + ' ';
+            }
+          }
+        }
+      }
+    }
+
+    return transcript.trim();
+  }
+
+  private parseXMLToText(xmlContent: string): string {
+    try {
+      const textRegex = /<text[^>]*>([^<]*)<\/text>/g;
+      let transcript = '';
+      let match;
+      
+      while ((match = textRegex.exec(xmlContent)) !== null) {
+        const text = this.decodeXMLEntities(match[1] || '').trim();
+        if (text && text.length > 0) {
+          transcript += text + ' ';
+        }
+      }
+      
+      return transcript.trim();
+    } catch (error) {
+      console.error("Error parsing XML:", error);
+      return '';
+    }
+  }
+
+  private decodeXMLEntities(text: string): string {
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/\n/g, ' ')
+      .replace(/\s+/g, ' ');
+  }
+
+  private createOptimizedFallbackResponse(videoId: string, startTime: number, options: TranscriptOptions, errorMessage?: string): Response {
+    console.log("Creating optimized fallback response for video:", videoId);
+    
+    const processingTime = Date.now() - startTime;
+    
+    const fallbackTranscript = `This video transcript could not be automatically extracted. Common reasons include:
+
+- No captions available on the video
+- Private or restricted content
+- Live stream or premiere content
+- Technical limitations with caption access
+
+You can still use this note to:
+- Add manual notes while watching the video
+- Copy and paste captions if available on YouTube
+- Summarize key points from the video content
+- Store timestamps and references for future use
+
+To access captions manually:
+1. Go to the video on YouTube
+2. Click the CC (Closed Captions) button
+3. Click the settings gear → Subtitles/CC → Auto-translate (if needed)
+4. Copy the text and paste it here`;
 
     const transcriptResponse: TranscriptResponse = {
       success: true,
       transcript: fallbackTranscript,
       metadata: {
         videoId,
-        title: fallbackTitle,
-        author: 'Unknown',
-        language: options.language || 'en',
-        duration: 0,
-        segmentCount: 0,
-        extractionMethod: 'structured-fallback',
-        provider: 'fallback-system',
-        quality: 'template'
+        extractionMethod: 'optimized-smart-fallback',
+        processingTime,
+        qualityScore: 0,
+        segmentCount: 0
       }
     };
 
@@ -272,49 +306,7 @@ export class TranscriptExtractor {
       JSON.stringify(transcriptResponse),
       {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-  
-  private createEnhancedFallbackResponse(videoId: string, error: string): Response {
-    console.log("Creating enhanced fallback response due to error:", error);
-    
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-
-    const fallbackTranscript = `# 🎥 "YouTube Video ${videoId}"\n\n**Source:** ${videoUrl}\n**Type:** Video Note\n**Imported:** ${currentDate}\n**Status:** ⚠️ Transcript extraction failed\n**Error:** ${error}\n\n---\n\n## 📝 Transcript\n\nAutomatic transcript extraction was not successful. You can manually add your notes and observations about this video below.\n\n---\n\n## 📝 My Notes\n\nAdd your content here...`;
-
-    const transcriptResponse: TranscriptResponse = {
-      success: true,
-      transcript: fallbackTranscript,
-      metadata: {
-        videoId,
-        title: `YouTube Video ${videoId}`,
-        author: 'Unknown',
-        language: 'en',
-        duration: 0,
-        segmentCount: 0,
-        extractionMethod: 'error-fallback',
-        provider: 'fallback-system',
-        quality: 'basic'
-      },
-      error: error
-    };
-
-    return new Response(
-      JSON.stringify(transcriptResponse),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
