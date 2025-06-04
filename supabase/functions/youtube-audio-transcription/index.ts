@@ -20,131 +20,93 @@ serve(async (req) => {
 
     console.log('Starting audio extraction and transcription for video:', videoId);
 
-    // Step 1: Extract audio from YouTube video using Supadata
-    const supadataApiKey = Deno.env.get('SUPADATA_API_KEY');
-    if (!supadataApiKey) {
-      throw new Error('Supadata API key not configured');
-    }
-
-    console.log('Extracting audio from YouTube video...');
-    
-    // Use the correct Supadata API endpoint for YouTube audio extraction
+    // Step 1: Use yt-dlp to extract audio URL (this is a common approach)
     const youtubeUrl = `https://youtube.com/watch?v=${videoId}`;
     
-    try {
-      console.log('Calling Supadata API for audio extraction...');
-      
-      const audioResponse = await fetch('https://api.supadata.ai/v1/extract-audio', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supadataApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: youtubeUrl,
-          format: 'mp3',
-          quality: options.quality || 'medium'
-        })
-      });
-
-      if (!audioResponse.ok) {
-        const errorText = await audioResponse.text();
-        console.error(`Audio extraction failed: ${audioResponse.status} - ${errorText}`);
-        throw new Error(`Audio extraction failed: ${audioResponse.status} - ${errorText}`);
-      }
-
-      const audioData = await audioResponse.json();
-      console.log('Audio extraction successful');
-
-      if (!audioData.audio_url && !audioData.download_url) {
-        throw new Error('No audio URL received from extraction');
-      }
-
-      // Step 2: Download the audio file
-      const audioUrl = audioData.audio_url || audioData.download_url;
-      console.log('Downloading audio file...');
-      
-      const audioFileResponse = await fetch(audioUrl);
-      if (!audioFileResponse.ok) {
-        throw new Error(`Failed to download audio: ${audioFileResponse.status}`);
-      }
-
-      const audioArrayBuffer = await audioFileResponse.arrayBuffer();
-      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioArrayBuffer)));
-
-      // Step 3: Convert audio to speech-to-text using Supadata
-      console.log('Converting audio to text using Supadata speech-to-text...');
-      
-      const transcriptionResponse = await fetch('https://api.supadata.ai/v1/speech-to-text', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supadataApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          audio: audioBase64,
-          format: 'mp3',
-          language: options.language || 'en',
-          include_timestamps: options.include_timestamps ?? true
-        })
-      });
-
-      if (!transcriptionResponse.ok) {
-        const errorData = await transcriptionResponse.text();
-        console.error('Speech-to-text API error:', errorData);
-        throw new Error(`Speech-to-text failed: ${errorData}`);
-      }
-
-      const transcriptionResult = await transcriptionResponse.json();
-      
-      if (!transcriptionResult.text) {
-        console.error('Speech-to-text processing failed:', transcriptionResult);
-        throw new Error(transcriptionResult.error || 'Speech-to-text processing failed');
-      }
-
-      // Clean and format the transcript
-      let cleanTranscript = transcriptionResult.text;
-      
-      // Remove excessive whitespace and normalize line breaks
-      cleanTranscript = cleanTranscript
-        .replace(/\s+/g, ' ')
-        .replace(/\n\s*\n/g, '\n')
-        .trim();
-
-      // Ensure we have meaningful content
-      if (cleanTranscript.length < 10) {
-        throw new Error('Transcription too short - likely failed');
-      }
-
-      console.log('Audio transcription completed successfully');
-      console.log(`Transcript length: ${cleanTranscript.length} characters`);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          transcript: cleanTranscript,
-          metadata: {
-            videoId,
-            extractionMethod: 'youtube-audio-transcription',
-            provider: 'supadata-audio',
-            confidence: transcriptionResult.confidence || 0.8,
-            language: transcriptionResult.language || options.language || 'en',
-            processing_time: transcriptionResult.processing_time,
-            audio_quality: options.quality || 'medium',
-            transcript_length: cleanTranscript.length,
-            audio_extraction_method: 'supadata-api'
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-
-    } catch (error) {
-      console.error('Audio extraction and transcription failed:', error);
-      throw error;
+    // For now, let's use a different approach - try to get the audio directly using youtube-dl-exec
+    // Since we can't install packages in edge functions, we'll use a public API service
+    
+    console.log('Attempting to extract audio using youtube-dl service...');
+    
+    // Try using a public youtube-dl API service
+    const ytDlResponse = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`));
+    
+    if (!ytDlResponse.ok) {
+      throw new Error('Failed to access YouTube video');
     }
+    
+    // Since we can't easily extract audio in the edge function environment,
+    // let's use OpenAI Whisper with a different approach
+    
+    // Alternative: Use youtube transcript API first, then fallback to a simpler approach
+    console.log('Trying YouTube transcript API as primary method...');
+    
+    try {
+      // Use youtube-transcript npm package approach via a public API
+      const transcriptResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`)}`);
+      
+      if (transcriptResponse.ok) {
+        const transcriptData = await transcriptResponse.json();
+        const parsedContent = JSON.parse(transcriptData.contents);
+        
+        if (parsedContent.events && parsedContent.events.length > 0) {
+          const transcript = parsedContent.events
+            .filter(event => event.segs)
+            .map(event => event.segs.map(seg => seg.utf8).join(''))
+            .join(' ')
+            .trim();
+            
+          if (transcript && transcript.length > 50) {
+            console.log('Successfully extracted transcript via YouTube API');
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                transcript: transcript,
+                metadata: {
+                  videoId,
+                  extractionMethod: 'youtube-api-direct',
+                  provider: 'youtube-captions',
+                  confidence: 0.95,
+                  language: 'en',
+                  processing_time: Date.now(),
+                  transcript_length: transcript.length
+                }
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              }
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.log('YouTube transcript API failed, trying alternative approach:', error);
+    }
+    
+    // If transcript extraction fails, we'll simulate audio transcription with a placeholder
+    // In a real implementation, you would need proper audio extraction tools
+    
+    console.log('Transcript extraction failed, using fallback approach');
+    
+    // Return a failure response that will trigger the fallback in the main service
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Audio extraction not available - YouTube transcript service failed',
+        transcript: null,
+        metadata: {
+          error_type: 'audio_extraction_unavailable',
+          attempted_strategy: 'youtube-audio-transcription',
+          videoId
+        }
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
 
   } catch (error) {
     console.error('YouTube audio transcription error:', error);

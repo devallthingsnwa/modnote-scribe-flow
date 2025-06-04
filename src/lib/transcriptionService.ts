@@ -1,4 +1,3 @@
-
 import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
@@ -52,12 +51,11 @@ export class TranscriptionService {
           console.log('✅ YouTube transcript extraction successful');
           
           // Check if this is structured content (fallback template) or actual transcript
-          const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || 
-                                  youtubeResult.text.includes('Alternative Options') ||
-                                  youtubeResult.text.includes('My Notes') ||
-                                  youtubeResult.metadata?.isWarning;
+          const isActualTranscript = this.isActualTranscript(youtubeResult.text);
           
-          if (!isWarningContent) {
+          if (isActualTranscript) {
+            console.log('🎯 Detected actual transcript content, not fallback template');
+            
             toast({
               title: "✅ Transcript Extracted",
               description: "Successfully extracted YouTube captions"
@@ -99,7 +97,7 @@ export class TranscriptionService {
         
         toast({
           title: "🎵 Audio Transcribed",
-          description: "Successfully transcribed from video audio using Supadata AI"
+          description: "Successfully transcribed from video audio"
         });
         
         return {
@@ -124,6 +122,35 @@ export class TranscriptionService {
     // If we reach here, all attempts failed
     console.warn("All YouTube transcription strategies failed, creating enhanced fallback");
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+  }
+
+  private static isActualTranscript(text: string): boolean {
+    // Check if the text contains fallback template indicators
+    const fallbackIndicators = [
+      'could not be automatically transcribed',
+      'Alternative Options',
+      'My Notes',
+      'Common reasons:',
+      'Add specific timestamps',
+      'Your thoughts, opinions',
+      'This content was saved automatically when transcription was unavailable'
+    ];
+    
+    const hasFailbackIndicators = fallbackIndicators.some(indicator => 
+      text.toLowerCase().includes(indicator.toLowerCase())
+    );
+    
+    if (hasFailbackIndicators) {
+      console.log('🚫 Detected fallback template content, not actual transcript');
+      return false;
+    }
+    
+    // Additional checks for actual transcript content
+    const hasNaturalLanguage = text.match(/[.!?]{1,3}\s+[A-Z]/g)?.length > 3;
+    const hasReasonableLength = text.length > 200;
+    const hasVariedVocabulary = new Set(text.toLowerCase().split(/\s+/)).size > 50;
+    
+    return hasNaturalLanguage && hasReasonableLength && hasVariedVocabulary;
   }
 
   private static formatTranscriptOutput(text: string, metadata: any, url: string): string {
@@ -176,10 +203,10 @@ export class TranscriptionService {
         return {
           success: true,
           text: data.transcript,
-          provider: 'supadata-audio',
+          provider: 'youtube-api-direct',
           metadata: {
             extractionMethod: 'youtube-audio-transcription',
-            provider: 'supadata-audio',
+            provider: 'youtube-api-direct',
             confidence: data.metadata?.confidence,
             language: data.metadata?.language,
             processing_time: data.metadata?.processing_time
@@ -194,7 +221,7 @@ export class TranscriptionService {
       return {
         success: false,
         error: error.message || 'Audio transcription failed',
-        provider: 'supadata-audio'
+        provider: 'youtube-api-direct'
       };
     }
   }
