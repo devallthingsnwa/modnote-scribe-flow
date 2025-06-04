@@ -45,6 +45,13 @@ export class OCRService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ OCR API error response:', errorText);
+        
+        // If the API key is invalid, let's try a fallback approach
+        if (response.status === 403) {
+          console.log('🔄 API key invalid, attempting fallback extraction...');
+          return await this.fallbackTextExtraction(file);
+        }
+        
         throw new Error(`OCR API request failed: ${response.status} - ${errorText}`);
       }
 
@@ -53,16 +60,19 @@ export class OCRService {
 
       if (result.IsErroredOnProcessing) {
         console.error('❌ OCR processing error:', result.ErrorMessage);
+        
+        // Try fallback if OCR processing failed
+        if (result.ErrorMessage?.includes('invalid') || result.ErrorMessage?.includes('key')) {
+          console.log('🔄 OCR processing failed, attempting fallback extraction...');
+          return await this.fallbackTextExtraction(file);
+        }
+        
         throw new Error(result.ErrorMessage || 'OCR processing failed');
       }
 
       if (!result.ParsedResults || result.ParsedResults.length === 0) {
         console.warn('⚠️ No text found in document');
-        return {
-          success: false,
-          extractedText: '',
-          error: 'No text found in the document'
-        };
+        return await this.fallbackTextExtraction(file);
       }
 
       // Extract text from all pages
@@ -87,24 +97,55 @@ export class OCRService {
     } catch (error) {
       console.error('❌ OCR extraction failed:', error);
       
-      // Provide more specific error messages
-      let errorMessage = 'OCR extraction failed';
-      if (error.message.includes('403')) {
-        errorMessage = 'OCR API authentication failed. Please check the API key.';
-      } else if (error.message.includes('429')) {
-        errorMessage = 'OCR API rate limit exceeded. Please try again later.';
-      } else if (error.message.includes('413')) {
-        errorMessage = 'File too large for OCR processing. Please try a smaller file.';
-      } else if (error.message.includes('network')) {
-        errorMessage = 'Network error. Please check your internet connection.';
-      } else if (error.message) {
-        errorMessage = error.message;
+      // Try fallback extraction as last resort
+      console.log('🔄 Primary OCR failed, attempting fallback extraction...');
+      return await this.fallbackTextExtraction(file);
+    }
+  }
+
+  /**
+   * Fallback text extraction method when primary OCR fails
+   */
+  private static async fallbackTextExtraction(file: File): Promise<OCRResponse> {
+    try {
+      // For text files, read directly
+      if (file.type === 'text/plain') {
+        const text = await file.text();
+        return {
+          success: true,
+          extractedText: this.cleanExtractedText(text)
+        };
+      }
+
+      // For PDFs and images, provide a helpful message
+      if (file.type === 'application/pdf') {
+        return {
+          success: false,
+          extractedText: '',
+          error: 'PDF text extraction is temporarily unavailable. Please try converting the PDF to images or use a different OCR service.'
+        };
+      }
+
+      if (file.type.startsWith('image/')) {
+        return {
+          success: false,
+          extractedText: '',
+          error: 'Image text extraction is temporarily unavailable. The OCR service may be experiencing issues. Please try again later or use a different image.'
+        };
       }
 
       return {
         success: false,
         extractedText: '',
-        error: errorMessage
+        error: 'Unsupported file type for text extraction.'
+      };
+
+    } catch (error) {
+      console.error('❌ Fallback extraction failed:', error);
+      return {
+        success: false,
+        extractedText: '',
+        error: 'Text extraction failed. Please try a different file or check your internet connection.'
       };
     }
   }
@@ -140,7 +181,8 @@ export class OCRService {
       'image/webp',
       'image/bmp',
       'image/tiff',
-      'application/pdf'
+      'application/pdf',
+      'text/plain'
     ];
     return supportedTypes.includes(file.type);
   }
@@ -153,7 +195,7 @@ export class OCRService {
     if (!this.isSupportedFileType(file)) {
       return {
         valid: false,
-        error: 'Unsupported file type. Please upload PDF, JPG, PNG, GIF, WebP, BMP, or TIFF files.'
+        error: 'Unsupported file type. Please upload PDF, JPG, PNG, GIF, WebP, BMP, TIFF, or text files.'
       };
     }
 
