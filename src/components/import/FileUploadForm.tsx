@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Upload, FileImage, FileText, X, Loader2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService } from "@/lib/ocrService";
+import { MistralProcessingButton } from "./MistralProcessingButton";
 
 interface FileUploadFormProps {
   onContentImported: (content: {
@@ -21,7 +22,9 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const [extractedText, setExtractedText] = useState<string>('');
+  const [processedText, setProcessedText] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
+  const [useAiProcessed, setUseAiProcessed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -96,10 +99,8 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       let content = "";
       
       if (selectedFile.type === 'text/plain') {
-        // Handle text files directly
         content = await selectedFile.text();
       } else if (OCRService.isSupportedFileType(selectedFile)) {
-        // Use OCR for images and PDFs
         const ocrResult = await OCRService.extractTextFromFile(selectedFile);
         
         if (ocrResult.success) {
@@ -116,6 +117,8 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       }
 
       setExtractedText(content);
+      setProcessedText('');
+      setUseAiProcessed(false);
       setShowPreview(true);
 
     } catch (error) {
@@ -130,37 +133,50 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
     }
   };
 
+  const handleMistralProcessed = (processedContent: string) => {
+    setProcessedText(processedContent);
+    setUseAiProcessed(true);
+  };
+
   const processFile = async () => {
     if (!selectedFile) return;
 
     try {
-      const title = selectedFile.name.replace(/\.[^/.]+$/, ""); // Remove file extension
+      const title = selectedFile.name.replace(/\.[^/.]+$/, "");
       
-      // Use extracted text or fallback to file info
-      const content = extractedText || `File "${selectedFile.name}" was uploaded but text extraction was not performed.`;
+      // Use AI-processed text if available, otherwise use extracted text
+      const contentToUse = useAiProcessed && processedText ? processedText : extractedText;
+      const content = contentToUse || `File "${selectedFile.name}" was uploaded but text extraction was not performed.`;
       
-      // Format content with proper structure
-      const currentDate = new Date().toLocaleString('en-US', {
-        month: 'numeric',
-        day: 'numeric', 
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
+      // Only add formatting if we're using raw extracted text (not AI-processed)
+      let formattedContent;
+      if (useAiProcessed && processedText) {
+        // AI-processed content is already formatted
+        formattedContent = processedText;
+      } else {
+        // Format raw extracted text
+        const currentDate = new Date().toLocaleString('en-US', {
+          month: 'numeric',
+          day: 'numeric', 
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
 
-      let formattedContent = `# 📄 "${title}"\n\n`;
-      formattedContent += `**Source:** Local file upload\n`;
-      formattedContent += `**Type:** ${selectedFile.type.startsWith('image/') ? 'Image' : selectedFile.type === 'application/pdf' ? 'PDF Document' : 'Text Document'}\n`;
-      formattedContent += `**Imported:** ${currentDate}\n`;
-      formattedContent += `**File Size:** ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\n\n`;
-      formattedContent += `---\n\n`;
-      formattedContent += `## 📝 Extracted Content\n\n`;
-      formattedContent += `${content}\n\n`;
-      formattedContent += `---\n\n`;
-      formattedContent += `## 📝 My Notes\n\n`;
-      formattedContent += `Add your personal notes and thoughts here...\n`;
+        formattedContent = `# 📄 "${title}"\n\n`;
+        formattedContent += `**Source:** Local file upload\n`;
+        formattedContent += `**Type:** ${selectedFile.type.startsWith('image/') ? 'Image' : selectedFile.type === 'application/pdf' ? 'PDF Document' : 'Text Document'}\n`;
+        formattedContent += `**Imported:** ${currentDate}\n`;
+        formattedContent += `**File Size:** ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\n\n`;
+        formattedContent += `---\n\n`;
+        formattedContent += `## 📝 Extracted Content\n\n`;
+        formattedContent += `${content}\n\n`;
+        formattedContent += `---\n\n`;
+        formattedContent += `## 📝 My Notes\n\n`;
+        formattedContent += `Add your personal notes and thoughts here...\n`;
+      }
 
       onContentImported({
         title,
@@ -168,14 +184,17 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
         is_transcription: false
       });
 
+      const processingMethod = useAiProcessed ? "enhanced with AI" : "imported";
       toast({
         title: "File imported successfully!",
-        description: `"${selectedFile.name}" has been imported as a new note.`,
+        description: `"${selectedFile.name}" has been ${processingMethod} as a new note.`,
       });
 
       // Reset form
       setSelectedFile(null);
       setExtractedText('');
+      setProcessedText('');
+      setUseAiProcessed(false);
       setShowPreview(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -301,17 +320,38 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
               </div>
             )}
 
+            {/* Mistral AI Processing */}
+            {extractedText && !useAiProcessed && (
+              <div className="mb-4">
+                <MistralProcessingButton
+                  extractedText={extractedText}
+                  fileName={selectedFile.name}
+                  fileType={selectedFile.type}
+                  onProcessed={handleMistralProcessed}
+                  disabled={processing}
+                />
+              </div>
+            )}
+
             {/* Text Preview */}
-            {showPreview && extractedText && (
+            {showPreview && (extractedText || processedText) && (
               <div className="bg-muted/50 rounded-lg p-4 mb-4">
-                <h4 className="font-medium mb-2">Extracted Text Preview:</h4>
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  {useAiProcessed ? "🤖 AI-Enhanced Content Preview:" : "📝 Extracted Text Preview:"}
+                  {useAiProcessed && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                      Enhanced by Mistral AI
+                    </span>
+                  )}
+                </h4>
                 <div className="max-h-40 overflow-y-auto text-sm text-muted-foreground bg-background p-3 rounded border">
-                  {extractedText.length > 500 
-                    ? `${extractedText.substring(0, 500)}...` 
-                    : extractedText}
+                  {useAiProcessed && processedText 
+                    ? (processedText.length > 500 ? `${processedText.substring(0, 500)}...` : processedText)
+                    : (extractedText.length > 500 ? `${extractedText.substring(0, 500)}...` : extractedText)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {extractedText.length} characters extracted
+                  {(useAiProcessed && processedText ? processedText : extractedText).length} characters
+                  {useAiProcessed ? " (AI-enhanced)" : " extracted"}
                 </p>
               </div>
             )}
