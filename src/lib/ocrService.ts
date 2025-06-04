@@ -15,6 +15,8 @@ export class OCRService {
   static async extractTextFromFile(file: File): Promise<OCRResponse> {
     try {
       console.log('🔍 Starting OCR extraction for:', file.name);
+      console.log('📁 File type:', file.type);
+      console.log('📏 File size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -26,23 +28,36 @@ export class OCRService {
       formData.append('scale', 'true');
       formData.append('isTable', 'true'); // Better handling of tabular data
 
+      console.log('🚀 Making OCR API request to:', this.OCR_API_URL);
+      console.log('🔑 Using API key:', this.API_KEY.substring(0, 10) + '...');
+
       const response = await fetch(this.OCR_API_URL, {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+          // Don't set Content-Type header when using FormData - let browser set it
+        }
       });
 
+      console.log('📡 OCR API response status:', response.status);
+      console.log('📡 OCR API response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        throw new Error(`OCR API request failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ OCR API error response:', errorText);
+        throw new Error(`OCR API request failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
       console.log('📄 OCR API response:', result);
 
       if (result.IsErroredOnProcessing) {
+        console.error('❌ OCR processing error:', result.ErrorMessage);
         throw new Error(result.ErrorMessage || 'OCR processing failed');
       }
 
       if (!result.ParsedResults || result.ParsedResults.length === 0) {
+        console.warn('⚠️ No text found in document');
         return {
           success: false,
           extractedText: '',
@@ -62,6 +77,7 @@ export class OCRService {
       extractedText = this.cleanExtractedText(extractedText.trim());
 
       console.log('✅ Text extraction completed. Length:', extractedText.length);
+      console.log('📝 Extracted text preview:', extractedText.substring(0, 200) + '...');
 
       return {
         success: true,
@@ -70,10 +86,25 @@ export class OCRService {
 
     } catch (error) {
       console.error('❌ OCR extraction failed:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'OCR extraction failed';
+      if (error.message.includes('403')) {
+        errorMessage = 'OCR API authentication failed. Please check the API key.';
+      } else if (error.message.includes('429')) {
+        errorMessage = 'OCR API rate limit exceeded. Please try again later.';
+      } else if (error.message.includes('413')) {
+        errorMessage = 'File too large for OCR processing. Please try a smaller file.';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       return {
         success: false,
         extractedText: '',
-        error: error.message || 'OCR extraction failed'
+        error: errorMessage
       };
     }
   }
@@ -112,5 +143,29 @@ export class OCRService {
       'application/pdf'
     ];
     return supportedTypes.includes(file.type);
+  }
+
+  /**
+   * Validate file for OCR processing
+   */
+  static validateFile(file: File): { valid: boolean; error?: string } {
+    // Check file type
+    if (!this.isSupportedFileType(file)) {
+      return {
+        valid: false,
+        error: 'Unsupported file type. Please upload PDF, JPG, PNG, GIF, WebP, BMP, or TIFF files.'
+      };
+    }
+
+    // Check file size (OCR.space free tier has 1MB limit, paid has 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      return {
+        valid: false,
+        error: `File too large. Maximum size is ${maxSize / 1024 / 1024}MB.`
+      };
+    }
+
+    return { valid: true };
   }
 }
