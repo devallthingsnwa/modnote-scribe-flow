@@ -1,60 +1,65 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { TranscriptionResult, TranscriptionConfig } from "./types";
+import { TranscriptionResult } from "./types";
 
 export class ExternalProviderService {
   static async callTranscriptionAPI(
-    provider: string, 
-    url: string, 
-    config: any = {}
+    provider: string,
+    url: string,
+    options?: any
   ): Promise<TranscriptionResult> {
     try {
-      console.log(`🔄 Calling ${provider} transcription API for: ${url}`);
-      
-      const enhancedConfig = {
-        ...config,
-        instructions: "Extract and transcribe all the words spoken in this YouTube video into a clean, readable transcript. Ignore background noise and non-speech sounds. Return only the spoken text.",
-        quality: 'high',
-        focus_on_speech: true,
-        remove_filler_words: false,
-        include_punctuation: true
-      };
-
       const { data, error } = await supabase.functions.invoke('multimedia-transcription', {
         body: { 
           provider,
           url,
-          options: enhancedConfig
+          options: {
+            include_metadata: true,
+            include_timestamps: true,
+            ...options
+          }
         }
       });
 
       if (error) {
-        throw new Error(error.message || `${provider} transcription failed`);
+        throw error;
       }
 
-      if (data?.success && data?.transcript) {
-        console.log(`✅ ${provider} transcription successful: ${data.transcript.length} characters`);
-        
-        return {
-          success: true,
-          text: data.transcript,
-          metadata: {
-            ...data.metadata,
-            provider,
-            instructions_used: enhancedConfig.instructions
-          },
-          provider
-        };
-      } else {
-        throw new Error(data?.error || `${provider} returned no transcript data`);
-      }
+      return {
+        success: true,
+        text: data.transcription,
+        metadata: data.metadata,
+        provider
+      };
     } catch (error) {
-      console.error(`❌ ${provider} transcription failed:`, error);
+      console.error(`${provider} transcription failed:`, error);
       return {
         success: false,
         error: error.message || `${provider} transcription failed`,
         provider
       };
     }
+  }
+
+  static async tryExternalProviders(url: string): Promise<TranscriptionResult> {
+    const providers = ['podsqueeze', 'whisper', 'riverside'];
+    
+    for (const provider of providers) {
+      console.log(`Attempting transcription with ${provider}...`);
+      
+      const result = await this.callTranscriptionAPI(provider, url);
+      
+      if (result.success) {
+        console.log(`Transcription successful with ${provider}`);
+        return result;
+      }
+      
+      console.warn(`${provider} failed, trying next provider...`);
+    }
+
+    return {
+      success: false,
+      error: 'All external transcription providers failed. Please try again later or use a different video.'
+    };
   }
 }

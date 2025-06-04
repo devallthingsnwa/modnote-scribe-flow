@@ -5,46 +5,32 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useSemanticSearch } from "@/hooks/useSemanticSearch";
-import { useSemanticChat } from "@/hooks/useSemanticChat";
+import { useDeepResearch } from "@/hooks/useDeepResearch";
 import { SearchInterface } from "@/components/research/SearchInterface";
 import { ChatInterface } from "@/components/research/ChatInterface";
 import { PerformanceMetrics } from "@/components/research/PerformanceMetrics";
 import { ModeToggle } from "@/components/research/ModeToggle";
+import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
 
 export function DeepResearchWidget() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isChatMode, setIsChatMode] = useState(false);
-  
   const {
     searchQuery,
     searchResults,
-    handleSearch
-  } = useSemanticSearch();
-  
-  const {
     chatMessages,
     isLoading,
+    isChatMode,
     chatInput,
     setChatInput,
     metrics,
     streamingContent,
+    handleSearch,
     handleChatSubmit,
     cancelRequest,
+    toggleMode,
     clearChat,
     abortControllerRef
-  } = useSemanticChat();
-
-  const toggleMode = () => {
-    const newMode = !isChatMode;
-    setIsChatMode(newMode);
-    
-    if (newMode) {
-      console.log('🔄 SWITCHED TO SEMANTIC CHAT MODE: AI-powered conversations with vector search');
-    } else {
-      console.log('🔄 SWITCHED TO SEMANTIC SEARCH MODE: Vector-based similarity search');
-    }
-  };
+  } = useDeepResearch();
 
   // Cleanup on unmount
   useEffect(() => {
@@ -52,6 +38,7 @@ export function DeepResearchWidget() {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      OptimizedSearchService.clearCache();
     };
   }, [abortControllerRef]);
 

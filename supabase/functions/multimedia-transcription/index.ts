@@ -14,18 +14,14 @@ interface TranscriptionRequest {
     include_metadata?: boolean;
     include_timestamps?: boolean;
     language?: string;
-    format?: string;
   };
 }
 
-// Podsqueeze - Primary provider for podcasts and YouTube
 async function transcribeWithPodsqueeze(url: string, options: any) {
   const apiKey = Deno.env.get('PODSQUEEZE_API_KEY');
   if (!apiKey) {
     throw new Error('Podsqueeze API key not configured');
   }
-
-  console.log('🎯 Starting Podsqueeze transcription for:', url);
 
   const response = await fetch('https://api.podsqueeze.com/v1/transcribe', {
     method: 'POST',
@@ -35,66 +31,39 @@ async function transcribeWithPodsqueeze(url: string, options: any) {
     },
     body: JSON.stringify({
       url,
-      include_timestamps: options.include_timestamps ?? true,
-      include_metadata: options.include_metadata ?? true,
-      language: options.language || 'auto',
-      format: 'detailed'
+      include_timestamps: options.include_timestamps,
+      include_metadata: options.include_metadata,
+      language: options.language || 'auto'
     }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Podsqueeze API error: ${response.status} - ${errorText}`);
+    throw new Error(`Podsqueeze API error: ${response.status}`);
   }
 
   const data = await response.json();
-  
-  if (!data.transcription && !data.text) {
-    throw new Error('No transcription text received from Podsqueeze');
-  }
-
   return {
-    transcription: data.transcription || data.text,
-    metadata: {
-      title: data.metadata?.title,
-      duration: data.metadata?.duration,
-      author: data.metadata?.author || data.metadata?.channel,
-      thumbnail: data.metadata?.thumbnail,
-      language: data.metadata?.language,
-      confidence: data.metadata?.confidence,
-      provider: 'podsqueeze'
-    }
+    transcription: data.transcription,
+    metadata: data.metadata
   };
 }
 
-// Whisper - OSS option for audio files - Fixed language handling
 async function transcribeWithWhisper(url: string, options: any) {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured for Whisper');
-  }
-
-  console.log('🎵 Starting Whisper transcription for:', url);
-
-  // For YouTube URLs, we can't directly download audio, so skip this provider
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    throw new Error('Whisper provider cannot process YouTube URLs directly');
+    throw new Error('OpenAI API key not configured');
   }
 
   // Download the audio first
   const audioResponse = await fetch(url);
   if (!audioResponse.ok) {
-    throw new Error(`Failed to download audio: ${audioResponse.status}`);
+    throw new Error('Failed to download audio');
   }
 
   const audioBlob = await audioResponse.blob();
   const formData = new FormData();
   formData.append('file', audioBlob, 'audio.mp3');
   formData.append('model', 'whisper-1');
-  
-  // Fix language parameter - use 'en' instead of 'auto'
-  const language = options.language === 'auto' ? 'en' : (options.language || 'en');
-  formData.append('language', language);
   formData.append('response_format', options.include_timestamps ? 'verbose_json' : 'json');
 
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -106,31 +75,23 @@ async function transcribeWithWhisper(url: string, options: any) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
+    throw new Error(`Whisper API error: ${response.status}`);
   }
 
   const data = await response.json();
-  
   return {
     transcription: data.text,
-    metadata: {
-      language: data.language,
-      duration: data.duration,
-      segments: options.include_timestamps ? data.segments : undefined,
-      provider: 'whisper'
-    }
+    metadata: options.include_timestamps ? {
+      segments: data.segments
+    } : {}
   };
 }
 
-// Riverside.fm - Fallback provider
 async function transcribeWithRiverside(url: string, options: any) {
   const apiKey = Deno.env.get('RIVERSIDE_API_KEY');
   if (!apiKey) {
     throw new Error('Riverside API key not configured');
   }
-
-  console.log('🎬 Starting Riverside transcription for:', url);
 
   const response = await fetch('https://api.riverside.fm/v1/transcriptions', {
     method: 'POST',
@@ -140,32 +101,19 @@ async function transcribeWithRiverside(url: string, options: any) {
     },
     body: JSON.stringify({
       url,
-      include_timestamps: options.include_timestamps ?? true,
-      include_speaker_labels: true,
+      include_timestamps: options.include_timestamps,
       language: options.language || 'auto'
     }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Riverside API error: ${response.status} - ${errorText}`);
+    throw new Error(`Riverside API error: ${response.status}`);
   }
 
   const data = await response.json();
-  
-  if (!data.transcription && !data.text) {
-    throw new Error('No transcription text received from Riverside');
-  }
-
   return {
-    transcription: data.transcription || data.text,
-    metadata: {
-      title: data.metadata?.title,
-      duration: data.metadata?.duration,
-      speakers: data.speakers,
-      language: data.language,
-      provider: 'riverside'
-    }
+    transcription: data.transcription,
+    metadata: data.metadata
   };
 }
 
@@ -181,8 +129,7 @@ serve(async (req) => {
       throw new Error('Provider and URL are required');
     }
 
-    console.log(`🚀 Starting transcription with ${provider} for URL: ${url.substring(0, 50)}...`);
-    const startTime = Date.now();
+    console.log(`Starting transcription with ${provider} for URL: ${url}`);
 
     let result;
 
@@ -200,15 +147,7 @@ serve(async (req) => {
         throw new Error(`Unsupported provider: ${provider}`);
     }
 
-    const processingTime = Date.now() - startTime;
-    console.log(`✅ Transcription completed with ${provider} in ${processingTime}ms`);
-
-    // Add processing metadata
-    result.metadata = {
-      ...result.metadata,
-      processingTime,
-      timestamp: new Date().toISOString()
-    };
+    console.log(`Transcription completed with ${provider}`);
 
     return new Response(
       JSON.stringify(result),
@@ -216,13 +155,12 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error(`❌ Transcription error:`, error);
+    console.error('Transcription error:', error);
     
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Transcription failed',
-        details: error.toString(),
-        timestamp: new Date().toISOString()
+        details: error.toString()
       }),
       {
         status: 500,

@@ -36,7 +36,7 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
 
     setIsProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("process-content-with-mistral", {
+      const { data, error } = await supabase.functions.invoke("process-content-with-deepseek", {
         body: {
           content,
           type: "video",
@@ -106,7 +106,7 @@ export function AISummaryPanel({ noteId, content, onSummaryGenerated }: AISummar
 
     setIsGeneratingNarrative(true);
     try {
-      const { data, error } = await supabase.functions.invoke("process-content-with-mistral", {
+      const { data, error } = await supabase.functions.invoke("process-content-with-deepseek", {
         body: {
           content,
           type: "video",
