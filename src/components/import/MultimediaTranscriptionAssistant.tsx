@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Video, Mic, FileText } from 'lucide-react';
+import { Video, Mic, FileText, Upload } from 'lucide-react';
 import { EnhancedYoutubeImportForm } from './EnhancedYoutubeImportForm';
 
 interface MultimediaTranscriptionAssistantProps {
@@ -21,7 +21,7 @@ export function MultimediaTranscriptionAssistant({ onContentImported, isLoading 
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Mic className="h-5 w-5" />
+          <Upload className="h-5 w-5" />
           Multimedia Transcription Assistant
         </CardTitle>
       </CardHeader>

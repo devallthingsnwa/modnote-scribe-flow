@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Play, Loader2, AlertCircle, CheckCircle, Video, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { TranscriptPreview } from './TranscriptPreview';
 
 interface EnhancedYoutubeImportFormProps {
   onContentImported: (content: {
@@ -20,12 +19,22 @@ interface EnhancedYoutubeImportFormProps {
   isLoading?: boolean;
 }
 
+interface ExtractedMetadata {
+  title?: string;
+  author?: string;
+  duration?: string;
+  thumbnail?: string;
+  publishedAt?: string;
+  importedAt?: string;
+  source_url?: string;
+}
+
 export function EnhancedYoutubeImportForm({ onContentImported, isLoading }: EnhancedYoutubeImportFormProps) {
   const [url, setUrl] = useState('');
   const [extractedContent, setExtractedContent] = useState<{
     title: string;
     transcript: string;
-    metadata?: any;
+    metadata?: ExtractedMetadata;
     formattedContent?: string;
   } | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -54,7 +63,7 @@ export function EnhancedYoutubeImportForm({ onContentImported, isLoading }: Enha
     });
   };
 
-  const formatEnhancedContent = (title: string, transcript: string, metadata: any, sourceUrl: string): string => {
+  const formatEnhancedContent = (title: string, transcript: string, metadata: ExtractedMetadata, sourceUrl: string): string => {
     const currentDateTime = formatCurrentDateTime();
     const contentType = metadata?.duration ? 'Video Transcript' : 'Podcast Transcript';
     
@@ -114,7 +123,7 @@ export function EnhancedYoutubeImportForm({ onContentImported, isLoading }: Enha
     try {
       console.log('🎥 Starting enhanced YouTube transcript extraction for:', videoId);
 
-      // Fetch metadata and transcript in parallel for better performance
+      // Fetch transcript and metadata in parallel
       const [transcriptResult, metadataResult] = await Promise.allSettled([
         supabase.functions.invoke('fetch-youtube-transcript', {
           body: { 
@@ -133,7 +142,7 @@ export function EnhancedYoutubeImportForm({ onContentImported, isLoading }: Enha
       ]);
 
       let transcript = '';
-      let metadata = {};
+      let metadata: ExtractedMetadata = {};
       let title = `YouTube Video ${videoId}`;
 
       // Process transcript result
