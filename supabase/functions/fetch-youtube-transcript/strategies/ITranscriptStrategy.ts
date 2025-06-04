@@ -1,14 +1,15 @@
 
-import { TranscriptResponse } from "../transcriptExtractor.ts";
-
 export interface TranscriptOptions {
-  language?: string;
   includeTimestamps?: boolean;
+  language?: string;
   format?: 'text' | 'json' | 'srt';
-  maxRetries?: number;
+  multipleStrategies?: boolean;
+  extendedTimeout?: boolean;
+  chunkProcessing?: boolean;
+  retryCount?: number;
 }
 
 export interface ITranscriptStrategy {
-  extract(videoId: string, options?: TranscriptOptions): Promise<Response | null>;
   getName(): string;
+  extract(videoId: string, options?: TranscriptOptions): Promise<Response | null>;
 }

@@ -45,6 +45,11 @@ export interface TranscriptionResult {
     parallelProcessing?: boolean;
     timestamp?: string;
     provider?: string;
+    fallbackType?: string;
+    retryCount?: number;
+    failureReason?: string;
+    successRate?: number;
+    confidenceScore?: number;
   };
   error?: string;
   provider?: string;

@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      files: {
+        Row: {
+          created_at: string
+          file_path: string
+          id: string
+          mime_type: string | null
+          name: string
+          note_id: string | null
+          size: number | null
+          storage_path: string | null
+          uploaded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          note_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+          uploaded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          note_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+          uploaded_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       note_tags: {
         Row: {
           created_at: string
@@ -47,6 +86,7 @@ export type Database = {
       }
       notebooks: {
         Row: {
+          color: string | null
           created_at: string
           description: string | null
           id: string
@@ -55,6 +95,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          color?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -63,6 +104,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          color?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -76,10 +118,15 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          due_date: string | null
           id: string
+          is_reminder: boolean | null
           is_transcription: boolean | null
           notebook_id: string | null
+          reminder_date: string | null
+          shared_permissions: Json | null
           source_url: string | null
+          task_progress: Json | null
           thumbnail: string | null
           title: string
           updated_at: string
@@ -88,10 +135,15 @@ export type Database = {
         Insert: {
           content?: string | null
           created_at?: string
+          due_date?: string | null
           id?: string
+          is_reminder?: boolean | null
           is_transcription?: boolean | null
           notebook_id?: string | null
+          reminder_date?: string | null
+          shared_permissions?: Json | null
           source_url?: string | null
+          task_progress?: Json | null
           thumbnail?: string | null
           title: string
           updated_at?: string
@@ -100,10 +152,15 @@ export type Database = {
         Update: {
           content?: string | null
           created_at?: string
+          due_date?: string | null
           id?: string
+          is_reminder?: boolean | null
           is_transcription?: boolean | null
           notebook_id?: string | null
+          reminder_date?: string | null
+          shared_permissions?: Json | null
           source_url?: string | null
+          task_progress?: Json | null
           thumbnail?: string | null
           title?: string
           updated_at?: string
@@ -148,7 +205,40 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_reminder_notes: {
+        Args: { user_uuid: string }
+        Returns: {
+          id: string
+          title: string
+          content: string
+          due_date: string
+          reminder_date: string
+          task_progress: Json
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      handle_file_upload: {
+        Args: {
+          file_name: string
+          file_size: number
+          mime_type: string
+          storage_path: string
+          note_id?: string
+        }
+        Returns: string
+      }
+      search_notes: {
+        Args: { search_term: string; user_uuid: string }
+        Returns: {
+          id: string
+          title: string
+          content: string
+          created_at: string
+          updated_at: string
+          rank: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
