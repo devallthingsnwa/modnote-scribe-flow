@@ -1,4 +1,5 @@
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
 import { MediaTypeDetector } from "./transcription/mediaTypeDetector";
@@ -57,6 +58,11 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
+          // Get metadata and format the result
+          const videoId = YouTubeService.extractVideoId(url);
+          const metadata = videoId ? await this.getYouTubeMetadata(videoId) : null;
+          const formattedContent = this.formatTranscriptContent(url, youtubeResult.text, metadata);
+          
           toast({
             title: "✅ Transcript Extracted",
             description: "Successfully extracted YouTube captions"
@@ -64,6 +70,7 @@ export class TranscriptionService {
           
           return {
             ...youtubeResult,
+            text: formattedContent,
             metadata: {
               ...youtubeResult.metadata,
               retryCount: attempt,
@@ -96,6 +103,9 @@ export class TranscriptionService {
         if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
           console.log('✅ Audio transcription successful');
           
+          const metadata = await this.getYouTubeMetadata(videoId);
+          const formattedContent = this.formatTranscriptContent(url, audioResult.text, metadata);
+          
           toast({
             title: "✅ Audio Transcribed",
             description: "Successfully transcribed via audio extraction"
@@ -103,6 +113,7 @@ export class TranscriptionService {
           
           return {
             ...audioResult,
+            text: formattedContent,
             metadata: {
               ...audioResult.metadata,
               strategiesAttempted: 'youtube-transcript,audio-extraction',
@@ -126,8 +137,13 @@ export class TranscriptionService {
       const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
       
       if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
+        const videoId = YouTubeService.extractVideoId(url);
+        const metadata = videoId ? await this.getYouTubeMetadata(videoId) : null;
+        const formattedContent = this.formatTranscriptContent(url, externalResult.text, metadata);
+        
         return {
           ...externalResult,
+          text: formattedContent,
           metadata: {
             ...externalResult.metadata,
             strategiesAttempted: strategies.join(','),
@@ -145,6 +161,24 @@ export class TranscriptionService {
 
     // Enhanced fallback with detailed guidance
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+  }
+
+  private static formatTranscriptContent(url: string, transcript: string, metadata: YouTubeMetadata | null): string {
+    const title = metadata?.title || 'YouTube Video';
+    const author = metadata?.author || 'Unknown';
+    const duration = metadata?.duration || 'Unknown';
+
+    // Format the content with the exact structure requested
+    let formattedContent = `# 🎥 ${title}\n\n`;
+    formattedContent += `**Source:** ${url}\n`;
+    formattedContent += `**Author:** ${author}\n`;
+    formattedContent += `**Duration:** ${duration}\n`;
+    formattedContent += `**Type:** Video Transcript\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 Transcript\n\n`;
+    formattedContent += transcript;
+
+    return formattedContent;
   }
 
   private static async handleGeneralMediaTranscriptionWithFallback(url: string, startTime: number): Promise<TranscriptionResult> {
