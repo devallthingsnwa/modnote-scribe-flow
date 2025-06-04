@@ -29,8 +29,8 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
     setIsProcessing(true);
 
     try {
-      // Call the OpenAI processing function
-      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-openai', {
+      // Call the Mistral AI processing function
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('process-content-with-mistral', {
         body: { 
           content: content, 
           type: "text",
@@ -65,7 +65,7 @@ export function AIProcessingButton({ noteId, content, onContentUpdated }: AIProc
       console.error("Error processing with AI:", error);
       toast({
         title: "AI Processing Failed",
-        description: error.message || "Failed to process content with AI. Please check your OpenAI API key configuration.",
+        description: error.message || "Failed to process content with AI. Please check your Mistral API key configuration.",
         variant: "destructive",
       });
     } finally {

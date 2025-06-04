@@ -50,11 +50,11 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting transcript fetch for video: ${videoId}`);
+    console.log(`Starting enhanced transcript fetch for video: ${videoId} (extended timeout: ${options.extendedTimeout || false})`);
     
-    // Process with expanded extraction methods
+    // Enhanced processing with extended timeout options for longer videos
     const extractor = new TranscriptExtractor();
-    return await extractor.extractTranscript(videoId, options);
+    return await extractor.extractTranscriptWithExtendedHandling(videoId, options);
     
   } catch (error) {
     console.error("Error in fetch-youtube-transcript function:", error);
