@@ -52,7 +52,6 @@ export class TranscriptExtractor {
           return result;
         }
         
-        // Add delay between attempts
         if (attempt < maxAttempts) {
           const delay = attempt * 2000;
           console.log(`Waiting ${delay}ms before next attempt...`);
@@ -101,7 +100,7 @@ export class TranscriptExtractor {
       
       if (supadataResult) {
         console.log("Supadata API extraction successful");
-        return supadataResult;
+        return this.formatTranscriptResponse(supadataResult, videoId);
       }
     } catch (error) {
       console.warn("Supadata API extraction failed:", error);
@@ -115,7 +114,7 @@ export class TranscriptExtractor {
       
       if (fallbackResult) {
         console.log("Fallback methods extraction successful");
-        return fallbackResult;
+        return this.formatTranscriptResponse(fallbackResult, videoId);
       }
     } catch (error) {
       console.warn("Fallback methods extraction failed:", error);
@@ -125,45 +124,131 @@ export class TranscriptExtractor {
     console.log("Creating structured fallback response...");
     return this.createStructuredFallbackResponse(videoId, options);
   }
+
+  private async formatTranscriptResponse(response: Response, videoId: string): Promise<Response> {
+    try {
+      const data = await response.json();
+      
+      if (data.success && data.transcript) {
+        // Get video metadata
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        let videoTitle = `YouTube Video ${videoId}`;
+        
+        try {
+          const oembedResponse = await fetch(
+            `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
+          );
+          if (oembedResponse.ok) {
+            const oembedData = await oembedResponse.json();
+            videoTitle = oembedData.title || videoTitle;
+          }
+        } catch (error) {
+          console.warn("Failed to fetch video metadata:", error);
+        }
+
+        // Format transcript with proper structure
+        const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl);
+        
+        const transcriptResponse: TranscriptResponse = {
+          success: true,
+          transcript: formattedTranscript,
+          metadata: {
+            ...data.metadata,
+            videoId,
+            title: videoTitle,
+            extractionMethod: data.metadata?.extractionMethod || 'api-extraction'
+          }
+        };
+
+        return new Response(
+          JSON.stringify(transcriptResponse),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
+      return response;
+    } catch (error) {
+      console.error("Error formatting transcript response:", error);
+      return response;
+    }
+  }
+
+  private formatTranscriptContent(transcript: string, title: string, videoUrl: string): string {
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let formattedContent = `# 🎥 "${title}"\n\n`;
+    formattedContent += `**Source:** ${videoUrl}\n`;
+    formattedContent += `**Type:** Video Transcript\n`;
+    formattedContent += `**Imported:** ${currentDate}\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 Transcript\n\n`;
+    formattedContent += `${transcript}\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 My Notes\n\n`;
+    formattedContent += `Add your personal notes and thoughts here...\n`;
+
+    return formattedContent;
+  }
   
   private createStructuredFallbackResponse(videoId: string, options: TranscriptOptions): Response {
     console.log("Creating structured fallback response for video:", videoId);
     
-    const fallbackTranscript = `Video Title: YouTube Video ${videoId}
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const fallbackTitle = `YouTube Video ${videoId}`;
+    
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
 
-This video's transcript could not be automatically extracted. This may be because:
-- The video doesn't have captions available
-- The video is private or restricted
-- Captions are disabled by the creator
-- The video is a live stream
-
-You can:
-1. Visit the video directly to check for captions
-2. Add your own notes about this video below
-3. Try again later as captions may become available
-
----
-
-## My Notes
-
-Add your personal notes and observations about this video here:
-
-### Key Points
-- 
-
-### Timestamps & Moments
-- 00:00 - 
-- 
-
-### Summary
-`;
+    let fallbackTranscript = `# 🎥 "${fallbackTitle}"\n\n`;
+    fallbackTranscript += `**Source:** ${videoUrl}\n`;
+    fallbackTranscript += `**Type:** Video Note\n`;
+    fallbackTranscript += `**Imported:** ${currentDate}\n`;
+    fallbackTranscript += `**Status:** ⚠️ Transcript unavailable\n\n`;
+    fallbackTranscript += `---\n\n`;
+    fallbackTranscript += `## 📝 Transcript\n\n`;
+    fallbackTranscript += `This video's transcript could not be automatically extracted. This may be because:\n`;
+    fallbackTranscript += `- The video doesn't have captions available\n`;
+    fallbackTranscript += `- The video is private or restricted\n`;
+    fallbackTranscript += `- Captions are disabled by the creator\n`;
+    fallbackTranscript += `- The video is a live stream\n\n`;
+    fallbackTranscript += `You can:\n`;
+    fallbackTranscript += `1. Visit the video directly to check for captions\n`;
+    fallbackTranscript += `2. Add your own notes about this video below\n`;
+    fallbackTranscript += `3. Try again later as captions may become available\n\n`;
+    fallbackTranscript += `---\n\n`;
+    fallbackTranscript += `## 📝 My Notes\n\n`;
+    fallbackTranscript += `Add your personal notes and observations about this video here:\n\n`;
+    fallbackTranscript += `### Key Points\n`;
+    fallbackTranscript += `- \n\n`;
+    fallbackTranscript += `### Timestamps & Moments\n`;
+    fallbackTranscript += `- 00:00 - \n`;
+    fallbackTranscript += `- \n\n`;
+    fallbackTranscript += `### Summary\n\n`;
 
     const transcriptResponse: TranscriptResponse = {
       success: true,
       transcript: fallbackTranscript,
       metadata: {
         videoId,
-        title: `YouTube Video ${videoId}`,
+        title: fallbackTitle,
         author: 'Unknown',
         language: options.language || 'en',
         duration: 0,
@@ -186,9 +271,22 @@ Add your personal notes and observations about this video here:
   private createEnhancedFallbackResponse(videoId: string, error: string): Response {
     console.log("Creating enhanced fallback response due to error:", error);
     
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const fallbackTranscript = `# 🎥 "YouTube Video ${videoId}"\n\n**Source:** ${videoUrl}\n**Type:** Video Note\n**Imported:** ${currentDate}\n**Status:** ⚠️ Transcript extraction failed\n**Error:** ${error}\n\n---\n\n## 📝 Transcript\n\nAutomatic transcript extraction was not successful. You can manually add your notes and observations about this video below.\n\n---\n\n## 📝 My Notes\n\nAdd your content here...`;
+
     const transcriptResponse: TranscriptResponse = {
       success: true,
-      transcript: `# YouTube Video Analysis\n\n**Video ID:** ${videoId}\n**Source:** https://www.youtube.com/watch?v=${videoId}\n**Status:** Transcript extraction failed\n**Error:** ${error}\n**Timestamp:** ${new Date().toLocaleString()}\n\n---\n\nAutomatic transcript extraction was not successful. You can manually add your notes and observations about this video below.\n\n## My Notes\n\nAdd your content here...`,
+      transcript: fallbackTranscript,
       metadata: {
         videoId,
         title: `YouTube Video ${videoId}`,

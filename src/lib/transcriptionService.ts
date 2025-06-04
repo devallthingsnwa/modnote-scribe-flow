@@ -15,7 +15,7 @@ export type { TranscriptionConfig, TranscriptionResult, YouTubeMetadata, MediaTy
 export class TranscriptionService {
   private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
   private static readonly MAX_RETRIES = 3;
-  private static readonly RETRY_DELAYS = [1000, 3000, 8000]; // Progressive delays
+  private static readonly RETRY_DELAYS = [1000, 3000, 8000];
 
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
@@ -57,6 +57,9 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
+          // Format the transcript with proper structure
+          const formattedText = this.formatTranscriptContent(youtubeResult.text, url);
+          
           toast({
             title: "✅ Transcript Extracted",
             description: "Successfully extracted YouTube captions"
@@ -64,6 +67,7 @@ export class TranscriptionService {
           
           return {
             ...youtubeResult,
+            text: formattedText,
             metadata: {
               ...youtubeResult.metadata,
               retryCount: attempt,
@@ -96,6 +100,8 @@ export class TranscriptionService {
         if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
           console.log('✅ Audio transcription successful');
           
+          const formattedText = this.formatTranscriptContent(audioResult.text, url);
+          
           toast({
             title: "✅ Audio Transcribed",
             description: "Successfully transcribed via audio extraction"
@@ -103,6 +109,7 @@ export class TranscriptionService {
           
           return {
             ...audioResult,
+            text: formattedText,
             metadata: {
               ...audioResult.metadata,
               strategiesAttempted: 'youtube-transcript,audio-extraction',
@@ -126,8 +133,11 @@ export class TranscriptionService {
       const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
       
       if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
+        const formattedText = this.formatTranscriptContent(externalResult.text, url);
+        
         return {
           ...externalResult,
+          text: formattedText,
           metadata: {
             ...externalResult.metadata,
             strategiesAttempted: strategies.join(','),
@@ -145,6 +155,40 @@ export class TranscriptionService {
 
     // Enhanced fallback with detailed guidance
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+  }
+
+  private static formatTranscriptContent(transcript: string, url: string): string {
+    const videoId = YouTubeService.extractVideoId(url);
+    let videoTitle = `YouTube Video ${videoId}`;
+    
+    // Try to extract title from transcript if it's formatted
+    const titleMatch = transcript.match(/^# 🎥 "(.+)"/);
+    if (titleMatch) {
+      return transcript; // Already formatted
+    }
+    
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let formattedContent = `# 🎥 "${videoTitle}"\n\n`;
+    formattedContent += `**Source:** ${url}\n`;
+    formattedContent += `**Type:** Video Transcript\n`;
+    formattedContent += `**Imported:** ${currentDate}\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 Transcript\n\n`;
+    formattedContent += `${transcript}\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 My Notes\n\n`;
+    formattedContent += `Add your personal notes and thoughts here...\n`;
+
+    return formattedContent;
   }
 
   private static async handleGeneralMediaTranscriptionWithFallback(url: string, startTime: number): Promise<TranscriptionResult> {
@@ -176,13 +220,13 @@ export class TranscriptionService {
       console.log(`🔄 Attempting transcription with ${provider}...`);
       providersAttempted.push(provider);
       
-      for (let retry = 0; retry < 2; retry++) { // 2 attempts per provider
+      for (let retry = 0; retry < 2; retry++) {
         try {
           const result = await ExternalProviderService.callTranscriptionAPI(provider, url, {
             include_metadata: true,
             include_timestamps: true,
             language: 'auto',
-            timeout: 60000 // 1 minute timeout
+            timeout: 60000
           });
           
           if (result.success && result.text && result.text.length > 50) {
@@ -229,17 +273,14 @@ export class TranscriptionService {
   }
 
   private static calculateConfidenceScore(text: string, provider: string): number {
-    let score = 50; // Base score
+    let score = 50;
     
-    // Length bonus
     if (text.length > 1000) score += 20;
     else if (text.length > 500) score += 10;
     
-    // Provider reliability bonus
     if (provider === 'podsqueeze') score += 15;
     else if (provider === 'whisper') score += 10;
     
-    // Text quality indicators
     if (text.includes('.') && text.includes(',')) score += 10;
     if (text.match(/[A-Z]/g)?.length > 10) score += 5;
     
@@ -252,39 +293,46 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    let fallbackContent = `# 🎥 ${isYouTube ? 'YouTube Video' : 'Media Content'} Note\n\n`;
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let fallbackContent = `# 🎥 "${isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content'}"\n\n`;
     fallbackContent += `**Source:** ${url}\n`;
+    fallbackContent += `**Type:** Video Note\n`;
+    fallbackContent += `**Imported:** ${currentDate}\n`;
     fallbackContent += `**Status:** ⚠️ Automatic transcription unavailable\n`;
-    fallbackContent += `**Created:** ${new Date().toLocaleString()}\n`;
     fallbackContent += `**Processing Time:** ${(processingTime / 1000).toFixed(1)}s\n\n`;
     fallbackContent += `---\n\n`;
+    fallbackContent += `## 📝 Transcript\n\n`;
     
     if (isYouTube) {
-      fallbackContent += `## 📋 About This Video\n\n`;
       fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
       fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
       fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
       fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
       fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
       fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
-      fallbackContent += `## 💡 Alternative Options\n\n`;
-      fallbackContent += `### 🎯 Quick Actions\n`;
+      fallbackContent += `### 💡 Alternative Options\n\n`;
       fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
       fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
       fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
       fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
-      fallbackContent += `### 🔄 Retry Later\n`;
-      fallbackContent += `- Video captions may become available later\n`;
-      fallbackContent += `- Service improvements may enable future transcription\n\n`;
     } else {
-      fallbackContent += `## 📋 About This Content\n\n`;
       fallbackContent += `This content could not be automatically transcribed. You can still:\n\n`;
       fallbackContent += `- **Manual Notes**: Add your own observations and summaries\n`;
       fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
       fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
     }
     
-    fallbackContent += `## 📝 My Notes & Observations\n\n`;
+    fallbackContent += `---\n\n`;
+    fallbackContent += `## 📝 My Notes\n\n`;
     fallbackContent += `### 🎯 Key Points\n`;
     fallbackContent += `- [ ] Main topic/theme:\n`;
     fallbackContent += `- [ ] Important insights:\n`;
@@ -296,12 +344,6 @@ export class TranscriptionService {
     fallbackContent += `- **00:00** - \n`;
     fallbackContent += `- **05:00** - \n`;
     fallbackContent += `- **10:00** - \n\n`;
-    
-    fallbackContent += `### 🔗 Related Resources\n`;
-    fallbackContent += `- [ ] Follow-up articles:\n`;
-    fallbackContent += `- [ ] Related videos:\n`;
-    fallbackContent += `- [ ] Tools mentioned:\n`;
-    fallbackContent += `- [ ] People referenced:\n\n`;
     
     fallbackContent += `### 💭 Personal Reflections\n`;
     fallbackContent += `*Your thoughts, opinions, and how this relates to your interests*\n\n`;
