@@ -11,6 +11,7 @@ import { useNotes } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AISearchNavbar } from "@/components/AISearchNavbar";
 import { SearchBar } from "@/components/SearchBar";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -103,6 +104,10 @@ export default function Dashboard() {
     );
   }) || [];
 
+  const handleQuickTest = () => {
+    window.open('/test', '_blank');
+  };
+
   if (error) {
     return (
       <div className="flex h-screen bg-background">
@@ -149,6 +154,14 @@ export default function Dashboard() {
                 />
                 <div className="flex items-center gap-3">
                   <AISearchNavbar />
+                  <Button
+                    onClick={handleQuickTest}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    🧪 Test Transcription
+                  </Button>
                 </div>
               </div>
             </div>

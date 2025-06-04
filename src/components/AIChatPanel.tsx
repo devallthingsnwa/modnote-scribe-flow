@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,7 +47,7 @@ export function AIChatPanel({ noteId, content }: AIChatPanelProps) {
       setMessages([{
         id: '1',
         role: 'assistant',
-        content: "🎯 **Welcome to your AI Learning Assistant!**\n\nI'm powered by DeepSeek and equipped with advanced RAG capabilities. I can help you:\n\n• **Analyze** and summarize your content\n• **Answer questions** about the material\n• **Create study guides** and flashcards\n• **Explain complex concepts** in simple terms\n• **Generate insights** and connections\n• **Practice questions** for better understanding\n\nWhat would you like to explore today?",
+        content: "🎯 **Welcome to your AI Learning Assistant!**\n\nI'm powered by Mistral AI and equipped with advanced RAG capabilities. I can help you:\n\n• **Analyze** and summarize your content\n• **Answer questions** about the material\n• **Create study guides** and flashcards\n• **Explain complex concepts** in simple terms\n• **Generate insights** and connections\n• **Practice questions** for better understanding\n\nWhat would you like to explore today?",
         timestamp: new Date()
       }]);
     }
@@ -123,7 +122,7 @@ Instructions: You are an expert learning assistant. Using the knowledge base abo
 Focus on being helpful, accurate, and educational.
 `;
 
-      const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
+      const { data, error } = await supabase.functions.invoke('process-content-with-mistral', {
         body: {
           content: ragContext,
           type: "chat",
@@ -164,14 +163,14 @@ Focus on being helpful, accurate, and educational.
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "⚠️ I'm experiencing connection issues with the DeepSeek API. Please ensure your API key is properly configured and try again. If the problem persists, check your network connection.",
+        content: "⚠️ I'm experiencing connection issues with the Mistral AI API. Please ensure your API key is properly configured and try again. If the problem persists, check your network connection.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
       
       toast({
         title: "Connection Error",
-        description: "Unable to connect to DeepSeek API. Please check your configuration.",
+        description: "Unable to connect to Mistral AI API. Please check your configuration.",
         variant: "destructive",
       });
     } finally {
@@ -237,7 +236,7 @@ Focus on being helpful, accurate, and educational.
               </h2>
               <p className="text-sm text-muted-foreground flex items-center gap-1">
                 <Sparkles className="h-3 w-3" />
-                Powered by DeepSeek RAG
+                Powered by Mistral AI RAG
               </p>
             </div>
           </div>
@@ -291,7 +290,7 @@ Focus on being helpful, accurate, and educational.
           )}
           
           <Badge variant="outline" className="bg-gradient-to-r from-purple-50 to-blue-50 text-purple-700 border-purple-200">
-            DeepSeek AI
+            Mistral AI
           </Badge>
         </div>
 
@@ -327,9 +326,9 @@ Focus on being helpful, accurate, and educational.
               <div className="flex items-start space-x-2">
                 <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium text-red-800 dark:text-red-200">DeepSeek API Configuration Issue</p>
+                  <p className="font-medium text-red-800 dark:text-red-200">Mistral AI API Configuration Issue</p>
                   <p className="text-red-700 dark:text-red-300 mt-1">
-                    The API connection failed. Please verify your DeepSeek API key is properly configured in the project settings.
+                    The API connection failed. Please verify your Mistral API key is properly configured in the project settings.
                   </p>
                 </div>
               </div>
@@ -476,7 +475,7 @@ Focus on being helpful, accurate, and educational.
             <span>•</span>
             <span className="flex items-center gap-1">
               <Sparkles className="h-3 w-3" />
-              Powered by DeepSeek RAG
+              Powered by Mistral AI RAG
             </span>
           </p>
         </CardContent>
