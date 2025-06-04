@@ -2,7 +2,6 @@ import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
 import { MediaTypeDetector } from "./transcription/mediaTypeDetector";
-import { YouTubeAudioService } from "./transcription/youtubeAudioService";
 import { 
   TranscriptionConfig, 
   TranscriptionResult, 
@@ -21,11 +20,11 @@ export class TranscriptionService {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     const startTime = Date.now();
     
-    console.log(`🎯 Starting enhanced transcription with robust fallback for ${mediaType}: ${url}`);
+    console.log(`🎯 Starting enhanced transcription with audio fallback for ${mediaType}: ${url}`);
     
     try {
       if (mediaType === 'youtube') {
-        return await this.handleYouTubeTranscriptionWithEnhancedFallback(url, startTime);
+        return await this.handleYouTubeTranscriptionWithAudioFallback(url, startTime);
       }
       
       return await this.handleGeneralMediaTranscriptionWithFallback(url, startTime);
@@ -35,10 +34,11 @@ export class TranscriptionService {
     }
   }
 
-  private static async handleYouTubeTranscriptionWithEnhancedFallback(url: string, startTime: number): Promise<TranscriptionResult> {
-    console.log('🎥 Processing YouTube video with enhanced multi-strategy fallback...');
+  private static async handleYouTubeTranscriptionWithAudioFallback(url: string, startTime: number): Promise<TranscriptionResult> {
+    console.log('🎥 Processing YouTube video with enhanced audio fallback...');
     
     const errors: string[] = [];
+    const videoId = YouTubeService.extractVideoId(url);
 
     // Strategy 1: YouTube transcript extraction with retries
     for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
@@ -54,23 +54,24 @@ export class TranscriptionService {
           const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || 
                                   youtubeResult.metadata?.isWarning;
           
-          // Return the raw text without additional formatting - let the frontend handle formatting
-          toast({
-            title: isWarningContent ? "📝 Smart Note Created" : "✅ Transcript Extracted",
-            description: isWarningContent ? "Transcript unavailable - created structured note for manual input" : "Successfully extracted YouTube captions"
-          });
-          
-          return {
-            ...youtubeResult,
-            text: youtubeResult.text, // Return raw text without additional formatting
-            metadata: {
-              ...youtubeResult.metadata,
-              retryCount: attempt,
-              strategiesAttempted: 'youtube-transcript',
-              processingTime: Date.now() - startTime,
-              successRate: isWarningContent ? 0 : 100
-            }
-          };
+          if (!isWarningContent) {
+            toast({
+              title: "✅ Transcript Extracted",
+              description: "Successfully extracted YouTube captions"
+            });
+            
+            return {
+              ...youtubeResult,
+              text: youtubeResult.text,
+              metadata: {
+                ...youtubeResult.metadata,
+                retryCount: attempt,
+                strategiesAttempted: 'youtube-transcript',
+                processingTime: Date.now() - startTime,
+                successRate: 100
+              }
+            };
+          }
         }
         
         if (attempt < this.MAX_RETRIES - 1) {
@@ -84,75 +85,88 @@ export class TranscriptionService {
       }
     }
 
-    // If we reach here, all transcript attempts failed
-    console.warn("All YouTube transcript attempts failed, creating enhanced fallback");
-    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
+    // Strategy 2: Audio extraction + speech-to-text fallback
+    console.log('🎵 Transcript failed, trying audio extraction + speech-to-text...');
+    
+    try {
+      const audioResult = await this.tryAudioTranscription(videoId);
+      
+      if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
+        console.log('✅ Audio transcription successful');
+        
+        toast({
+          title: "🎵 Audio Transcribed",
+          description: "Successfully transcribed from video audio using Supadata AI"
+        });
+        
+        return {
+          ...audioResult,
+          metadata: {
+            ...audioResult.metadata,
+            strategiesAttempted: 'youtube-transcript,audio-transcription',
+            processingTime: Date.now() - startTime,
+            successRate: 95,
+            fallbackUsed: true
+          }
+        };
+      }
+      
+      errors.push(`Audio-transcription: ${audioResult.error || 'Failed to extract audio'}`);
+    } catch (error) {
+      console.warn('⚠️ Audio transcription failed:', error);
+      errors.push(`Audio-transcription: ${error.message}`);
+    }
+
+    // If we reach here, all attempts failed
+    console.warn("All YouTube transcription strategies failed, creating enhanced fallback");
+    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
   }
 
-  private static async formatWarningContent(warningText: string, url: string): Promise<string> {
-    const videoId = YouTubeService.extractVideoId(url);
-    
-    // Try to get metadata for better formatting
-    let metadata = null;
+  private static async tryAudioTranscription(videoId: string): Promise<TranscriptionResult> {
     try {
-      if (videoId) {
-        metadata = await this.getYouTubeMetadata(videoId);
+      // Use the Supabase client to call the edge function
+      const { supabase } = await import("@/integrations/supabase/client");
+      
+      const { data, error } = await supabase.functions.invoke('youtube-audio-transcription', {
+        body: {
+          videoId,
+          options: {
+            language: 'en',
+            quality: 'medium',
+            include_timestamps: true
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Audio transcription service error');
       }
-    } catch (error) {
-      console.warn('Failed to fetch metadata for formatting:', error);
-    }
-    
-    const title = metadata?.title || `YouTube Video ${videoId}`;
-    const author = metadata?.author || 'Unknown';
-    const duration = metadata?.duration || 'Unknown';
-    
-    // Create single header structure for warning content
-    let formattedContent = `# 🎥 ${title}\n\n`;
-    formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Author:** ${author}\n`;
-    formattedContent += `**Duration:** ${duration}\n`;
-    formattedContent += `**Type:** Video Note\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Notes\n\n`;
-    formattedContent += warningText;
 
-    return formattedContent;
-  }
-
-  private static async formatTranscriptContent(transcript: string, url: string): Promise<string> {
-    const videoId = YouTubeService.extractVideoId(url);
-    
-    // Try to get metadata for better formatting
-    let metadata = null;
-    try {
-      if (videoId) {
-        metadata = await this.getYouTubeMetadata(videoId);
+      if (data?.success && data?.transcript) {
+        return {
+          success: true,
+          text: data.transcript,
+          provider: 'supadata-audio',
+          metadata: {
+            extractionMethod: 'youtube-audio-transcription',
+            provider: 'supadata-audio',
+            confidence: data.metadata?.confidence,
+            language: data.metadata?.language,
+            processing_time: data.metadata?.processing_time
+          }
+        };
       }
-    } catch (error) {
-      console.warn('Failed to fetch metadata for formatting:', error);
-    }
-    
-    const title = metadata?.title || `YouTube Video ${videoId}`;
-    const author = metadata?.author || 'Unknown';
-    const duration = metadata?.duration || 'Unknown';
-    
-    // Clean and format the transcript - no duplicate headers
-    let cleanTranscript = transcript.trim();
-    
-    // Format according to the requested structure
-    let formattedContent = `# 🎥 ${title}\n\n`;
-    formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Author:** ${author}\n`;
-    formattedContent += `**Duration:** ${duration}\n`;
-    formattedContent += `**Type:** Video Transcript\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${cleanTranscript}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 My Notes\n\n`;
-    formattedContent += `Add your personal notes and thoughts here...\n`;
 
-    return formattedContent;
+      throw new Error(data?.error || 'Audio transcription failed');
+      
+    } catch (error) {
+      console.error('Audio transcription error:', error);
+      return {
+        success: false,
+        error: error.message || 'Audio transcription failed',
+        provider: 'supadata-audio'
+      };
+    }
   }
 
   private static async handleGeneralMediaTranscriptionWithFallback(url: string, startTime: number): Promise<TranscriptionResult> {
@@ -257,7 +271,6 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    // Create simple fallback content without headers - let frontend handle formatting
     let fallbackContent = `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
     fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
     fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;

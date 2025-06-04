@@ -18,3 +18,9 @@ verify_jwt = true
 
 [functions.pinecone-operations]
 verify_jwt = true
+
+[functions.youtube-audio-transcription]
+verify_jwt = true
+
+[functions.supadata-speech-to-text]
+verify_jwt = true
