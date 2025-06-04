@@ -50,6 +50,10 @@ export interface TranscriptionResult {
     failureReason?: string;
     successRate?: number;
     confidenceScore?: number;
+    fallbackUsed?: boolean;
+    confidence?: number;
+    language?: string;
+    processing_time?: number;
   };
   error?: string;
   provider?: string;
