@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -260,16 +259,9 @@ export default function Dashboard() {
                   filteredNotes.map((note) => (
                     <NoteCard
                       key={note.id}
-                      id={note.id}
-                      title={note.title}
-                      content={note.content || ""}
-                      date={new Date(note.updated_at)}
-                      tags={[]}
-                      thumbnail={note.thumbnail}
-                      onClick={() => {
-                        // Handle note click - navigate to note details
-                        console.log('Note clicked:', note.id);
-                      }}
+                      note={note}
+                      onDelete={handleDeleteNote}
+                      onUpdate={handleNoteUpdate}
                     />
                   ))
                 )}
