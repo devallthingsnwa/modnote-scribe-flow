@@ -131,7 +131,12 @@ export function TranscriptionTester() {
   };
 
   const getProviderConfig = () => {
-    return ExternalProviderService.getProviderStatus();
+    return TranscriptionService.getProviderConfig().map((config, index) => ({
+      name: config.provider,
+      priority: config.priority,
+      description: `Provider for transcription services`,
+      capabilities: ['transcription', 'youtube', 'audio']
+    }));
   };
 
   return (
