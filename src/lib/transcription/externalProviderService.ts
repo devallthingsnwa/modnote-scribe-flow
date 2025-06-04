@@ -27,4 +27,27 @@ export class ExternalProviderService {
       };
     }
   }
+
+  static getProviderStatus() {
+    return [
+      {
+        name: 'PodSqueeze',
+        priority: 1,
+        description: 'AI-powered podcast and video transcription service',
+        capabilities: ['YouTube', 'Audio', 'Timestamps', 'Summary']
+      },
+      {
+        name: 'Whisper',
+        priority: 2,
+        description: 'OpenAI Whisper speech recognition model',
+        capabilities: ['Audio', 'Multi-language', 'High accuracy']
+      },
+      {
+        name: 'Riverside',
+        priority: 3,
+        description: 'Professional audio transcription service',
+        capabilities: ['Audio', 'Real-time', 'Speaker detection']
+      }
+    ];
+  }
 }
