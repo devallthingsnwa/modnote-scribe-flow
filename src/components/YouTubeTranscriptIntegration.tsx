@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,31 +38,6 @@ export function YouTubeTranscriptIntegration({
     return text.match(urlRegex) || [];
   };
 
-  const formatTranscriptContent = (transcript: string, url: string, metadata: any) => {
-    const videoId = TranscriptionService.extractVideoId(url);
-    const title = metadata?.title || `YouTube Video ${videoId}`;
-    const importDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-
-    let formattedContent = `# 🎥 ${title}\n\n`;
-    formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Type:** Video Transcript\n`;
-    formattedContent += `**Imported:** ${importDate}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += transcript;
-    formattedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
-
-    return formattedContent;
-  };
-
   const extractTranscriptFromContent = async (content: string) => {
     const videoIds = extractYouTubeId(content);
     const urls = detectYouTubeUrls(content);
@@ -84,91 +60,81 @@ export function YouTubeTranscriptIntegration({
       const videoId = videoIds[0];
       const url = urls[0];
 
-      console.log("Starting transcript extraction for video:", videoId);
+      console.log("Starting transcript extraction with fallback for video:", videoId);
 
-      // Get video metadata first with error handling
-      let metadata = null;
-      try {
-        metadata = await TranscriptionService.getYouTubeMetadata(videoId);
-      } catch (error) {
-        console.warn('Failed to fetch video metadata:', error);
-        metadata = { 
-          title: `YouTube Video ${videoId}`, 
-          author: 'Unknown', 
-          duration: 'Unknown' 
-        };
-      }
-
-      // Enhanced transcript extraction with proper error handling
+      // Use the TranscriptionService which now always returns success with fallback content
       const result = await TranscriptionService.transcribeWithFallback(url);
 
       if (result.success && result.text) {
-        console.log('Transcript extraction completed successfully');
+        console.log('Transcript extraction completed:', result.provider);
         
-        // Check if this is a meaningful transcript or fallback content
-        const isActualTranscript = result.text.length > 200 && 
-                                  !result.text.includes('could not be automatically') &&
-                                  !result.text.includes('requires additional permissions');
+        // Check if this is a warning result
+        const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
+        setHasWarning(isWarning);
         
-        setHasWarning(!isActualTranscript);
+        // Get video metadata
+        let metadata = null;
+        try {
+          metadata = await TranscriptionService.getYouTubeMetadata(videoId);
+        } catch (error) {
+          console.warn('Failed to fetch video metadata:', error);
+        }
+        
         setExtractedTranscript(result.text);
         setVideoInfo(metadata);
 
-        // Format the content properly
-        const enhancedContent = formatTranscriptContent(result.text, url, metadata);
+        // Format the enhanced content
+        const title = metadata?.title || `YouTube Video ${videoId}`;
+        const author = metadata?.author || 'Unknown';
+        const duration = metadata?.duration || 'Unknown';
+
+        let enhancedContent = `# 🎥 ${title}\n\n`;
+        enhancedContent += `**Source:** ${url}\n`;
+        enhancedContent += `**Author:** ${author}\n`;
+        enhancedContent += `**Duration:** ${duration}\n`;
+        enhancedContent += `**Type:** Video ${isWarning ? 'Note' : 'Transcript'}\n`;
+        enhancedContent += `**Extracted:** ${new Date().toLocaleString()}\n`;
+        enhancedContent += `**Method:** ${result.provider || 'unknown'}\n`;
+        if (isWarning) {
+          enhancedContent += `**Status:** ⚠️ Transcript unavailable - manual notes only\n`;
+        }
+        enhancedContent += `\n---\n\n`;
+        enhancedContent += `## 📝 ${isWarning ? 'Notes' : 'Transcript'}\n\n`;
+        enhancedContent += result.text;
+        enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+
         onTranscriptExtracted(enhancedContent);
 
-        if (isActualTranscript) {
+        if (isWarning) {
           toast({
-            title: "✅ Transcript Extracted Successfully!",
-            description: `Successfully extracted transcript with ${result.text.length} characters`
+            title: "⚠️ Video Saved with Warning",
+            description: "Transcript unavailable but note created for manual input"
           });
         } else {
           toast({
-            title: "⚠️ Limited Content Available",
-            description: "Transcript extraction had limitations - note created for manual input"
+            title: "✅ Transcript Extracted Successfully!",
+            description: `Successfully extracted transcript using ${result.provider || 'fallback method'}`
           });
         }
 
       } else {
-        // Handle extraction failure gracefully
-        console.error("Transcript extraction failed:", result.error);
-        
-        // Create a fallback note even if extraction fails
-        const fallbackContent = formatTranscriptContent(
-          "Transcript extraction was not successful. You can manually add your notes and observations about this video.",
-          url,
-          metadata
-        );
-        
-        onTranscriptExtracted(fallbackContent);
-        setHasWarning(true);
+        // This should not happen anymore since we always return success
+        console.error("Unexpected: TranscriptionService returned failure");
         
         toast({
-          title: "⚠️ Transcript Unavailable",
-          description: "Created note template for manual input",
+          title: "❌ Unexpected Error",
+          description: "An unexpected error occurred. Please try again.",
+          variant: "destructive"
         });
       }
 
     } catch (error) {
       console.error("Unexpected error during transcript extraction:", error);
       
-      // Create an error note with helpful guidance
-      const videoId = videoIds[0];
-      const url = urls[0];
-      const errorContent = formatTranscriptContent(
-        `Transcript extraction encountered an error: ${error.message}\n\nYou can:\n1. Try again later\n2. Check if the video has captions available\n3. Add your own notes about the video content`,
-        url,
-        { title: `YouTube Video ${videoId}`, author: 'Unknown', duration: 'Unknown' }
-      );
-      
-      onTranscriptExtracted(errorContent);
-      setHasWarning(true);
-      
       toast({
-        title: "❌ Extraction Error",
-        description: "Created note template - you can add manual notes",
-        variant: "default"
+        title: "❌ Unexpected Error",
+        description: "An unexpected error occurred during transcript extraction. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setIsExtracting(false);
@@ -179,20 +145,13 @@ export function YouTubeTranscriptIntegration({
     if (!extractedTranscript) return;
 
     const content = `# ${videoInfo?.title || 'YouTube Video Transcript'}
-Source: ${videoInfo?.url || 'Unknown'}
-Type: Video ${hasWarning ? 'Note' : 'Transcript'}
-Imported: ${new Date().toLocaleString()}
+Author: ${videoInfo?.author || 'Unknown'}
+Duration: ${videoInfo?.duration || 'Unknown'}
+Extracted: ${new Date().toLocaleString()}
 ${hasWarning ? 'Status: ⚠️ Transcript unavailable - manual notes only' : ''}
-
----
 
 ## ${hasWarning ? 'Notes' : 'Transcript'}
 ${extractedTranscript}
-
----
-
-## My Notes
-Add your personal notes and thoughts here...
 `;
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -212,16 +171,17 @@ Add your personal notes and thoughts here...
   };
 
   const handleSpeechToText = (transcribedText: string) => {
+    const enhancedContent = `# 🎤 Voice Note\n\n`;
     const timestamp = new Date().toLocaleString();
     
-    let content = `# 🎤 Voice Note\n\n`;
+    let content = enhancedContent;
     content += `**Type:** Voice Transcription\n`;
-    content += `**Imported:** ${timestamp}\n`;
+    content += `**Recorded:** ${timestamp}\n`;
     content += `**Method:** Speech-to-Text AI (Supadata + Whisper Fallback)\n\n`;
     content += `---\n\n`;
     content += `## 📝 Transcription\n\n`;
     content += transcribedText;
-    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
 
     onTranscriptExtracted(content);
   };
@@ -291,7 +251,7 @@ Add your personal notes and thoughts here...
                     </p>
                     {hasWarning && (
                       <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                        ⚠️ Transcript extraction had limitations
+                        ⚠️ Transcript unavailable - note created for manual input
                       </p>
                     )}
                   </div>
@@ -314,7 +274,7 @@ Add your personal notes and thoughts here...
               <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-blue-700 dark:text-blue-300">
                 <p className="font-medium mb-1">How to use:</p>
-                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note with proper formatting.</p>
+                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note. If transcript isn't available, a note will still be created with a warning.</p>
               </div>
             </div>
           </TabsContent>
@@ -338,8 +298,8 @@ Add your personal notes and thoughts here...
         <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-amber-700 dark:text-amber-300">
-            <p className="font-medium mb-1">Enhanced Extraction System:</p>
-            <p>Uses multiple methods to extract transcript content. When successful, returns the raw transcript text formatted in your note.</p>
+            <p className="font-medium mb-1">Smart Fallback System:</p>
+            <p>When transcripts aren't available, the system automatically creates a note with a warning message, so you can still save and organize your video references.</p>
           </div>
         </div>
       </CardContent>

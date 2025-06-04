@@ -57,6 +57,9 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
+          // Format the transcript with proper structure - preserve raw content
+          const formattedText = this.formatTranscriptContent(youtubeResult.text, url);
+          
           toast({
             title: "✅ Transcript Extracted",
             description: "Successfully extracted YouTube captions"
@@ -64,7 +67,7 @@ export class TranscriptionService {
           
           return {
             ...youtubeResult,
-            text: youtubeResult.text, // Return raw transcript without formatting
+            text: formattedText,
             metadata: {
               ...youtubeResult.metadata,
               retryCount: attempt,
@@ -97,6 +100,8 @@ export class TranscriptionService {
         if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
           console.log('✅ Audio transcription successful');
           
+          const formattedText = this.formatTranscriptContent(audioResult.text, url);
+          
           toast({
             title: "✅ Audio Transcribed",
             description: "Successfully transcribed via audio extraction"
@@ -104,7 +109,7 @@ export class TranscriptionService {
           
           return {
             ...audioResult,
-            text: audioResult.text, // Return raw transcript without formatting
+            text: formattedText,
             metadata: {
               ...audioResult.metadata,
               strategiesAttempted: 'youtube-transcript,audio-extraction',
@@ -128,9 +133,11 @@ export class TranscriptionService {
       const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
       
       if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
+        const formattedText = this.formatTranscriptContent(externalResult.text, url);
+        
         return {
           ...externalResult,
-          text: externalResult.text, // Return raw transcript without formatting
+          text: formattedText,
           metadata: {
             ...externalResult.metadata,
             strategiesAttempted: strategies.join(','),
@@ -296,27 +303,63 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    // Return raw fallback content without markdown formatting
-    let fallbackContent = `This ${isYouTube ? 'YouTube video' : 'content'} could not be automatically transcribed.\n\n`;
+    const currentDate = new Date().toLocaleString('en-US', {
+      month: 'numeric',
+      day: 'numeric', 
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let fallbackContent = `# 🎥 "${isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content'}"\n\n`;
+    fallbackContent += `**Source:** ${url}\n`;
+    fallbackContent += `**Type:** Video Note\n`;
+    fallbackContent += `**Imported:** ${currentDate}\n`;
+    fallbackContent += `**Status:** ⚠️ Automatic transcription unavailable\n`;
+    fallbackContent += `**Processing Time:** ${(processingTime / 1000).toFixed(1)}s\n\n`;
+    fallbackContent += `---\n\n`;
+    fallbackContent += `## 📝 Transcript\n\n`;
     
     if (isYouTube) {
-      fallbackContent += `Common reasons:\n`;
-      fallbackContent += `- No Captions Available: Video doesn't have auto-generated or manual captions\n`;
-      fallbackContent += `- Private/Restricted Content: Video has access restrictions\n`;
-      fallbackContent += `- Live Stream: Live content may not have stable captions\n`;
-      fallbackContent += `- Language Barriers: Non-English content without proper language detection\n`;
-      fallbackContent += `- Technical Issues: Temporary service limitations or API restrictions\n\n`;
-      fallbackContent += `Alternative Options:\n`;
-      fallbackContent += `1. Check YouTube Captions: Visit the video directly and look for CC button\n`;
-      fallbackContent += `2. Manual Summary: Watch and create your own key points\n`;
-      fallbackContent += `3. Audio Recording: Use voice notes to summarize while watching\n`;
-      fallbackContent += `4. Third-party Tools: Try external transcription services\n`;
+      fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
+      fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
+      fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
+      fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
+      fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
+      fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
+      fallbackContent += `### 💡 Alternative Options\n\n`;
+      fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
+      fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
+      fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
+      fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
     } else {
-      fallbackContent += `You can still:\n`;
-      fallbackContent += `- Manual Notes: Add your own observations and summaries\n`;
-      fallbackContent += `- Key Timestamps: Note important moments if it's a time-based media\n`;
-      fallbackContent += `- Reference Links: Add related resources and follow-up materials\n`;
+      fallbackContent += `This content could not be automatically transcribed. You can still:\n\n`;
+      fallbackContent += `- **Manual Notes**: Add your own observations and summaries\n`;
+      fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
+      fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
     }
+    
+    fallbackContent += `---\n\n`;
+    fallbackContent += `## 📝 My Notes\n\n`;
+    fallbackContent += `### 🎯 Key Points\n`;
+    fallbackContent += `- [ ] Main topic/theme:\n`;
+    fallbackContent += `- [ ] Important insights:\n`;
+    fallbackContent += `- [ ] Action items:\n`;
+    fallbackContent += `- [ ] Questions raised:\n\n`;
+    
+    fallbackContent += `### ⏰ Timestamps & Moments\n`;
+    fallbackContent += `*Add specific timestamps and what happens at those moments*\n\n`;
+    fallbackContent += `- **00:00** - \n`;
+    fallbackContent += `- **05:00** - \n`;
+    fallbackContent += `- **10:00** - \n\n`;
+    
+    fallbackContent += `### 💭 Personal Reflections\n`;
+    fallbackContent += `*Your thoughts, opinions, and how this relates to your interests*\n\n`;
+    
+    fallbackContent += `---\n\n`;
+    fallbackContent += `*Note: This content was saved automatically when transcription was unavailable. You can edit this note to add your own insights and observations.*`;
 
     toast({
       title: "📝 Smart Note Created",
@@ -326,7 +369,7 @@ export class TranscriptionService {
 
     return {
       success: true,
-      text: fallbackContent, // Return raw fallback content
+      text: fallbackContent,
       metadata: {
         extractionMethod: 'enhanced-smart-fallback',
         isWarning: true,

@@ -19,7 +19,6 @@ import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
 import { UrlImporter } from './UrlImporter';
 import { FileUploadForm } from './FileUploadForm';
-import { VideoFileImport } from './VideoFileImport';
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
