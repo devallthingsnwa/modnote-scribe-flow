@@ -50,14 +50,59 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting enhanced transcript fetch for video: ${videoId} (extended timeout: ${options.extendedTimeout || false})`);
+    console.log(`Starting enhanced transcript fetch for video: ${videoId}`);
     
     const result = await TranscriptExtractor.extractTranscript(videoId, options);
     
     if (!result) {
-      console.log("Creating structured fallback response for video:", videoId);
+      console.log("No transcript available, triggering audio processing fallback");
       
-      // Create a structured fallback response with proper formatting
+      // Instead of creating structured fallback, trigger audio processing
+      try {
+        const audioResult = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/youtube-audio-transcription`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            videoId,
+            options: {
+              language: 'en',
+              quality: 'medium'
+            }
+          })
+        });
+
+        if (audioResult.ok) {
+          const audioData = await audioResult.json();
+          if (audioData.success && audioData.transcript) {
+            console.log("Audio transcription successful, returning processed transcript");
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                transcript: audioData.transcript,
+                metadata: {
+                  videoId,
+                  extractionMethod: 'youtube-audio-transcription',
+                  provider: 'supadata-audio',
+                  quality: 'medium',
+                  fallbackUsed: true
+                }
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              }
+            );
+          }
+        }
+      } catch (audioError) {
+        console.warn("Audio transcription fallback failed:", audioError);
+      }
+
+      // If audio fallback also fails, create structured fallback
       const fallbackTranscript = await createStructuredFallback(videoId);
       
       return new Response(
@@ -101,13 +146,12 @@ serve(async (req) => {
 async function createStructuredFallback(videoId: string): Promise<string> {
   console.log("Creating structured fallback response...");
   
-  // Try to get basic video metadata from oembed or other sources
+  // Try to get basic video metadata from oembed
   let title = `YouTube Video ${videoId}`;
   let author = 'Unknown';
   let duration = 'Unknown';
   
   try {
-    // Try oembed for basic metadata
     const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
     if (oembedResponse.ok) {
       const oembedData = await oembedResponse.json();
@@ -122,17 +166,17 @@ async function createStructuredFallback(videoId: string): Promise<string> {
     console.warn("Failed to fetch oembed metadata:", error);
   }
   
-  // Create structured fallback content matching the requested format
+  // Create structured fallback content
   const fallbackContent = `# 🎥 ${title}
 
 **Source:** https://www.youtube.com/watch?v=${videoId}
 **Author:** ${author}
 **Duration:** ${duration}
-**Type:** Video Transcript
+**Type:** Video Note
 
 ---
 
-## 📝 Transcript
+## 📝 Notes
 
 This video's transcript could not be automatically extracted. Common reasons include:
 

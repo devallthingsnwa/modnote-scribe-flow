@@ -38,14 +38,7 @@ export class TranscriptionService {
   private static async handleYouTubeTranscriptionWithEnhancedFallback(url: string, startTime: number): Promise<TranscriptionResult> {
     console.log('🎥 Processing YouTube video with enhanced multi-strategy fallback...');
     
-    const strategies = [
-      'youtube-transcript',
-      'youtube-audio-extraction', 
-      'external-providers'
-    ];
-    
     const errors: string[] = [];
-    let retryCount = 0;
 
     // Strategy 1: YouTube transcript extraction with retries
     for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
@@ -57,32 +50,31 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
-          // Check if this is already formatted content or raw transcript
-          const isAlreadyFormatted = youtubeResult.text.includes('# 🎥') && youtubeResult.text.includes('**Source:**');
+          // Check if this is structured content (already formatted) or raw transcript
+          const isStructuredContent = youtubeResult.text.includes('# 🎥') && youtubeResult.text.includes('**Source:**');
+          const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || youtubeResult.metadata?.isWarning;
           
-          let formattedText;
-          if (isAlreadyFormatted) {
-            // It's already formatted (from our fallback system), use as-is
-            formattedText = youtubeResult.text;
-          } else {
-            // Raw transcript, format it properly
-            formattedText = await this.formatTranscriptContent(youtubeResult.text, url);
+          let finalText = youtubeResult.text;
+          
+          // If it's not already formatted properly, format it
+          if (!isStructuredContent && !isWarningContent) {
+            finalText = await this.formatTranscriptContent(youtubeResult.text, url);
           }
           
           toast({
-            title: "✅ Transcript Extracted",
-            description: "Successfully extracted YouTube captions"
+            title: isWarningContent ? "📝 Smart Note Created" : "✅ Transcript Extracted",
+            description: isWarningContent ? "Transcript unavailable - created structured note for manual input" : "Successfully extracted YouTube captions"
           });
           
           return {
             ...youtubeResult,
-            text: formattedText,
+            text: finalText,
             metadata: {
               ...youtubeResult.metadata,
               retryCount: attempt,
               strategiesAttempted: 'youtube-transcript',
               processingTime: Date.now() - startTime,
-              successRate: 100
+              successRate: isWarningContent ? 0 : 100
             }
           };
         }
@@ -98,71 +90,8 @@ export class TranscriptionService {
       }
     }
 
-    // Strategy 2: Audio extraction with Supadata
-    const videoId = YouTubeService.extractVideoId(url);
-    if (videoId) {
-      try {
-        console.log('🎵 Attempting audio extraction with Supadata...');
-        
-        const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
-        
-        if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
-          console.log('✅ Audio transcription successful');
-          
-          const formattedText = await this.formatTranscriptContent(audioResult.text, url);
-          
-          toast({
-            title: "✅ Audio Transcribed",
-            description: "Successfully transcribed via audio extraction"
-          });
-          
-          return {
-            ...audioResult,
-            text: formattedText,
-            metadata: {
-              ...audioResult.metadata,
-              strategiesAttempted: 'youtube-transcript,audio-extraction',
-              processingTime: Date.now() - startTime,
-              successRate: 85
-            }
-          };
-        }
-        
-        errors.push(`Audio extraction: ${audioResult.error || 'Low quality result'}`);
-      } catch (error) {
-        console.warn('⚠️ Audio extraction failed:', error);
-        errors.push(`Audio extraction: ${error.message}`);
-      }
-    }
-
-    // Strategy 3: External providers with enhanced retry
-    try {
-      console.log('🌐 Trying external providers with enhanced fallback...');
-      
-      const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
-      
-      if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
-        const formattedText = await this.formatTranscriptContent(externalResult.text, url);
-        
-        return {
-          ...externalResult,
-          text: formattedText,
-          metadata: {
-            ...externalResult.metadata,
-            strategiesAttempted: strategies.join(','),
-            processingTime: Date.now() - startTime,
-            successRate: 70
-          }
-        };
-      }
-      
-      errors.push(`External providers: ${externalResult.error}`);
-    } catch (error) {
-      console.warn('⚠️ External providers failed:', error);
-      errors.push(`External providers: ${error.message}`);
-    }
-
-    // Enhanced fallback with detailed guidance
+    // If we reach here, all transcript attempts failed
+    console.warn("All YouTube transcript attempts failed, creating enhanced fallback");
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
   }
 
@@ -183,18 +112,9 @@ export class TranscriptionService {
     const author = metadata?.author || 'Unknown';
     const duration = metadata?.duration || 'Unknown';
     
-    // Clean up the transcript content but preserve its raw structure
-    let cleanTranscript = transcript;
+    // Clean and format the transcript - no duplicate headers
+    let cleanTranscript = transcript.trim();
     
-    // Remove any existing markdown formatting if it's raw transcript
-    if (!transcript.includes('# 🎥')) {
-      cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove headers
-      cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold lines
-      cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
-      cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
-      cleanTranscript = cleanTranscript.trim();
-    }
-
     // Format according to the requested structure
     let formattedContent = `# 🎥 ${title}\n\n`;
     formattedContent += `**Source:** ${url}\n`;
@@ -322,7 +242,7 @@ export class TranscriptionService {
     fallbackContent += `**Duration:** Unknown\n`;
     fallbackContent += `**Type:** Video Note\n\n`;
     fallbackContent += `---\n\n`;
-    fallbackContent += `## 📝 Transcript\n\n`;
+    fallbackContent += `## 📝 Notes\n\n`;
     
     if (isYouTube) {
       fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
