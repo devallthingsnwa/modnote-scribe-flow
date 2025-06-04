@@ -5,16 +5,19 @@ import { TranscriptionResult } from "./types";
 export class YouTubeAudioService {
   static async extractAudioAndTranscribe(videoId: string): Promise<TranscriptionResult> {
     try {
-      console.log(`Starting audio extraction and transcription for video: ${videoId}`);
+      console.log(`Starting enhanced audio extraction and transcription for video: ${videoId}`);
       
-      // Call edge function to extract audio and transcribe with Supadata
+      // Call edge function to extract audio and transcribe with enhanced instructions
       const { data, error } = await supabase.functions.invoke('youtube-audio-transcription', {
         body: { 
           videoId,
           options: {
             audioFormat: 'mp3',
             quality: 'medium',
-            language: 'en'
+            language: 'en',
+            instructions: "Extract and transcribe all the words spoken in this YouTube video into a clean, readable transcript. Ignore background noise and non-speech sounds. Return only the spoken text.",
+            focus_on_speech: true,
+            remove_background_noise: true
           }
         }
       });
@@ -32,21 +35,22 @@ export class YouTubeAudioService {
           text: data.transcript,
           metadata: {
             ...data.metadata,
-            extractionMethod: 'youtube-audio-supadata',
+            extractionMethod: 'youtube-audio-enhanced',
             audioQuality: data.audioQuality,
-            processingTime: data.processingTime
+            processingTime: data.processingTime,
+            instructions_used: "Clean speech-only transcription"
           },
-          provider: 'supadata-audio'
+          provider: 'enhanced-audio-transcription'
         };
       } else {
-        throw new Error(data?.error || 'No transcript data received from audio extraction');
+        throw new Error(data?.error || 'No transcript data received from enhanced audio extraction');
       }
     } catch (error) {
-      console.error('YouTube audio extraction failed:', error);
+      console.error('YouTube enhanced audio extraction failed:', error);
       return {
         success: false,
-        error: error.message || 'YouTube audio extraction and transcription failed',
-        provider: 'supadata-audio'
+        error: error.message || 'YouTube enhanced audio extraction and transcription failed',
+        provider: 'enhanced-audio-transcription'
       };
     }
   }
