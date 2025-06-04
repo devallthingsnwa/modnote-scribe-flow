@@ -58,13 +58,12 @@ export function YoutubeImportForm({ onContentImported, isLoading }: YoutubeImpor
       setProcessingStatus('Processing complete!');
       setTranscriptionProgress(100);
 
-      // Extract title from the formatted content or use metadata
-      const titleMatch = transcriptionResult.text.match(/^# 🎥 (.+)/);
-      const title = titleMatch ? titleMatch[1] : metadata.title || `YouTube Video ${videoId}`;
+      const title = metadata.title || `YouTube Video ${videoId}`;
+      const content = `# 🎥 ${title}\n\n**Source:** ${url}\n**Author:** ${metadata.author || 'Unknown'}\n**Duration:** ${metadata.duration || 'Unknown'}\n\n---\n\n## 📝 Transcript\n\n${transcriptionResult.text}`;
 
       onContentImported({
         title,
-        content: transcriptionResult.text,
+        content,
         source_url: url,
         thumbnail: metadata.thumbnail,
         is_transcription: true

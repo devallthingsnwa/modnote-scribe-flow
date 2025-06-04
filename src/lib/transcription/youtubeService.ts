@@ -1,60 +1,67 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { TranscriptionResult, YouTubeMetadata } from "./types";
+import { YouTubeAudioService } from "./youtubeAudioService";
 
 export class YouTubeService {
-  // Optimized metadata extraction with faster processing
+  // Enhanced metadata extraction with multiple sources and better error handling
   static async getYouTubeMetadata(videoId: string): Promise<YouTubeMetadata> {
-    console.log(`📊 Fetching optimized metadata for video: ${videoId}`);
+    console.log(`📊 Fetching enhanced metadata for video: ${videoId}`);
     
     try {
-      // Fast parallel approach - try multiple sources simultaneously
+      // Try multiple metadata sources in parallel with timeout protection
       const metadataPromises = [
-        this.fetchSupabaseMetadataFast(videoId),
-        this.fetchOEmbedMetadataFast(videoId)
+        // Primary: Supabase function with YouTube API
+        this.fetchSupabaseMetadata(videoId),
+        // Fallback: Direct oembed API (faster but less data)
+        this.fetchOEmbedMetadata(videoId)
       ];
 
-      // Race condition - use first successful result
       const results = await Promise.allSettled(metadataPromises);
-      
       let metadata: YouTubeMetadata = {};
-      let bestQuality = 'minimal';
 
-      // Process results and pick the best one
+      // Process results in priority order
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
-          const currentMetadata = result.value;
-          const quality = this.assessMetadataQuality(currentMetadata);
-          
-          if (this.isQualityBetter(quality, bestQuality)) {
-            metadata = currentMetadata;
-            bestQuality = quality;
+          metadata = { ...metadata, ...result.value };
+          if (metadata.title && metadata.author) {
+            break; // We have enough data
           }
-          
-          // If we have high quality, stop processing
-          if (quality === 'high') break;
         }
       }
 
-      // Ensure minimum required data
-      return this.ensureMinimumMetadata(metadata, videoId);
+      // Ensure we have at least basic metadata
+      if (!metadata.title) {
+        metadata.title = `YouTube Video ${videoId}`;
+      }
+      if (!metadata.author) {
+        metadata.author = 'Unknown';
+      }
+      if (!metadata.thumbnail) {
+        metadata.thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+      }
 
+      metadata.metadataQuality = this.assessMetadataQuality(metadata);
+      metadata.extractedAt = new Date().toISOString();
+
+      return metadata;
     } catch (error) {
       console.error('❌ All metadata extraction methods failed:', error);
       return this.createFallbackMetadata(videoId);
     }
   }
 
-  private static async fetchSupabaseMetadataFast(videoId: string): Promise<YouTubeMetadata | null> {
+  private static async fetchSupabaseMetadata(videoId: string): Promise<YouTubeMetadata | null> {
     try {
       const { data, error } = await Promise.race([
         supabase.functions.invoke('youtube-metadata', { body: { videoId } }),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Supabase metadata timeout')), 8000) // Reduced timeout
+          setTimeout(() => reject(new Error('Supabase metadata timeout')), 15000)
         )
       ]);
 
       if (error || !data || data.error) {
-        return null;
+        throw new Error(error?.message || data?.error || 'Supabase metadata failed');
       }
 
       return {
@@ -65,8 +72,7 @@ export class YouTubeService {
         thumbnail: data.thumbnail,
         publishedAt: data.publishedAt,
         viewCount: data.viewCount,
-        tags: data.tags,
-        metadataSource: 'supabase'
+        tags: data.tags
       };
     } catch (error) {
       console.warn('Supabase metadata failed:', error);
@@ -74,12 +80,12 @@ export class YouTubeService {
     }
   }
 
-  private static async fetchOEmbedMetadataFast(videoId: string): Promise<YouTubeMetadata | null> {
+  private static async fetchOEmbedMetadata(videoId: string): Promise<YouTubeMetadata | null> {
     try {
       const response = await Promise.race([
         fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('OEmbed timeout')), 5000) // Very fast timeout
+          setTimeout(() => reject(new Error('OEmbed timeout')), 10000)
         )
       ]);
 
@@ -90,8 +96,7 @@ export class YouTubeService {
         title: data.title,
         author: data.author_name,
         thumbnail: data.thumbnail_url,
-        duration: 'Unknown',
-        metadataSource: 'oembed'
+        duration: 'Unknown'
       };
     } catch (error) {
       console.warn('OEmbed metadata failed:', error);
@@ -108,23 +113,6 @@ export class YouTubeService {
     return 'minimal';
   }
 
-  private static isQualityBetter(current: string, existing: string): boolean {
-    const qualityRank = { 'high': 3, 'basic': 2, 'minimal': 1 };
-    return qualityRank[current] > qualityRank[existing];
-  }
-
-  private static ensureMinimumMetadata(metadata: YouTubeMetadata, videoId: string): YouTubeMetadata {
-    return {
-      title: metadata.title || `YouTube Video ${videoId}`,
-      author: metadata.author || 'Unknown',
-      duration: metadata.duration || 'Unknown',
-      thumbnail: metadata.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-      ...metadata,
-      metadataQuality: this.assessMetadataQuality(metadata),
-      extractedAt: new Date().toISOString()
-    };
-  }
-
   private static createFallbackMetadata(videoId: string): YouTubeMetadata {
     return {
       title: `YouTube Video ${videoId}`,
@@ -132,7 +120,6 @@ export class YouTubeService {
       duration: 'Unknown',
       thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
       metadataQuality: 'minimal',
-      metadataSource: 'fallback',
       extractedAt: new Date().toISOString()
     };
   }
@@ -144,27 +131,29 @@ export class YouTubeService {
         throw new Error('Invalid YouTube URL');
       }
 
-      console.log(`🎥 Optimized YouTube transcript extraction for: ${videoId} (attempt ${retryCount + 1}/2)`);
+      console.log(`🎥 Enhanced YouTube transcript extraction for: ${videoId} (attempt ${retryCount + 1}/3)`);
       
       const startTime = Date.now();
-      const timeout = 45000; // Reduced timeout for faster processing
+      const timeout = retryCount > 0 ? 180000 : 120000; // Increase timeout on retries
       
       const { data, error } = await Promise.race([
         supabase.functions.invoke('fetch-youtube-transcript', {
           body: { 
             videoId,
             options: {
-              includeTimestamps: false, // Faster without timestamps
+              includeTimestamps: true,
               language: 'auto',
-              format: 'text',
+              format: 'enhanced',
               qualityLevel: 'high',
-              fastMode: true,
+              multipleStrategies: true,
+              extendedTimeout: retryCount > 0,
+              chunkProcessing: true,
               retryCount
             }
           }
         }),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error(`Optimized transcript timeout (${timeout/1000}s)`)), timeout)
+          setTimeout(() => reject(new Error(`Extended transcript timeout (${timeout/1000}s)`)), timeout)
         )
       ]);
 
@@ -176,11 +165,14 @@ export class YouTubeService {
 
       if (data?.success && data?.transcript) {
         const transcriptLength = data.transcript.length;
-        console.log(`✅ Optimized transcript extracted: ${transcriptLength} chars in ${processingTime}ms`);
+        console.log(`✅ Transcript extracted: ${transcriptLength} chars in ${processingTime}ms via ${data.metadata?.extractionMethod}`);
         
+        // Enhanced quality validation
         if (transcriptLength < 10) {
           throw new Error('Transcript too short - likely incomplete');
         }
+
+        const qualityScore = this.calculateTranscriptQuality(data.transcript, data.metadata);
 
         return {
           success: true,
@@ -188,41 +180,65 @@ export class YouTubeService {
           metadata: {
             ...data.metadata,
             processingTime,
+            qualityScore: qualityScore.toFixed(1),
             transcriptionSpeed: (transcriptLength / (processingTime / 1000)).toFixed(1) + ' chars/sec',
             videoId,
             extractionTimestamp: new Date().toISOString(),
             retryCount,
-            optimized: true
+            confidenceScore: qualityScore
           },
-          provider: data.metadata?.extractionMethod || 'youtube-transcript-optimized'
+          provider: data.metadata?.extractionMethod || 'youtube-transcript'
         };
       } else {
         throw new Error(data?.error || 'No transcript data received');
       }
     } catch (error) {
-      console.error(`❌ Optimized YouTube transcript failed (attempt ${retryCount + 1}):`, error);
+      console.error(`❌ YouTube transcript failed (attempt ${retryCount + 1}):`, error);
       
-      if (retryCount < 1 && this.shouldRetry(error.message)) {
-        console.log('🔄 Quick retry...');
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Faster retry
+      if (retryCount < 2 && this.shouldRetry(error.message)) {
+        console.log('🔄 Retrying with enhanced strategy...');
+        const delay = retryCount === 0 ? 3000 : 8000; 
+        await new Promise(resolve => setTimeout(resolve, delay));
         return this.fetchYouTubeTranscript(url, retryCount + 1);
       }
       
       return {
         success: false,
         error: error.message || 'YouTube transcript extraction failed',
-        provider: 'youtube-transcript-optimized',
+        provider: 'youtube-transcript',
         metadata: {
           retryCount,
-          extractionTimestamp: new Date().toISOString(),
-          optimized: true
+          extractionTimestamp: new Date().toISOString()
         }
       };
     }
   }
 
+  private static calculateTranscriptQuality(transcript: string, metadata: any): number {
+    let score = 50; // Base score
+    
+    // Length factor
+    const length = transcript.length;
+    if (length > 5000) score += 20;
+    else if (length > 2000) score += 15;
+    else if (length > 500) score += 10;
+    
+    // Segment count factor
+    const segmentCount = metadata?.segmentCount || 0;
+    if (segmentCount > 100) score += 15;
+    else if (segmentCount > 50) score += 10;
+    else if (segmentCount > 20) score += 5;
+    
+    // Text quality indicators
+    if (transcript.includes('[') && transcript.includes(']')) score += 10; // Timestamps
+    if (transcript.match(/\./g)?.length > 10) score += 5; // Sentences
+    if (transcript.match(/[A-Z]/g)?.length > 20) score += 5; // Proper capitalization
+    
+    return Math.min(100, Math.max(0, score));
+  }
+
   private static shouldRetry(errorMessage: string): boolean {
-    const retryableErrors = ['timeout', 'network', 'temporary', 'processing'];
+    const retryableErrors = ['timeout', 'network', 'rate limit', 'temporary', 'processing', 'connection'];
     return retryableErrors.some(error => 
       errorMessage.toLowerCase().includes(error)
     );

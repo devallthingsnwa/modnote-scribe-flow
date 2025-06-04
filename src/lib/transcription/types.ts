@@ -50,7 +50,6 @@ export interface TranscriptionResult {
     failureReason?: string;
     successRate?: number;
     confidenceScore?: number;
-    optimized?: boolean;
   };
   error?: string;
   provider?: string;
@@ -66,7 +65,6 @@ export interface YouTubeMetadata {
   viewCount?: string;
   tags?: string[];
   metadataQuality?: 'high' | 'basic' | 'minimal';
-  metadataSource?: 'supabase' | 'oembed' | 'fallback';
   extractedAt?: string;
 }
 
