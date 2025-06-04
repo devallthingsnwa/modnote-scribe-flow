@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,54 +84,58 @@ export function YouTubeTranscriptIntegration({
       const videoId = videoIds[0];
       const url = urls[0];
 
-      console.log("Starting enhanced transcript extraction for video:", videoId);
+      console.log("Starting transcript extraction for video:", videoId);
 
-      // Get video metadata first
+      // Get video metadata first with error handling
       let metadata = null;
       try {
         metadata = await TranscriptionService.getYouTubeMetadata(videoId);
       } catch (error) {
         console.warn('Failed to fetch video metadata:', error);
-        metadata = { title: `YouTube Video ${videoId}`, author: 'Unknown', duration: 'Unknown' };
+        metadata = { 
+          title: `YouTube Video ${videoId}`, 
+          author: 'Unknown', 
+          duration: 'Unknown' 
+        };
       }
 
-      // Use the TranscriptionService for transcript extraction
+      // Enhanced transcript extraction with proper error handling
       const result = await TranscriptionService.transcribeWithFallback(url);
 
       if (result.success && result.text) {
-        console.log('Transcript extraction completed:', result.provider);
+        console.log('Transcript extraction completed successfully');
         
-        // Check if this is a fallback/warning result (short generic message)
-        const isWarning = result.text.length < 200 || 
-                         result.text.includes('could not be automatically') ||
-                         result.text.includes('requires additional permissions') ||
-                         result.metadata?.isWarning;
+        // Check if this is a meaningful transcript or fallback content
+        const isActualTranscript = result.text.length > 200 && 
+                                  !result.text.includes('could not be automatically') &&
+                                  !result.text.includes('requires additional permissions');
         
-        setHasWarning(isWarning);
+        setHasWarning(!isActualTranscript);
         setExtractedTranscript(result.text);
         setVideoInfo(metadata);
 
-        // Format the content with proper structure
-        const enhancedContent = this.formatTranscriptContent(result.text, url, metadata);
+        // Format the content properly
+        const enhancedContent = formatTranscriptContent(result.text, url, metadata);
         onTranscriptExtracted(enhancedContent);
 
-        if (isWarning) {
-          toast({
-            title: "⚠️ Limited Content Available",
-            description: "Transcript extraction had limitations - note created for manual input"
-          });
-        } else {
+        if (isActualTranscript) {
           toast({
             title: "✅ Transcript Extracted Successfully!",
             description: `Successfully extracted transcript with ${result.text.length} characters`
           });
+        } else {
+          toast({
+            title: "⚠️ Limited Content Available",
+            description: "Transcript extraction had limitations - note created for manual input"
+          });
         }
 
       } else {
+        // Handle extraction failure gracefully
         console.error("Transcript extraction failed:", result.error);
         
         // Create a fallback note even if extraction fails
-        const fallbackContent = this.formatTranscriptContent(
+        const fallbackContent = formatTranscriptContent(
           "Transcript extraction was not successful. You can manually add your notes and observations about this video.",
           url,
           metadata
@@ -150,10 +153,22 @@ export function YouTubeTranscriptIntegration({
     } catch (error) {
       console.error("Unexpected error during transcript extraction:", error);
       
+      // Create an error note with helpful guidance
+      const videoId = videoIds[0];
+      const url = urls[0];
+      const errorContent = formatTranscriptContent(
+        `Transcript extraction encountered an error: ${error.message}\n\nYou can:\n1. Try again later\n2. Check if the video has captions available\n3. Add your own notes about the video content`,
+        url,
+        { title: `YouTube Video ${videoId}`, author: 'Unknown', duration: 'Unknown' }
+      );
+      
+      onTranscriptExtracted(errorContent);
+      setHasWarning(true);
+      
       toast({
         title: "❌ Extraction Error",
-        description: "An error occurred during transcript extraction. Please try again.",
-        variant: "destructive"
+        description: "Created note template - you can add manual notes",
+        variant: "default"
       });
     } finally {
       setIsExtracting(false);

@@ -1,3 +1,4 @@
+
 import { SupadataStrategy } from "./strategies/SupadataStrategy.ts";
 import { FallbackMethods } from "./fallbackMethods.ts";
 import { corsHeaders } from "./utils.ts";
@@ -61,12 +62,12 @@ export class TranscriptExtractor {
         console.error(`Enhanced parsing error on attempt ${attempt}:`, error);
         
         if (attempt === maxAttempts) {
-          return this.createEnhancedFallbackResponse(videoId, error.message);
+          return this.createGracefulFallbackResponse(videoId, error.message);
         }
       }
     }
     
-    return this.createEnhancedFallbackResponse(videoId, "All extraction attempts failed");
+    return this.createGracefulFallbackResponse(videoId, "All extraction attempts failed");
   }
   
   private async extractWithTimeout(videoId: string, options: TranscriptOptions, timeout: number): Promise<Response | null> {
@@ -99,7 +100,7 @@ export class TranscriptExtractor {
       
       if (supadataResult) {
         console.log("Supadata API extraction successful");
-        return this.formatTranscriptResponse(supadataResult, videoId);
+        return this.processTranscriptResponse(supadataResult, videoId);
       }
     } catch (error) {
       console.warn("Supadata API extraction failed:", error);
@@ -113,25 +114,26 @@ export class TranscriptExtractor {
       
       if (fallbackResult) {
         console.log("Fallback methods extraction successful");
-        return this.formatTranscriptResponse(fallbackResult, videoId);
+        return this.processTranscriptResponse(fallbackResult, videoId);
       }
     } catch (error) {
       console.warn("Fallback methods extraction failed:", error);
     }
     
-    // Strategy 3: Final fallback with raw response
-    console.log("Creating raw fallback response...");
-    return this.createRawFallbackResponse(videoId, options);
+    // Strategy 3: Final graceful fallback
+    console.log("Creating graceful fallback response...");
+    return this.createGracefulFallbackResponse(videoId, "No transcript available");
   }
 
-  private async formatTranscriptResponse(response: Response, videoId: string): Promise<Response> {
+  private async processTranscriptResponse(response: Response, videoId: string): Promise<Response> {
     try {
       const data = await response.json();
       
-      if (data.success && data.transcript) {
-        // Get video metadata
+      if (data.success && data.transcript && data.transcript.length > 50) {
+        // Get video metadata for better formatting
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
         let videoTitle = `YouTube Video ${videoId}`;
+        let videoAuthor = 'Unknown';
         
         try {
           const oembedResponse = await fetch(
@@ -140,19 +142,22 @@ export class TranscriptExtractor {
           if (oembedResponse.ok) {
             const oembedData = await oembedResponse.json();
             videoTitle = oembedData.title || videoTitle;
+            videoAuthor = oembedData.author_name || videoAuthor;
           }
         } catch (error) {
           console.warn("Failed to fetch video metadata:", error);
         }
 
-        // Return clean transcript without any formatting
+        // Return enhanced transcript response
         const transcriptResponse: TranscriptResponse = {
           success: true,
-          transcript: data.transcript, // Raw transcript content only
+          transcript: data.transcript,
+          segments: data.segments,
           metadata: {
             ...data.metadata,
             videoId,
             title: videoTitle,
+            author: videoAuthor,
             extractionMethod: data.metadata?.extractionMethod || 'api-extraction'
           }
         };
@@ -168,67 +173,34 @@ export class TranscriptExtractor {
       
       return response;
     } catch (error) {
-      console.error("Error formatting transcript response:", error);
-      return response;
+      console.error("Error processing transcript response:", error);
+      return this.createGracefulFallbackResponse(videoId, error.message);
     }
   }
   
-  private createRawFallbackResponse(videoId: string, options: TranscriptOptions): Response {
-    console.log("Creating raw fallback response for video:", videoId);
-    
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const fallbackTitle = `YouTube Video ${videoId}`;
-    
-    // Raw fallback content without markdown formatting
-    const fallbackTranscript = `This video's transcript could not be automatically extracted. This may be because:
-- The video doesn't have captions available
-- The video is private or restricted
-- Captions are disabled by the creator
-- The video is a live stream
-
-You can:
-1. Visit the video directly to check for captions
-2. Add your own notes about this video
-3. Try again later as captions may become available`;
-
-    const transcriptResponse: TranscriptResponse = {
-      success: true,
-      transcript: fallbackTranscript, // Raw fallback content
-      metadata: {
-        videoId,
-        title: fallbackTitle,
-        author: 'Unknown',
-        language: options.language || 'en',
-        duration: 0,
-        segmentCount: 0,
-        extractionMethod: 'raw-fallback',
-        provider: 'fallback-system',
-        quality: 'template'
-      }
-    };
-
-    return new Response(
-      JSON.stringify(transcriptResponse),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-  
-  private createEnhancedFallbackResponse(videoId: string, error: string): Response {
-    console.log("Creating enhanced fallback response due to error:", error);
+  private createGracefulFallbackResponse(videoId: string, error: string): Response {
+    console.log("Creating graceful fallback response for video:", videoId);
     
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
-    // Raw error fallback content
-    const fallbackTranscript = `Automatic transcript extraction was not successful. You can manually add your notes and observations about this video.
+    // Create a helpful fallback message that doesn't look like an error
+    const fallbackTranscript = `This video's transcript is not currently available for automatic extraction. 
 
-Error details: ${error}`;
+Common reasons:
+• Video doesn't have captions enabled
+• Captions are in a format that requires special permissions
+• Video is private, unlisted, or has restricted access
+• Live stream or very recent upload
+
+You can still create notes about this video! Consider:
+• Watching the video and taking manual notes
+• Checking if captions are available directly on YouTube
+• Adding timestamps and key points as you watch
+• Summarizing the main topics and insights`;
 
     const transcriptResponse: TranscriptResponse = {
       success: true,
-      transcript: fallbackTranscript, // Raw error content
+      transcript: fallbackTranscript,
       metadata: {
         videoId,
         title: `YouTube Video ${videoId}`,
@@ -236,11 +208,10 @@ Error details: ${error}`;
         language: 'en',
         duration: 0,
         segmentCount: 0,
-        extractionMethod: 'error-fallback',
+        extractionMethod: 'graceful-fallback',
         provider: 'fallback-system',
-        quality: 'basic'
-      },
-      error: error
+        quality: 'template'
+      }
     };
 
     return new Response(
