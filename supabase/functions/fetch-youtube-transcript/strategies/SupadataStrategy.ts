@@ -22,41 +22,28 @@ export class SupadataStrategy implements ITranscriptStrategy {
       
       // Updated API endpoints based on correct Supadata API structure
       const apiAttempts = [
-        // Primary: Correct YouTube transcript endpoint
+        // Primary: YouTube transcript endpoint with correct API format
         {
-          url: `https://api.supadata.ai/youtube/transcript`,
+          url: `https://api.supadata.ai/v1/youtube/transcript`,
           method: 'POST',
           body: {
-            video_url: `https://www.youtube.com/watch?v=${videoId}`,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
             language: language,
-            include_timestamps: includeTimestamps
+            include_timestamps: includeTimestamps,
+            format: 'text'
           },
-          description: 'POST YouTube URL transcript'
+          description: 'POST YouTube transcript v1 API'
         },
-        // Fallback 1: Alternative format
+        // Fallback 1: Alternative endpoint structure
         {
-          url: `https://api.supadata.ai/transcript`,
+          url: `https://api.supadata.ai/transcript/youtube`,
           method: 'POST',
           body: {
-            url: `https://www.youtube.com/watch?v=${videoId}`,
-            source: 'youtube',
-            options: {
-              language: language,
-              timestamps: includeTimestamps
-            }
+            video_id: videoId,
+            language: language,
+            timestamps: includeTimestamps
           },
-          description: 'POST generic transcript endpoint'
-        },
-        // Fallback 2: GET approach if available
-        {
-          url: `https://api.supadata.ai/youtube/transcript`,
-          method: 'GET',
-          params: new URLSearchParams({
-            url: `https://www.youtube.com/watch?v=${videoId}`,
-            lang: language,
-            timestamps: includeTimestamps.toString()
-          }),
-          description: 'GET with URL params'
+          description: 'POST alternative transcript endpoint'
         }
       ];
 
@@ -64,33 +51,16 @@ export class SupadataStrategy implements ITranscriptStrategy {
         console.log(`Calling Supadata API (${attempt.description}) for video ${videoId}`);
 
         try {
-          let response: Response;
-          
-          if (attempt.method === 'POST') {
-            response = await fetch(attempt.url, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${supadataApiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'User-Agent': 'YouTube-Transcript-Extractor/1.0'
-              },
-              body: JSON.stringify(attempt.body)
-            });
-          } else {
-            const urlWithParams = attempt.params ? 
-              `${attempt.url}?${attempt.params.toString()}` : 
-              attempt.url;
-            
-            response = await fetch(urlWithParams, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${supadataApiKey}`,
-                'Accept': 'application/json',
-                'User-Agent': 'YouTube-Transcript-Extractor/1.0'
-              }
-            });
-          }
+          const response = await fetch(attempt.url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supadataApiKey}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': 'YouTube-Transcript-Extractor/1.0'
+            },
+            body: JSON.stringify(attempt.body)
+          });
 
           console.log(`Supadata API response status: ${response.status}`);
 
@@ -100,14 +70,14 @@ export class SupadataStrategy implements ITranscriptStrategy {
             
             if (response.status === 401) {
               console.error("Supadata API authentication failed - check API key");
-              return null; // Don't try other endpoints if auth fails
+              return null;
             } else if (response.status === 429) {
               console.warn("Supadata API rate limit exceeded, waiting before retry");
               await new Promise(resolve => setTimeout(resolve, 2000));
               continue;
             }
             
-            continue; // Try next endpoint
+            continue;
           }
 
           let data;

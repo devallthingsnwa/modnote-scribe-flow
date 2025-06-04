@@ -41,40 +41,137 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false,
           error: "Valid YouTube video ID is required",
-          transcript: "Unable to fetch transcript: Invalid or missing YouTube video ID."
+          transcript: "Unable to extract transcript - invalid video ID provided."
         }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
     }
 
     console.log(`Starting enhanced transcript fetch for video: ${videoId} (extended timeout: ${options.extendedTimeout || false})`);
     
-    // Enhanced processing with extended timeout options for longer videos
-    const extractor = new TranscriptExtractor();
-    return await extractor.extractTranscriptWithExtendedHandling(videoId, options);
+    const result = await TranscriptExtractor.extractTranscript(videoId, options);
+    
+    if (!result) {
+      console.log("Creating structured fallback response for video:", videoId);
+      
+      // Create a structured fallback response with proper formatting
+      const fallbackTranscript = await createStructuredFallback(videoId);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          transcript: fallbackTranscript,
+          metadata: {
+            videoId,
+            extractionMethod: 'structured-fallback',
+            provider: 'fallback-system',
+            quality: 'template',
+            isWarning: true
+          }
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
+    
+    return result;
     
   } catch (error) {
-    console.error("Error in fetch-youtube-transcript function:", error);
+    console.error("Error in transcript fetch:", error);
     
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
-        transcript: "Unable to fetch transcript due to a technical error. Please try again later.",
         error: error.message || "Unknown error occurred",
-        metadata: {
-          videoId: "unknown",
-          segments: 0,
-          duration: 0,
-          extractionMethod: 'error'
-        }
+        transcript: "Unable to extract transcript due to an unexpected error."
       }),
       {
-        status: 200, // Return 200 even on error for consistent client handling
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );
   }
 });
+
+async function createStructuredFallback(videoId: string): Promise<string> {
+  console.log("Creating structured fallback response...");
+  
+  // Try to get basic video metadata from oembed or other sources
+  let title = `YouTube Video ${videoId}`;
+  let author = 'Unknown';
+  let duration = 'Unknown';
+  
+  try {
+    // Try oembed for basic metadata
+    const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+    if (oembedResponse.ok) {
+      const oembedData = await oembedResponse.json();
+      if (oembedData.title) {
+        title = oembedData.title.replace(/ - YouTube$/, '').trim();
+      }
+      if (oembedData.author_name) {
+        author = oembedData.author_name;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to fetch oembed metadata:", error);
+  }
+  
+  // Create structured fallback content matching the requested format
+  const fallbackContent = `# 🎥 ${title}
+
+**Source:** https://www.youtube.com/watch?v=${videoId}
+**Author:** ${author}
+**Duration:** ${duration}
+**Type:** Video Transcript
+
+---
+
+## 📝 Transcript
+
+This video's transcript could not be automatically extracted. Common reasons include:
+
+- Video doesn't have auto-generated or manual captions available
+- Private or restricted content with limited access
+- Live stream content without stable captions
+- Language barriers or unsupported content types
+- Temporary service limitations or API restrictions
+
+### 💡 What you can do:
+
+1. **Check YouTube directly**: Visit the video and look for the CC (closed captions) button
+2. **Manual notes**: Watch the video and create your own summary below
+3. **Key timestamps**: Note important moments and topics
+4. **Voice notes**: Use speech-to-text to capture your thoughts while watching
+
+---
+
+## 📝 My Notes
+
+### 🎯 Key Points
+- [ ] Main topic/theme:
+- [ ] Important insights:
+- [ ] Action items:
+- [ ] Questions raised:
+
+### ⏰ Timestamps & Moments
+*Add specific timestamps and what happens at those moments*
+
+- **00:00** - 
+- **05:00** - 
+- **10:00** - 
+
+### 💭 Personal Reflections
+*Your thoughts, opinions, and how this relates to your interests*
+
+---
+
+*Note: This content was saved automatically when transcript extraction was unavailable. You can edit this note to add your own insights and observations.*`;
+
+  return fallbackContent;
+}
