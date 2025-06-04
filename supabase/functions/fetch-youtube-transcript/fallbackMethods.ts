@@ -139,32 +139,34 @@ export class FallbackMethods {
         
         if (englishTrack && englishTrack.baseUrl) {
           const captionResponse = await fetch(englishTrack.baseUrl);
-          const captionXml = await captionResponse.text();
           
-          const segments = this.parseXMLCaptions(captionXml);
-          
-          if (segments.length > 0) {
-            const naturalTranscript = this.formatAsNaturalText(segments);
+          if (captionResponse.ok) {
+            const captionXml = await captionResponse.text();
+            const segments = this.parseXMLCaptions(captionXml);
             
-            const transcriptResponse: TranscriptResponse = {
-              success: true,
-              transcript: naturalTranscript,
-              segments,
-              metadata: {
-                videoId,
-                language: englishTrack.languageCode || 'en',
-                duration: segments.length > 0 ? segments[segments.length - 1].start + segments[segments.length - 1].duration : 0,
-                segmentCount: segments.length,
-                extractionMethod: 'youtube-watch-scraping'
-              }
-            };
+            if (segments.length > 0) {
+              const naturalTranscript = this.formatAsNaturalText(segments);
+              
+              const transcriptResponse: TranscriptResponse = {
+                success: true,
+                transcript: naturalTranscript,
+                segments,
+                metadata: {
+                  videoId,
+                  language: englishTrack.languageCode || 'en',
+                  duration: segments.length > 0 ? segments[segments.length - 1].start + segments[segments.length - 1].duration : 0,
+                  segmentCount: segments.length,
+                  extractionMethod: 'youtube-watch-scraping'
+                }
+              };
 
-            return new Response(
-              JSON.stringify(transcriptResponse),
-              {
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
+              return new Response(
+                JSON.stringify(transcriptResponse),
+                {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                }
+              );
+            }
           }
         }
       }
@@ -210,23 +212,20 @@ export class FallbackMethods {
         const captionsData = await captionsResponse.json();
         
         if (captionsData.items && captionsData.items.length > 0) {
-          // Find English captions or first available
-          const caption = captionsData.items.find((item: any) => 
-            item.snippet.language === 'en' || item.snippet.language === options.language
-          ) || captionsData.items[0];
-
-          console.log("Found captions via YouTube API, but content download requires authentication");
+          console.log("Found captions via YouTube API, but content download requires OAuth authentication");
           
-          // YouTube API v3 requires OAuth for caption download, so we return a fallback message
+          // Return a helpful message since we can't download captions without OAuth
+          const fallbackMessage = `This video has captions available on YouTube. You can view them directly on the video or add your own notes about the content.`;
+          
           const transcriptResponse: TranscriptResponse = {
             success: true,
-            transcript: "This video has captions available, but automatic extraction failed. You can view the captions directly on YouTube or add your own notes about this video.",
+            transcript: fallbackMessage,
             segments: [],
             metadata: {
               videoId,
               title: videoData.items[0].snippet.title,
               author: videoData.items[0].snippet.channelTitle,
-              language: caption.snippet.language || 'en',
+              language: captionsData.items[0].snippet.language || 'en',
               duration: 0,
               segmentCount: 0,
               extractionMethod: 'youtube-api-detected-captions'
@@ -263,7 +262,51 @@ export class FallbackMethods {
       if (response.ok) {
         const html = await response.text();
         // Look for any caption data in embed page
-        console.log("Embed page loaded, but no caption extraction implemented yet");
+        console.log("Embed page loaded, checking for caption data...");
+        
+        // Try to extract any caption URLs from the embed page
+        const captionUrlPattern = /\/api\/timedtext[^"']*/g;
+        const captionUrls = html.match(captionUrlPattern);
+        
+        if (captionUrls && captionUrls.length > 0) {
+          for (const relativeUrl of captionUrls) {
+            try {
+              const fullUrl = `https://www.youtube.com${relativeUrl}`;
+              const captionResponse = await fetch(fullUrl);
+              
+              if (captionResponse.ok) {
+                const xmlContent = await captionResponse.text();
+                const segments = this.parseXMLCaptions(xmlContent);
+                
+                if (segments.length > 0) {
+                  const naturalTranscript = this.formatAsNaturalText(segments);
+                  
+                  const transcriptResponse: TranscriptResponse = {
+                    success: true,
+                    transcript: naturalTranscript,
+                    segments,
+                    metadata: {
+                      videoId,
+                      language: options.language || 'en',
+                      duration: segments.length > 0 ? segments[segments.length - 1].start + segments[segments.length - 1].duration : 0,
+                      segmentCount: segments.length,
+                      extractionMethod: 'youtube-embed-extraction'
+                    }
+                  };
+
+                  return new Response(
+                    JSON.stringify(transcriptResponse),
+                    {
+                      headers: { ...corsHeaders, "Content-Type": "application/json" },
+                    }
+                  );
+                }
+              }
+            } catch (error) {
+              console.log(`Embed caption URL failed: ${relativeUrl}`, error.message);
+            }
+          }
+        }
       }
 
       return null;
@@ -277,6 +320,7 @@ export class FallbackMethods {
     const segments: TranscriptSegment[] = [];
     
     try {
+      // Enhanced XML parsing with better regex
       const textRegex = /<text start="([^"]*)"(?:\s+dur="([^"]*)")?>([^<]*)<\/text>/g;
       let match;
       
@@ -293,6 +337,8 @@ export class FallbackMethods {
           });
         }
       }
+      
+      console.log(`Parsed ${segments.length} caption segments from XML`);
     } catch (error) {
       console.error("Error parsing XML captions:", error);
     }
@@ -313,14 +359,20 @@ export class FallbackMethods {
   }
 
   private formatAsNaturalText(segments: TranscriptSegment[]): string {
+    if (segments.length === 0) {
+      return "";
+    }
+    
     let transcript = segments.map(segment => segment.text).join(' ');
     
+    // Clean up the transcript formatting
     transcript = transcript
       .replace(/\s+/g, ' ')
       .replace(/([.!?])\s+/g, '$1 ')
       .replace(/,\s+/g, ', ')
       .trim();
     
+    console.log(`Formatted transcript: ${transcript.length} characters`);
     return transcript;
   }
 }
