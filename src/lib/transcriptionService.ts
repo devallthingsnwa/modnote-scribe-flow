@@ -50,15 +50,18 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
-          // Check if this is structured content (already formatted) or raw transcript
-          const isStructuredContent = youtubeResult.text.includes('# 🎥') && youtubeResult.text.includes('**Source:**');
-          const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || youtubeResult.metadata?.isWarning;
+          // Check if this is structured content (fallback template) or actual transcript
+          const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || 
+                                  youtubeResult.metadata?.isWarning;
           
           let finalText = youtubeResult.text;
           
-          // If it's not already formatted properly, format it
-          if (!isStructuredContent && !isWarningContent) {
+          // If it's not a warning (actual transcript), format it properly
+          if (!isWarningContent) {
             finalText = await this.formatTranscriptContent(youtubeResult.text, url);
+          } else {
+            // For warning content, ensure proper formatting without duplicates
+            finalText = await this.formatWarningContent(youtubeResult.text, url);
           }
           
           toast({
@@ -93,6 +96,36 @@ export class TranscriptionService {
     // If we reach here, all transcript attempts failed
     console.warn("All YouTube transcript attempts failed, creating enhanced fallback");
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
+  }
+
+  private static async formatWarningContent(warningText: string, url: string): Promise<string> {
+    const videoId = YouTubeService.extractVideoId(url);
+    
+    // Try to get metadata for better formatting
+    let metadata = null;
+    try {
+      if (videoId) {
+        metadata = await this.getYouTubeMetadata(videoId);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch metadata for formatting:', error);
+    }
+    
+    const title = metadata?.title || `YouTube Video ${videoId}`;
+    const author = metadata?.author || 'Unknown';
+    const duration = metadata?.duration || 'Unknown';
+    
+    // Create single header structure for warning content
+    let formattedContent = `# 🎥 ${title}\n\n`;
+    formattedContent += `**Source:** ${url}\n`;
+    formattedContent += `**Author:** ${author}\n`;
+    formattedContent += `**Duration:** ${duration}\n`;
+    formattedContent += `**Type:** Video Note\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 Notes\n\n`;
+    formattedContent += warningText;
+
+    return formattedContent;
   }
 
   private static async formatTranscriptContent(transcript: string, url: string): Promise<string> {
