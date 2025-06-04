@@ -107,10 +107,17 @@ serve(async (req) => {
     // If we have a URL, download the audio
     if (audioData.audio_url || audioData.download_url || audioData.url) {
       const audioUrl = audioData.audio_url || audioData.download_url || audioData.url;
-      const audioResponse = await fetch(audioUrl);
-      if (audioResponse.ok) {
-        const audioArrayBuffer = await audioResponse.arrayBuffer();
-        audioContent = btoa(String.fromCharCode(...new Uint8Array(audioArrayBuffer)));
+      try {
+        const audioResponse = await fetch(audioUrl);
+        if (audioResponse.ok) {
+          const audioArrayBuffer = await audioResponse.arrayBuffer();
+          audioContent = btoa(String.fromCharCode(...new Uint8Array(audioArrayBuffer)));
+        } else {
+          throw new Error(`Failed to download audio: ${audioResponse.status}`);
+        }
+      } catch (error) {
+        console.error('Error downloading audio:', error);
+        throw new Error(`Audio download failed: ${error.message}`);
       }
     } else if (audioData.audio_data || audioData.data) {
       audioContent = audioData.audio_data || audioData.data;
@@ -139,29 +146,48 @@ serve(async (req) => {
 
     if (!transcriptionResponse.ok) {
       const errorData = await transcriptionResponse.text();
+      console.error('Speech-to-text API error:', errorData);
       throw new Error(`Speech-to-text failed: ${errorData}`);
     }
 
     const transcriptionResult = await transcriptionResponse.json();
     
     if (!transcriptionResult.success || !transcriptionResult.text) {
+      console.error('Speech-to-text processing failed:', transcriptionResult);
       throw new Error(transcriptionResult.error || 'Speech-to-text processing failed');
     }
 
+    // Clean and format the transcript
+    let cleanTranscript = transcriptionResult.text;
+    
+    // Remove excessive whitespace and normalize line breaks
+    cleanTranscript = cleanTranscript
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+
+    // Ensure we have meaningful content
+    if (cleanTranscript.length < 10) {
+      throw new Error('Transcription too short - likely failed');
+    }
+
     console.log('Audio transcription completed successfully');
+    console.log(`Transcript length: ${cleanTranscript.length} characters`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        transcript: transcriptionResult.text,
+        transcript: cleanTranscript,
         metadata: {
           videoId,
           extractionMethod: 'youtube-audio-transcription',
           provider: 'supadata-audio',
-          confidence: transcriptionResult.confidence,
-          language: transcriptionResult.language,
+          confidence: transcriptionResult.confidence || 0.8,
+          language: transcriptionResult.language || options.language || 'en',
           processing_time: transcriptionResult.processing_time,
-          audio_quality: options.quality || 'medium'
+          audio_quality: options.quality || 'medium',
+          transcript_length: cleanTranscript.length,
+          audio_extraction_method: 'supadata-api'
         }
       }),
       {
@@ -177,7 +203,11 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         error: error.message || 'Audio transcription failed',
-        transcript: null
+        transcript: null,
+        metadata: {
+          error_type: 'transcription_failed',
+          attempted_strategy: 'youtube-audio-transcription'
+        }
       }),
       {
         status: 500,

@@ -1,3 +1,4 @@
+
 import { toast } from "@/hooks/use-toast";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
@@ -52,6 +53,8 @@ export class TranscriptionService {
           
           // Check if this is structured content (fallback template) or actual transcript
           const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || 
+                                  youtubeResult.text.includes('Alternative Options') ||
+                                  youtubeResult.text.includes('My Notes') ||
                                   youtubeResult.metadata?.isWarning;
           
           if (!isWarningContent) {
@@ -62,7 +65,7 @@ export class TranscriptionService {
             
             return {
               ...youtubeResult,
-              text: youtubeResult.text,
+              text: this.formatTranscriptOutput(youtubeResult.text, youtubeResult.metadata, url),
               metadata: {
                 ...youtubeResult.metadata,
                 retryCount: attempt,
@@ -101,6 +104,7 @@ export class TranscriptionService {
         
         return {
           ...audioResult,
+          text: this.formatTranscriptOutput(audioResult.text, audioResult.metadata, url),
           metadata: {
             ...audioResult.metadata,
             strategiesAttempted: 'youtube-transcript,audio-transcription',
@@ -120,6 +124,32 @@ export class TranscriptionService {
     // If we reach here, all attempts failed
     console.warn("All YouTube transcription strategies failed, creating enhanced fallback");
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+  }
+
+  private static formatTranscriptOutput(text: string, metadata: any, url: string): string {
+    const videoId = YouTubeService.extractVideoId(url);
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric', 
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let formattedOutput = `# 🎥 ${metadata?.title || 'YouTube Video'}\n`;
+    formattedOutput += `**Source:** ${url}\n`;
+    formattedOutput += `**Type:** Video Transcript\n`;
+    formattedOutput += `**Imported:** ${currentDate}\n`;
+    formattedOutput += `---\n\n`;
+    formattedOutput += `## 📝 Transcript\n`;
+    formattedOutput += `${text}\n\n`;
+    formattedOutput += `---\n\n`;
+    formattedOutput += `## 📝 My Notes\n`;
+    formattedOutput += `Add your personal notes and thoughts here...`;
+
+    return formattedOutput;
   }
 
   private static async tryAudioTranscription(videoId: string): Promise<TranscriptionResult> {
@@ -174,6 +204,10 @@ export class TranscriptionService {
     
     try {
       const result = await this.tryExternalProvidersWithEnhancedRetry(url);
+      
+      if (result.success && result.text) {
+        result.text = this.formatTranscriptOutput(result.text, result.metadata, url);
+      }
       
       return {
         ...result,
@@ -271,14 +305,14 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    let fallbackContent = `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
+    let fallbackContent = `This ${isYouTube ? 'YouTube video' : 'media file'} could not be automatically transcribed. Common reasons:\n\n`;
     fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
     fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
     fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
     fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
     fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
     fallbackContent += `### 💡 Alternative Options\n\n`;
-    fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
+    fallbackContent += `1. **Check ${isYouTube ? 'YouTube' : 'Source'} Captions**: Visit the ${isYouTube ? 'video' : 'content'} directly and look for CC button\n`;
     fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
     fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
     fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
