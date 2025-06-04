@@ -1,20 +1,31 @@
 
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, FileText, Video, Upload, Mic, Volume2 } from "lucide-react";
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Upload, Video, Mic, Globe, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { YoutubeImportForm } from "./YoutubeImportForm";
+import { AudioImportForm } from "./AudioImportForm";
+import { UrlImporter } from './UrlImporter';
+import { FileUploadForm } from './FileUploadForm';
 import { useAuth } from "@/hooks/useAuth";
-import { EnhancedMediaProcessor } from "@/lib/transcription/enhancedMediaProcessor";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AudioRecorder } from "@/components/audio/AudioRecorder";
+import { supabase } from "@/integrations/supabase/client";
 
 interface EnhancedImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (note: {
+  onImport: (content: {
     title: string;
     content: string;
     source_url?: string;
@@ -24,297 +35,267 @@ interface EnhancedImportModalProps {
 }
 
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
-  const [url, setUrl] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [customTitle, setCustomTitle] = useState("");
-  const [customContent, setCustomContent] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
+  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
+  const [isAudioImporting, setIsAudioImporting] = useState(false);
+  const [isFileImporting, setIsFileImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url' | 'files'>('youtube');
 
-  const detectMediaType = (url: string) => {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
-    if (url.includes('spotify.com') || url.includes('soundcloud.com') || url.includes('anchor.fm')) return 'podcast';
-    if (url.includes('.mp3') || url.includes('.wav') || url.includes('.m4a')) return 'audio';
-    return 'general';
+  const saveToSupabase = async (content: {
+    title: string;
+    content: string;
+    source_url?: string;
+    thumbnail?: string;
+    is_transcription?: boolean;
+  }) => {
+    if (!user) {
+      throw new Error("You must be logged in to import content");
+    }
+
+    console.log("💾 Saving content to Supabase:", {
+      title: content.title,
+      contentLength: content.content.length,
+      sourceUrl: content.source_url,
+      isTranscription: content.is_transcription
+    });
+
+    const noteData = {
+      user_id: user.id,
+      title: content.title,
+      content: content.content,
+      source_url: content.source_url || null,
+      thumbnail: content.thumbnail || null,
+      is_transcription: content.is_transcription || false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data: insertedNote, error: insertError } = await supabase
+      .from('notes')
+      .insert([noteData])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("❌ Supabase insert error:", insertError);
+      throw new Error(`Failed to save note to database: ${insertError.message}`);
+    }
+
+    if (!insertedNote) {
+      console.error("❌ No note data returned after insert");
+      throw new Error("Failed to save note - no data returned");
+    }
+
+    console.log("✅ Note successfully saved to Supabase:", {
+      id: insertedNote.id,
+      title: insertedNote.title,
+      createdAt: insertedNote.created_at
+    });
+
+    // Verify the note was actually saved
+    const { data: verifyNote, error: verifyError } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('id', insertedNote.id)
+      .single();
+
+    if (verifyError || !verifyNote) {
+      console.error("❌ Note verification failed:", verifyError);
+      throw new Error("Note was saved but could not be verified");
+    }
+
+    console.log("🔍 Note verification successful:", verifyNote.title);
+    return insertedNote;
   };
 
-  const handleUrlImport = async () => {
-    if (!url.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid URL",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!user) {
-      toast({
-        title: "Error", 
-        description: "You must be logged in to import content",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
+  const handleYoutubeImport = async (processedContent: {
+    title: string;
+    content: string;
+    source_url?: string;
+    thumbnail?: string;
+    is_transcription?: boolean;
+  }) => {
+    setIsYoutubeImporting(true);
+    
     try {
-      console.log('🚀 Starting enhanced media processing for:', url);
+      // Save to Supabase first
+      await saveToSupabase(processedContent);
       
-      const result = await EnhancedMediaProcessor.processMediaUrl({
-        url,
-        options: {
-          cleanTranscript: true,
-          includeTimestamps: false,
-          generateSummary: false
-        }
-      });
-
-      console.log('📋 Processing result:', {
-        success: result.success,
-        title: result.title,
-        hasContent: !!result.content,
-        isTranscription: result.is_transcription
-      });
-
-      // Save to database
-      const saveResult = await EnhancedMediaProcessor.saveToDatabase(result, user.id);
-      
-      if (!saveResult.success) {
-        throw new Error(saveResult.error || 'Failed to save to database');
-      }
-
-      // Trigger dashboard refresh
-      onImport({
-        title: result.title,
-        content: result.content,
-        source_url: result.source_url,
-        thumbnail: result.thumbnail,
-        is_transcription: result.is_transcription,
-      });
-
-      toast({
-        title: "✅ Content Imported Successfully!",
-        description: result.is_transcription 
-          ? `Transcribed "${result.title}" with clean, spoken content only`
-          : `Imported "${result.title}" (transcript unavailable - note created)`,
-      });
-
-      // Reset and close
-      setUrl("");
+      // Then trigger the dashboard import handler
+      onImport(processedContent);
       onClose();
-
+      
+      toast({
+        title: "YouTube Content Imported",
+        description: "Successfully imported content from YouTube as a new note.",
+      });
     } catch (error) {
-      console.error('💥 Import error:', error);
+      console.error("💥 YouTube import error:", error);
       toast({
         title: "Import failed",
-        description: error.message || "Failed to import content. Please try again.",
+        description: error.message || "Failed to import YouTube content. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsProcessing(false);
+      setIsYoutubeImporting(false);
     }
   };
 
-  const handleManualNote = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create notes",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const title = customTitle || "New Note";
-    const content = customContent || "Start writing your note here...";
+  const handleAudioImport = async (processedContent: {
+    title: string;
+    content: string;
+    source_url?: string;
+    is_transcription?: boolean;
+  }) => {
+    setIsAudioImporting(true);
     
     try {
-      // Call onImport to handle saving and refresh
-      onImport({
-        title,
-        content,
-        is_transcription: false,
-      });
-
-      toast({
-        title: "Note created!",
-        description: `Created "${title}"`,
-      });
-
-      // Reset form and close
-      setCustomTitle("");
-      setCustomContent("");
+      // Save to Supabase first
+      await saveToSupabase(processedContent);
+      
+      // Then trigger the dashboard import handler
+      onImport(processedContent);
       onClose();
-    } catch (error) {
-      console.error('💥 Manual note creation error:', error);
+      
       toast({
-        title: "Failed to create note",
-        description: error.message || "Please try again.",
+        title: "Audio Content Imported",
+        description: "Successfully imported content from audio as a new note.",
+      });
+    } catch (error) {
+      console.error("💥 Audio import error:", error);
+      toast({
+        title: "Import failed",
+        description: error.message || "Failed to import audio content. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsAudioImporting(false);
     }
   };
 
-  const handleSpeechToText = (transcribedText: string) => {
-    const enhancedContent = `# 🎤 Voice Note\n\n`;
-    const timestamp = new Date().toLocaleString();
+  const handleFileImport = async (processedContent: {
+    title: string;
+    content: string;
+    source_url?: string;
+    is_transcription?: boolean;
+  }) => {
+    setIsFileImporting(true);
     
-    let content = enhancedContent;
-    content += `**Type:** Voice Transcription\n`;
-    content += `**Recorded:** ${timestamp}\n`;
-    content += `**Method:** Speech-to-Text AI\n\n`;
-    content += `---\n\n`;
-    content += `## 📝 Transcript\n\n`;
-    content += transcribedText;
-    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+    try {
+      // Save to Supabase first
+      await saveToSupabase(processedContent);
+      
+      // Then trigger the dashboard import handler
+      onImport(processedContent);
+      onClose();
+      
+      toast({
+        title: "File Imported",
+        description: "Successfully imported file as a new note.",
+      });
+    } catch (error) {
+      console.error("💥 File import error:", error);
+      toast({
+        title: "Import failed",
+        description: error.message || "Failed to import file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFileImporting(false);
+    }
+  };
 
-    onImport({
-      title: `Voice Note - ${timestamp}`,
-      content,
-      is_transcription: true,
-    });
-
-    toast({
-      title: "✅ Voice Note Created!",
-      description: "Your speech has been transcribed and saved",
-    });
-
-    onClose();
+  const handleUrlImport = async (content: { title: string; content: string; sourceUrl: string }) => {
+    try {
+      const processedContent = {
+        title: content.title,
+        content: content.content,
+        source_url: content.sourceUrl,
+        is_transcription: false
+      };
+      
+      // Save to Supabase first
+      await saveToSupabase(processedContent);
+      
+      // Then trigger the dashboard import handler
+      onImport(processedContent);
+      onClose();
+      
+      toast({
+        title: "URL Content Imported",
+        description: "Successfully imported content from URL as a new note.",
+      });
+    } catch (error) {
+      console.error("💥 URL import error:", error);
+      toast({
+        title: "Import failed",
+        description: error.message || "Failed to import URL content. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Enhanced Content Import
+            Import Content
           </DialogTitle>
+          <DialogDescription>
+            Import content from YouTube videos, audio files, web URLs, or upload documents
+          </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="url" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="url" className="flex items-center gap-2">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="youtube" className="flex items-center gap-2">
               <Video className="h-4 w-4" />
-              Media URL
+              YouTube
             </TabsTrigger>
-            <TabsTrigger value="speech" className="flex items-center gap-2">
+            <TabsTrigger value="audio" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
-              Voice
+              Audio
             </TabsTrigger>
-            <TabsTrigger value="manual" className="flex items-center gap-2">
+            <TabsTrigger value="url" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Web URL
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Manual
+              Files
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="url" className="space-y-4 mt-6">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Media URL (YouTube, Podcasts, Audio files)
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="https://youtube.com/watch?v=... or podcast URL"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={handleUrlImport}
-                    disabled={isProcessing || !url.trim()}
-                    className="whitespace-nowrap"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        {detectMediaType(url) === 'youtube' && <Video className="h-4 w-4 mr-2" />}
-                        {detectMediaType(url) === 'podcast' && <Volume2 className="h-4 w-4 mr-2" />}
-                        {!['youtube', 'podcast'].includes(detectMediaType(url)) && <FileText className="h-4 w-4 mr-2" />}
-                        Import
-                      </>
-                    )}
-                  </Button>
-                </div>
-                
-                {url && (
-                  <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      <strong>Detected:</strong> {detectMediaType(url).charAt(0).toUpperCase() + detectMediaType(url).slice(1)} content
-                      <br />
-                      <strong>Features:</strong> Automatic transcription, metadata extraction, noise filtering, clean text output
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="speech" className="space-y-4 mt-6">
-            <div className="space-y-4">
-              <AudioRecorder 
-                onTranscription={handleSpeechToText}
-                className="w-full"
+          <div className="flex-1 overflow-auto">
+            <TabsContent value="youtube" className="mt-4 h-full">
+              <YoutubeImportForm
+                onContentImported={handleYoutubeImport}
+                isLoading={isYoutubeImporting}
               />
-              
-              <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-                <p className="text-xs text-green-700 dark:text-green-300">
-                  <strong>Enhanced Speech-to-Text:</strong> Uses advanced AI for high-quality transcription with automatic noise filtering and punctuation.
-                </p>
-              </div>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="manual" className="space-y-4 mt-6">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Title</label>
-                <Input
-                  placeholder="Enter note title..."
-                  value={customTitle}
-                  onChange={(e) => setCustomTitle(e.target.value)}
-                />
-              </div>
+            <TabsContent value="audio" className="mt-4 h-full">
+              <AudioImportForm
+                onContentImported={handleAudioImport}
+                isLoading={isAudioImporting}
+              />
+            </TabsContent>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">Content</label>
-                <Textarea
-                  placeholder="Start writing your note content..."
-                  value={customContent}
-                  onChange={(e) => setCustomContent(e.target.value)}
-                  rows={8}
-                />
-              </div>
+            <TabsContent value="url" className="mt-4 h-full">
+              <UrlImporter onContentImported={handleUrlImport} />
+            </TabsContent>
 
-              <Button
-                onClick={handleManualNote}
-                className="w-full"
-                variant="outline"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Create Note
-              </Button>
-            </div>
-          </TabsContent>
+            <TabsContent value="files" className="mt-4 h-full">
+              <FileUploadForm
+                onContentImported={handleFileImport}
+                isLoading={isFileImporting}
+              />
+            </TabsContent>
+          </div>
         </Tabs>
-
-        <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-          <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">✨ Enhanced Features</h4>
-          <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
-            <li>• <strong>Smart Transcription:</strong> Extracts only spoken content, ignores background noise</li>
-            <li>• <strong>Auto-Metadata:</strong> Fetches title, duration, thumbnail, and timestamps</li>
-            <li>• <strong>Clean Format:</strong> Standardized output with sections for transcript and notes</li>
-            <li>• <strong>Fallback Support:</strong> Creates useful notes even when transcription fails</li>
-            <li>• <strong>Multi-Platform:</strong> Supports YouTube, podcasts, audio files, and more</li>
-          </ul>
-        </div>
       </DialogContent>
     </Dialog>
   );
