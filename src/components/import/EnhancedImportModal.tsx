@@ -13,10 +13,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Upload, Video, Mic, Globe, FileText } from "lucide-react";
+import { Upload, Video, Mic, Globe, FileText, FileVideo } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
+import { VideoFileImport } from "./VideoFileImport";
 import { UrlImporter } from './UrlImporter';
 import { FileUploadForm } from './FileUploadForm';
 import { useAuth } from "@/hooks/useAuth";
