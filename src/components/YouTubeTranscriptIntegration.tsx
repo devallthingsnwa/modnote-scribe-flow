@@ -83,25 +83,21 @@ export function YouTubeTranscriptIntegration({
         setExtractedTranscript(result.text);
         setVideoInfo(metadata);
 
-        // Format the enhanced content
-        const title = metadata?.title || `YouTube Video ${videoId}`;
-        const author = metadata?.author || 'Unknown';
-        const duration = metadata?.duration || 'Unknown';
+        // Format the enhanced content with new structure
+        const title = `🎥 ${metadata?.title || `YouTube Video ${videoId}`}`;
+        const importDate = new Date().toLocaleString();
 
-        let enhancedContent = `# 🎥 ${title}\n\n`;
+        let enhancedContent = `# ${title}\n\n`;
         enhancedContent += `**Source:** ${url}\n`;
-        enhancedContent += `**Author:** ${author}\n`;
-        enhancedContent += `**Duration:** ${duration}\n`;
         enhancedContent += `**Type:** Video ${isWarning ? 'Note' : 'Transcript'}\n`;
-        enhancedContent += `**Extracted:** ${new Date().toLocaleString()}\n`;
-        enhancedContent += `**Method:** ${result.provider || 'unknown'}\n`;
+        enhancedContent += `**Imported:** ${importDate}\n`;
         if (isWarning) {
           enhancedContent += `**Status:** ⚠️ Transcript unavailable - manual notes only\n`;
         }
         enhancedContent += `\n---\n\n`;
         enhancedContent += `## 📝 ${isWarning ? 'Notes' : 'Transcript'}\n\n`;
         enhancedContent += result.text;
-        enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+        enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
 
         onTranscriptExtracted(enhancedContent);
 
@@ -145,13 +141,20 @@ export function YouTubeTranscriptIntegration({
     if (!extractedTranscript) return;
 
     const content = `# ${videoInfo?.title || 'YouTube Video Transcript'}
-Author: ${videoInfo?.author || 'Unknown'}
-Duration: ${videoInfo?.duration || 'Unknown'}
-Extracted: ${new Date().toLocaleString()}
+Source: ${videoInfo?.url || 'Unknown'}
+Type: Video ${hasWarning ? 'Note' : 'Transcript'}
+Imported: ${new Date().toLocaleString()}
 ${hasWarning ? 'Status: ⚠️ Transcript unavailable - manual notes only' : ''}
+
+---
 
 ## ${hasWarning ? 'Notes' : 'Transcript'}
 ${extractedTranscript}
+
+---
+
+## My Notes
+Add your personal notes and thoughts here...
 `;
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -171,17 +174,16 @@ ${extractedTranscript}
   };
 
   const handleSpeechToText = (transcribedText: string) => {
-    const enhancedContent = `# 🎤 Voice Note\n\n`;
     const timestamp = new Date().toLocaleString();
     
-    let content = enhancedContent;
+    let content = `# 🎤 Voice Note\n\n`;
     content += `**Type:** Voice Transcription\n`;
-    content += `**Recorded:** ${timestamp}\n`;
+    content += `**Imported:** ${timestamp}\n`;
     content += `**Method:** Speech-to-Text AI (Supadata + Whisper Fallback)\n\n`;
     content += `---\n\n`;
     content += `## 📝 Transcription\n\n`;
     content += transcribedText;
-    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+    content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
 
     onTranscriptExtracted(content);
   };

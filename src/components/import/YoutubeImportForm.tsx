@@ -58,8 +58,17 @@ export function YoutubeImportForm({ onContentImported, isLoading }: YoutubeImpor
       setProcessingStatus('Processing complete!');
       setTranscriptionProgress(100);
 
-      const title = metadata.title || `YouTube Video ${videoId}`;
-      const content = `# 🎥 ${title}\n\n**Source:** ${url}\n**Author:** ${metadata.author || 'Unknown'}\n**Duration:** ${metadata.duration || 'Unknown'}\n\n---\n\n## 📝 Transcript\n\n${transcriptionResult.text}`;
+      const title = `🎥 ${metadata.title || `YouTube Video ${videoId}`}`;
+      const importDate = new Date().toLocaleString();
+      
+      let content = `# ${title}\n\n`;
+      content += `**Source:** ${url}\n`;
+      content += `**Type:** Video Transcript\n`;
+      content += `**Imported:** ${importDate}\n`;
+      content += `\n---\n\n`;
+      content += `## 📝 Transcript\n\n`;
+      content += transcriptionResult.text;
+      content += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
 
       onContentImported({
         title,
@@ -76,7 +85,7 @@ export function YoutubeImportForm({ onContentImported, isLoading }: YoutubeImpor
       
       toast({
         title: "✅ Import Successful",
-        description: `Transcribed "${title}" using ${transcriptionResult.provider}`
+        description: `Transcribed "${metadata.title}" using ${transcriptionResult.provider}`
       });
 
     } catch (error) {
