@@ -5,7 +5,7 @@ import { corsHeaders } from "./utils.ts";
 export interface TranscriptOptions {
   includeTimestamps?: boolean;
   language?: string;
-  format?: 'text' | 'json' | 'srt' | 'raw';
+  format?: 'text' | 'json' | 'srt';
   extendedTimeout?: boolean;
   retryCount?: number;
 }
@@ -99,7 +99,7 @@ export class TranscriptExtractor {
       
       if (supadataResult) {
         console.log("Supadata API extraction successful");
-        return this.formatTranscriptResponse(supadataResult, videoId, options);
+        return this.formatTranscriptResponse(supadataResult, videoId);
       }
     } catch (error) {
       console.warn("Supadata API extraction failed:", error);
@@ -113,7 +113,7 @@ export class TranscriptExtractor {
       
       if (fallbackResult) {
         console.log("Fallback methods extraction successful");
-        return this.formatTranscriptResponse(fallbackResult, videoId, options);
+        return this.formatTranscriptResponse(fallbackResult, videoId);
       }
     } catch (error) {
       console.warn("Fallback methods extraction failed:", error);
@@ -124,7 +124,7 @@ export class TranscriptExtractor {
     return this.createStructuredFallbackResponse(videoId, options);
   }
 
-  private async formatTranscriptResponse(response: Response, videoId: string, options: TranscriptOptions): Promise<Response> {
+  private async formatTranscriptResponse(response: Response, videoId: string): Promise<Response> {
     try {
       const data = await response.json();
       
@@ -145,8 +145,8 @@ export class TranscriptExtractor {
           console.warn("Failed to fetch video metadata:", error);
         }
 
-        // Format transcript based on requested format
-        const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl, options.format || 'text');
+        // Format transcript with exact structure - preserve raw transcript content
+        const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl);
         
         const transcriptResponse: TranscriptResponse = {
           success: true,
@@ -175,7 +175,7 @@ export class TranscriptExtractor {
     }
   }
 
-  private formatTranscriptContent(transcript: string, title: string, videoUrl: string, format: string = 'text'): string {
+  private formatTranscriptContent(transcript: string, title: string, videoUrl: string): string {
     const currentDate = new Date().toLocaleString('en-US', {
       month: 'numeric',
       day: 'numeric', 
@@ -186,33 +186,7 @@ export class TranscriptExtractor {
       hour12: true
     });
 
-    // If raw format is requested, extract only the text content
-    if (format === 'raw') {
-      let rawTranscript = transcript;
-      
-      // Remove timestamps and formatting, keep only the spoken text
-      rawTranscript = rawTranscript
-        .replace(/\[\d{2}:\d{2}(?:\.\d{3})?\s*-?\s*\d{2}:\d{2}(?:\.\d{3})?\]/g, '') // Remove timestamps
-        .replace(/\n\s*\n/g, ' ') // Replace line breaks with spaces
-        .replace(/\s+/g, ' ') // Normalize spaces
-        .replace(/[,]\s*/g, ', ') // Normalize commas
-        .trim();
-
-      let formattedContent = `# 🎥 "${title}"\n\n`;
-      formattedContent += `**Source:** ${videoUrl}\n`;
-      formattedContent += `**Type:** Video Transcript\n`;
-      formattedContent += `**Imported:** ${currentDate}\n\n`;
-      formattedContent += `---\n\n`;
-      formattedContent += `## 📝 Transcript\n\n`;
-      formattedContent += `${rawTranscript}\n\n`;
-      formattedContent += `---\n\n`;
-      formattedContent += `## 📝 My Notes\n\n`;
-      formattedContent += `Add your personal notes and thoughts here...\n`;
-
-      return formattedContent;
-    }
-
-    // Default structured format
+    // Clean up the transcript text but preserve its original structure
     let cleanTranscript = transcript;
     
     // Remove any existing markdown formatting that might interfere
