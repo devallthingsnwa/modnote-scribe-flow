@@ -2,8 +2,9 @@
 import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileImage, FileText, X, Loader2 } from "lucide-react";
+import { Upload, FileImage, FileText, X, Loader2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { OCRService } from "@/lib/ocrService";
 
 interface FileUploadFormProps {
   onContentImported: (content: {
@@ -19,6 +20,8 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -56,13 +59,15 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       'image/png',
       'image/gif',
       'image/webp',
+      'image/bmp',
+      'image/tiff',
       'text/plain'
     ];
 
     if (!validTypes.includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please upload a PDF, image file (JPG, PNG, GIF, WebP), or text file",
+        description: "Please upload a PDF, image file, or text file",
         variant: "destructive",
       });
       return;
@@ -78,9 +83,11 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
     }
 
     setSelectedFile(file);
+    setExtractedText('');
+    setShowPreview(false);
   };
 
-  const processFile = async () => {
+  const extractTextFromFile = async () => {
     if (!selectedFile) return;
 
     setProcessing(true);
@@ -89,17 +96,48 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       let content = "";
       
       if (selectedFile.type === 'text/plain') {
-        // Handle text files
+        // Handle text files directly
         content = await selectedFile.text();
-      } else if (selectedFile.type === 'application/pdf') {
-        // For PDF files, create a placeholder note (OCR would be implemented here)
-        content = `This PDF file "${selectedFile.name}" was uploaded but automatic text extraction is not yet available. You can manually add the content below.\n\nFile size: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\nFile type: PDF Document`;
-      } else if (selectedFile.type.startsWith('image/')) {
-        // For image files, create a placeholder note (OCR would be implemented here)
-        content = `This image file "${selectedFile.name}" was uploaded but automatic text extraction is not yet available. You can manually add descriptions or notes about the image below.\n\nFile size: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\nFile type: ${selectedFile.type}`;
+      } else if (OCRService.isSupportedFileType(selectedFile)) {
+        // Use OCR for images and PDFs
+        const ocrResult = await OCRService.extractTextFromFile(selectedFile);
+        
+        if (ocrResult.success) {
+          content = ocrResult.extractedText;
+          toast({
+            title: "Text extracted successfully!",
+            description: `Extracted ${content.length} characters from ${selectedFile.name}`,
+          });
+        } else {
+          throw new Error(ocrResult.error || 'Text extraction failed');
+        }
+      } else {
+        throw new Error('Unsupported file type for text extraction');
       }
 
+      setExtractedText(content);
+      setShowPreview(true);
+
+    } catch (error) {
+      console.error("Text extraction error:", error);
+      toast({
+        title: "Extraction failed",
+        description: error.message || "Failed to extract text from the file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const processFile = async () => {
+    if (!selectedFile) return;
+
+    try {
       const title = selectedFile.name.replace(/\.[^/.]+$/, ""); // Remove file extension
+      
+      // Use extracted text or fallback to file info
+      const content = extractedText || `File "${selectedFile.name}" was uploaded but text extraction was not performed.`;
       
       // Format content with proper structure
       const currentDate = new Date().toLocaleString('en-US', {
@@ -118,7 +156,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       formattedContent += `**Imported:** ${currentDate}\n`;
       formattedContent += `**File Size:** ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB\n\n`;
       formattedContent += `---\n\n`;
-      formattedContent += `## 📝 Content\n\n`;
+      formattedContent += `## 📝 Extracted Content\n\n`;
       formattedContent += `${content}\n\n`;
       formattedContent += `---\n\n`;
       formattedContent += `## 📝 My Notes\n\n`;
@@ -131,12 +169,14 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       });
 
       toast({
-        title: "File uploaded successfully!",
+        title: "File imported successfully!",
         description: `"${selectedFile.name}" has been imported as a new note.`,
       });
 
       // Reset form
       setSelectedFile(null);
+      setExtractedText('');
+      setShowPreview(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -144,17 +184,17 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
     } catch (error) {
       console.error("File processing error:", error);
       toast({
-        title: "Upload failed",
+        title: "Import failed",
         description: "Failed to process the file. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setProcessing(false);
     }
   };
 
   const removeFile = () => {
     setSelectedFile(null);
+    setExtractedText('');
+    setShowPreview(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -169,7 +209,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       <div className="text-center">
         <h3 className="text-lg font-semibold mb-2">Upload Files</h3>
         <p className="text-muted-foreground text-sm">
-          Upload PDF documents, images, or text files to import as notes
+          Upload PDF documents, images, or text files to extract and import as notes
         </p>
       </div>
 
@@ -195,7 +235,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
             Supports PDF, images (JPG, PNG, GIF, WebP), and text files
           </p>
           <p className="text-xs text-muted-foreground">
-            Maximum file size: 10MB
+            Maximum file size: 10MB • OCR text extraction enabled
           </p>
         </CardContent>
       </Card>
@@ -204,7 +244,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.txt"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.txt"
         onChange={handleFileInput}
         className="hidden"
       />
@@ -213,7 +253,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       {selectedFile && (
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 {selectedFile.type.startsWith('image/') ? (
                   <FileImage className="h-8 w-8 text-blue-500" />
@@ -236,6 +276,45 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
                 <X className="h-4 w-4" />
               </Button>
             </div>
+
+            {/* Extract Text Button */}
+            {OCRService.isSupportedFileType(selectedFile) && selectedFile.type !== 'text/plain' && !extractedText && (
+              <div className="flex justify-center mb-4">
+                <Button
+                  onClick={extractTextFromFile}
+                  disabled={processing}
+                  variant="outline"
+                  className="px-6"
+                >
+                  {processing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Extracting text...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Extract Text with OCR
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Text Preview */}
+            {showPreview && extractedText && (
+              <div className="bg-muted/50 rounded-lg p-4 mb-4">
+                <h4 className="font-medium mb-2">Extracted Text Preview:</h4>
+                <div className="max-h-40 overflow-y-auto text-sm text-muted-foreground bg-background p-3 rounded border">
+                  {extractedText.length > 500 
+                    ? `${extractedText.substring(0, 500)}...` 
+                    : extractedText}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {extractedText.length} characters extracted
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -244,26 +323,17 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
       <div className="flex justify-end">
         <Button
           onClick={processFile}
-          disabled={!selectedFile || processing || isLoading}
+          disabled={!selectedFile || isLoading}
           className="px-6"
         >
-          {processing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Upload className="h-4 w-4 mr-2" />
-              Import File
-            </>
-          )}
+          <Upload className="h-4 w-4 mr-2" />
+          Import File
         </Button>
       </div>
 
       {/* Supported Formats Info */}
       <div className="bg-muted/50 rounded-lg p-4">
-        <h4 className="font-medium mb-2">Supported Formats</h4>
+        <h4 className="font-medium mb-2">OCR Text Extraction</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-red-500" />
@@ -279,7 +349,7 @@ export function FileUploadForm({ onContentImported, isLoading }: FileUploadFormP
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Note: PDF and image text extraction will be enhanced in future updates
+          ✅ OCR-powered text extraction from images and PDFs
         </p>
       </div>
     </div>
