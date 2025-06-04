@@ -57,8 +57,12 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
-          // Format the transcript with proper structure - preserve raw content
-          const formattedText = this.formatTranscriptContent(youtubeResult.text, url);
+          // Get metadata for proper formatting
+          const videoId = YouTubeService.extractVideoId(url);
+          const metadata = videoId ? await this.getYouTubeMetadata(videoId) : {};
+          
+          // Format the transcript with the exact format requested
+          const formattedText = this.formatTranscriptContentExact(youtubeResult.text, url, metadata);
           
           toast({
             title: "✅ Transcript Extracted",
@@ -100,7 +104,8 @@ export class TranscriptionService {
         if (audioResult.success && audioResult.text && audioResult.text.length > 50) {
           console.log('✅ Audio transcription successful');
           
-          const formattedText = this.formatTranscriptContent(audioResult.text, url);
+          const metadata = await this.getYouTubeMetadata(videoId);
+          const formattedText = this.formatTranscriptContentExact(audioResult.text, url, metadata);
           
           toast({
             title: "✅ Audio Transcribed",
@@ -133,7 +138,8 @@ export class TranscriptionService {
       const externalResult = await this.tryExternalProvidersWithEnhancedRetry(url);
       
       if (externalResult.success && externalResult.text && externalResult.text.length > 50) {
-        const formattedText = this.formatTranscriptContent(externalResult.text, url);
+        const metadata = videoId ? await this.getYouTubeMetadata(videoId) : {};
+        const formattedText = this.formatTranscriptContentExact(externalResult.text, url, metadata);
         
         return {
           ...externalResult,
@@ -157,27 +163,15 @@ export class TranscriptionService {
     return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
   }
 
-  private static formatTranscriptContent(transcript: string, url: string): string {
+  private static formatTranscriptContentExact(transcript: string, url: string, metadata: YouTubeMetadata): string {
     const videoId = YouTubeService.extractVideoId(url);
-    let videoTitle = `YouTube Video ${videoId}`;
     
-    // Try to extract title from transcript if it's formatted
-    const titleMatch = transcript.match(/^# 🎥 "(.+)"/);
-    if (titleMatch) {
-      return transcript; // Already formatted
-    }
+    // Extract title from metadata or create default
+    const title = metadata.title || `YouTube Video ${videoId}`;
+    const author = metadata.author || 'Unknown';
+    const duration = metadata.duration || 'Unknown';
     
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-
-    // Clean up the transcript content but preserve its raw structure
+    // Clean the transcript - extract only the raw content
     let cleanTranscript = transcript;
     
     // Remove any existing markdown formatting
@@ -185,18 +179,18 @@ export class TranscriptionService {
     cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold lines
     cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
     cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
+    cleanTranscript = cleanTranscript.replace(/^Add your personal notes.*$/gm, ''); // Remove default notes
     cleanTranscript = cleanTranscript.trim();
 
-    let formattedContent = `# 🎥 "${videoTitle}"\n\n`;
+    // Format exactly as requested
+    let formattedContent = `# 🎥 ${title}\n\n`;
     formattedContent += `**Source:** ${url}\n`;
-    formattedContent += `**Type:** Video Transcript\n`;
-    formattedContent += `**Imported:** ${currentDate}\n\n`;
+    formattedContent += `**Author:** ${author}\n`;
+    formattedContent += `**Duration:** ${duration}\n`;
+    formattedContent += `**Type:** Video Transcript\n\n`;
     formattedContent += `---\n\n`;
     formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${cleanTranscript}\n\n`;
-    formattedContent += `---\n\n`;
-    formattedContent += `## 📝 My Notes\n\n`;
-    formattedContent += `Add your personal notes and thoughts here...\n`;
+    formattedContent += `${cleanTranscript}`;
 
     return formattedContent;
   }
@@ -303,22 +297,11 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    const currentDate = new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-
     let fallbackContent = `# 🎥 "${isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content'}"\n\n`;
     fallbackContent += `**Source:** ${url}\n`;
-    fallbackContent += `**Type:** Video Note\n`;
-    fallbackContent += `**Imported:** ${currentDate}\n`;
-    fallbackContent += `**Status:** ⚠️ Automatic transcription unavailable\n`;
-    fallbackContent += `**Processing Time:** ${(processingTime / 1000).toFixed(1)}s\n\n`;
+    fallbackContent += `**Author:** Unknown\n`;
+    fallbackContent += `**Duration:** Unknown\n`;
+    fallbackContent += `**Type:** Video Note\n\n`;
     fallbackContent += `---\n\n`;
     fallbackContent += `## 📝 Transcript\n\n`;
     
@@ -340,26 +323,6 @@ export class TranscriptionService {
       fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
       fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
     }
-    
-    fallbackContent += `---\n\n`;
-    fallbackContent += `## 📝 My Notes\n\n`;
-    fallbackContent += `### 🎯 Key Points\n`;
-    fallbackContent += `- [ ] Main topic/theme:\n`;
-    fallbackContent += `- [ ] Important insights:\n`;
-    fallbackContent += `- [ ] Action items:\n`;
-    fallbackContent += `- [ ] Questions raised:\n\n`;
-    
-    fallbackContent += `### ⏰ Timestamps & Moments\n`;
-    fallbackContent += `*Add specific timestamps and what happens at those moments*\n\n`;
-    fallbackContent += `- **00:00** - \n`;
-    fallbackContent += `- **05:00** - \n`;
-    fallbackContent += `- **10:00** - \n\n`;
-    
-    fallbackContent += `### 💭 Personal Reflections\n`;
-    fallbackContent += `*Your thoughts, opinions, and how this relates to your interests*\n\n`;
-    
-    fallbackContent += `---\n\n`;
-    fallbackContent += `*Note: This content was saved automatically when transcription was unavailable. You can edit this note to add your own insights and observations.*`;
 
     toast({
       title: "📝 Smart Note Created",
