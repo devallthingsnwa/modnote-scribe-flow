@@ -38,6 +38,31 @@ export function YouTubeTranscriptIntegration({
     return text.match(urlRegex) || [];
   };
 
+  const formatTranscriptContent = (transcript: string, url: string, metadata: any) => {
+    const videoId = TranscriptionService.extractVideoId(url);
+    const title = metadata?.title || `YouTube Video ${videoId}`;
+    const importDate = new Date().toLocaleString('en-US', {
+      month: 'numeric',
+      day: 'numeric', 
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    let formattedContent = `# 🎥 ${title}\n\n`;
+    formattedContent += `**Source:** ${url}\n`;
+    formattedContent += `**Type:** Video Transcript\n`;
+    formattedContent += `**Imported:** ${importDate}\n\n`;
+    formattedContent += `---\n\n`;
+    formattedContent += `## 📝 Transcript\n\n`;
+    formattedContent += transcript;
+    formattedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+
+    return formattedContent;
+  };
+
   const extractTranscriptFromContent = async (content: string) => {
     const videoIds = extractYouTubeId(content);
     const urls = detectYouTubeUrls(content);
@@ -60,67 +85,65 @@ export function YouTubeTranscriptIntegration({
       const videoId = videoIds[0];
       const url = urls[0];
 
-      console.log("Starting transcript extraction with fallback for video:", videoId);
+      console.log("Starting enhanced transcript extraction for video:", videoId);
 
-      // Use the TranscriptionService which now always returns success with fallback content
+      // Get video metadata first
+      let metadata = null;
+      try {
+        metadata = await TranscriptionService.getYouTubeMetadata(videoId);
+      } catch (error) {
+        console.warn('Failed to fetch video metadata:', error);
+        metadata = { title: `YouTube Video ${videoId}`, author: 'Unknown', duration: 'Unknown' };
+      }
+
+      // Use the TranscriptionService for transcript extraction
       const result = await TranscriptionService.transcribeWithFallback(url);
 
       if (result.success && result.text) {
         console.log('Transcript extraction completed:', result.provider);
         
-        // Check if this is a warning result
-        const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
+        // Check if this is a fallback/warning result (short generic message)
+        const isWarning = result.text.length < 200 || 
+                         result.text.includes('could not be automatically') ||
+                         result.text.includes('requires additional permissions') ||
+                         result.metadata?.isWarning;
+        
         setHasWarning(isWarning);
-        
-        // Get video metadata
-        let metadata = null;
-        try {
-          metadata = await TranscriptionService.getYouTubeMetadata(videoId);
-        } catch (error) {
-          console.warn('Failed to fetch video metadata:', error);
-        }
-        
         setExtractedTranscript(result.text);
         setVideoInfo(metadata);
 
-        // Format the enhanced content with new structure
-        const title = `🎥 ${metadata?.title || `YouTube Video ${videoId}`}`;
-        const importDate = new Date().toLocaleString();
-
-        let enhancedContent = `# ${title}\n\n`;
-        enhancedContent += `**Source:** ${url}\n`;
-        enhancedContent += `**Type:** Video ${isWarning ? 'Note' : 'Transcript'}\n`;
-        enhancedContent += `**Imported:** ${importDate}\n`;
-        if (isWarning) {
-          enhancedContent += `**Status:** ⚠️ Transcript unavailable - manual notes only\n`;
-        }
-        enhancedContent += `\n---\n\n`;
-        enhancedContent += `## 📝 ${isWarning ? 'Notes' : 'Transcript'}\n\n`;
-        enhancedContent += result.text;
-        enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
-
+        // Format the content with proper structure
+        const enhancedContent = this.formatTranscriptContent(result.text, url, metadata);
         onTranscriptExtracted(enhancedContent);
 
         if (isWarning) {
           toast({
-            title: "⚠️ Video Saved with Warning",
-            description: "Transcript unavailable but note created for manual input"
+            title: "⚠️ Limited Content Available",
+            description: "Transcript extraction had limitations - note created for manual input"
           });
         } else {
           toast({
             title: "✅ Transcript Extracted Successfully!",
-            description: `Successfully extracted transcript using ${result.provider || 'fallback method'}`
+            description: `Successfully extracted transcript with ${result.text.length} characters`
           });
         }
 
       } else {
-        // This should not happen anymore since we always return success
-        console.error("Unexpected: TranscriptionService returned failure");
+        console.error("Transcript extraction failed:", result.error);
+        
+        // Create a fallback note even if extraction fails
+        const fallbackContent = this.formatTranscriptContent(
+          "Transcript extraction was not successful. You can manually add your notes and observations about this video.",
+          url,
+          metadata
+        );
+        
+        onTranscriptExtracted(fallbackContent);
+        setHasWarning(true);
         
         toast({
-          title: "❌ Unexpected Error",
-          description: "An unexpected error occurred. Please try again.",
-          variant: "destructive"
+          title: "⚠️ Transcript Unavailable",
+          description: "Created note template for manual input",
         });
       }
 
@@ -128,8 +151,8 @@ export function YouTubeTranscriptIntegration({
       console.error("Unexpected error during transcript extraction:", error);
       
       toast({
-        title: "❌ Unexpected Error",
-        description: "An unexpected error occurred during transcript extraction. Please try again.",
+        title: "❌ Extraction Error",
+        description: "An error occurred during transcript extraction. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -253,7 +276,7 @@ Add your personal notes and thoughts here...
                     </p>
                     {hasWarning && (
                       <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                        ⚠️ Transcript unavailable - note created for manual input
+                        ⚠️ Transcript extraction had limitations
                       </p>
                     )}
                   </div>
@@ -276,7 +299,7 @@ Add your personal notes and thoughts here...
               <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-blue-700 dark:text-blue-300">
                 <p className="font-medium mb-1">How to use:</p>
-                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note. If transcript isn't available, a note will still be created with a warning.</p>
+                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note with proper formatting.</p>
               </div>
             </div>
           </TabsContent>
@@ -300,8 +323,8 @@ Add your personal notes and thoughts here...
         <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-amber-700 dark:text-amber-300">
-            <p className="font-medium mb-1">Smart Fallback System:</p>
-            <p>When transcripts aren't available, the system automatically creates a note with a warning message, so you can still save and organize your video references.</p>
+            <p className="font-medium mb-1">Enhanced Extraction System:</p>
+            <p>Uses multiple methods to extract transcript content. When successful, returns the raw transcript text formatted in your note.</p>
           </div>
         </div>
       </CardContent>
