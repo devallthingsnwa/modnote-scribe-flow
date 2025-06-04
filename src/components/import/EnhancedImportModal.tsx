@@ -13,11 +13,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Upload, Video, Mic, Globe } from "lucide-react";
+import { Upload, Video, Mic, Globe, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
 import { UrlImporter } from './UrlImporter';
+import { FileUploadForm } from './FileUploadForm';
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -38,7 +39,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const { user } = useAuth();
   const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
   const [isAudioImporting, setIsAudioImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url'>('youtube');
+  const [isFileImporting, setIsFileImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url' | 'files'>('youtube');
 
   const saveToSupabase = async (content: {
     title: string;
@@ -172,6 +174,38 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     }
   };
 
+  const handleFileImport = async (processedContent: {
+    title: string;
+    content: string;
+    source_url?: string;
+    is_transcription?: boolean;
+  }) => {
+    setIsFileImporting(true);
+    
+    try {
+      // Save to Supabase first
+      await saveToSupabase(processedContent);
+      
+      // Then trigger the dashboard import handler
+      onImport(processedContent);
+      onClose();
+      
+      toast({
+        title: "File Imported",
+        description: "Successfully imported file as a new note.",
+      });
+    } catch (error) {
+      console.error("💥 File import error:", error);
+      toast({
+        title: "Import failed",
+        description: error.message || "Failed to import file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFileImporting(false);
+    }
+  };
+
   const handleUrlImport = async (content: { title: string; content: string; sourceUrl: string }) => {
     try {
       const processedContent = {
@@ -211,12 +245,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
           </DialogTitle>
           <DialogDescription>
-            Import content from YouTube videos, audio files, or web URLs
+            Import content from YouTube videos, audio files, web URLs, or upload documents
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="youtube" className="flex items-center gap-2">
               <Video className="h-4 w-4" />
               YouTube
@@ -228,6 +262,10 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             <TabsTrigger value="url" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               Web URL
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Files
             </TabsTrigger>
           </TabsList>
 
@@ -248,6 +286,13 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
             <TabsContent value="url" className="mt-4 h-full">
               <UrlImporter onContentImported={handleUrlImport} />
+            </TabsContent>
+
+            <TabsContent value="files" className="mt-4 h-full">
+              <FileUploadForm
+                onContentImported={handleFileImport}
+                isLoading={isFileImporting}
+              />
             </TabsContent>
           </div>
         </Tabs>
