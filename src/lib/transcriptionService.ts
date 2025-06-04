@@ -57,7 +57,7 @@ export class TranscriptionService {
         if (youtubeResult.success && youtubeResult.text && youtubeResult.text.length > 100) {
           console.log('✅ YouTube transcript extraction successful');
           
-          // Format the transcript with proper structure
+          // Format the transcript with proper structure - preserve raw content
           const formattedText = this.formatTranscriptContent(youtubeResult.text, url);
           
           toast({
@@ -154,7 +154,7 @@ export class TranscriptionService {
     }
 
     // Enhanced fallback with detailed guidance
-    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, videoId);
+    return this.createEnhancedFallbackResult(url, errors.join('; '), startTime, YouTubeService.extractVideoId(url));
   }
 
   private static formatTranscriptContent(transcript: string, url: string): string {
@@ -168,14 +168,24 @@ export class TranscriptionService {
     }
     
     const currentDate = new Date().toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit', 
+      month: 'numeric',
+      day: 'numeric', 
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true
     });
+
+    // Clean up the transcript content but preserve its raw structure
+    let cleanTranscript = transcript;
+    
+    // Remove any existing markdown formatting
+    cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove headers
+    cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold lines
+    cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
+    cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
+    cleanTranscript = cleanTranscript.trim();
 
     let formattedContent = `# 🎥 "${videoTitle}"\n\n`;
     formattedContent += `**Source:** ${url}\n`;
@@ -183,7 +193,7 @@ export class TranscriptionService {
     formattedContent += `**Imported:** ${currentDate}\n\n`;
     formattedContent += `---\n\n`;
     formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${transcript}\n\n`;
+    formattedContent += `${cleanTranscript}\n\n`;
     formattedContent += `---\n\n`;
     formattedContent += `## 📝 My Notes\n\n`;
     formattedContent += `Add your personal notes and thoughts here...\n`;
@@ -294,10 +304,10 @@ export class TranscriptionService {
     const processingTime = Date.now() - startTime;
     
     const currentDate = new Date().toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit', 
+      month: 'numeric',
+      day: 'numeric', 
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true

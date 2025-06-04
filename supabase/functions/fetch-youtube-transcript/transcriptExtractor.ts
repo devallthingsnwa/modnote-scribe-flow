@@ -1,4 +1,3 @@
-
 import { SupadataStrategy } from "./strategies/SupadataStrategy.ts";
 import { FallbackMethods } from "./fallbackMethods.ts";
 import { corsHeaders } from "./utils.ts";
@@ -146,7 +145,7 @@ export class TranscriptExtractor {
           console.warn("Failed to fetch video metadata:", error);
         }
 
-        // Format transcript with proper structure
+        // Format transcript with exact structure - preserve raw transcript content
         const formattedTranscript = this.formatTranscriptContent(data.transcript, videoTitle, videoUrl);
         
         const transcriptResponse: TranscriptResponse = {
@@ -178,14 +177,24 @@ export class TranscriptExtractor {
 
   private formatTranscriptContent(transcript: string, title: string, videoUrl: string): string {
     const currentDate = new Date().toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit', 
+      month: 'numeric',
+      day: 'numeric', 
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true
     });
+
+    // Clean up the transcript text but preserve its original structure
+    let cleanTranscript = transcript;
+    
+    // Remove any existing markdown formatting that might interfere
+    cleanTranscript = cleanTranscript.replace(/^#+\s*.*$/gm, ''); // Remove existing headers
+    cleanTranscript = cleanTranscript.replace(/^\*\*.*\*\*$/gm, ''); // Remove bold metadata lines
+    cleanTranscript = cleanTranscript.replace(/^---+$/gm, ''); // Remove separators
+    cleanTranscript = cleanTranscript.replace(/^##\s*.*$/gm, ''); // Remove section headers
+    cleanTranscript = cleanTranscript.trim();
 
     let formattedContent = `# 🎥 "${title}"\n\n`;
     formattedContent += `**Source:** ${videoUrl}\n`;
@@ -193,7 +202,7 @@ export class TranscriptExtractor {
     formattedContent += `**Imported:** ${currentDate}\n\n`;
     formattedContent += `---\n\n`;
     formattedContent += `## 📝 Transcript\n\n`;
-    formattedContent += `${transcript}\n\n`;
+    formattedContent += `${cleanTranscript}\n\n`;
     formattedContent += `---\n\n`;
     formattedContent += `## 📝 My Notes\n\n`;
     formattedContent += `Add your personal notes and thoughts here...\n`;
@@ -208,10 +217,10 @@ export class TranscriptExtractor {
     const fallbackTitle = `YouTube Video ${videoId}`;
     
     const currentDate = new Date().toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit', 
+      month: 'numeric',
+      day: 'numeric', 
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true
@@ -273,10 +282,10 @@ export class TranscriptExtractor {
     
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const currentDate = new Date().toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit', 
+      month: 'numeric',
+      day: 'numeric', 
       year: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true
