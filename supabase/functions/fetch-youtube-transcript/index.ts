@@ -20,11 +20,9 @@ serve(async (req) => {
       options = body.options || {};
       
       if (!videoId && body.url) {
-        // Support both direct videoId and URL parameters
         videoId = extractVideoId(body.url) || '';
       }
     } catch (e) {
-      // Fallback to query parameters for GET requests
       const url = new URL(req.url);
       videoId = url.searchParams.get('videoId') || '';
       
@@ -57,7 +55,6 @@ serve(async (req) => {
     if (!result) {
       console.log("No transcript available, triggering audio processing fallback");
       
-      // Instead of creating structured fallback, trigger audio processing
       try {
         const audioResult = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/youtube-audio-transcription`, {
           method: 'POST',
@@ -102,7 +99,6 @@ serve(async (req) => {
         console.warn("Audio transcription fallback failed:", audioError);
       }
 
-      // If audio fallback also fails, create structured fallback
       const fallbackTranscript = await createStructuredFallback(videoId);
       
       return new Response(
@@ -146,7 +142,6 @@ serve(async (req) => {
 async function createStructuredFallback(videoId: string): Promise<string> {
   console.log("Creating structured fallback response...");
   
-  // Try to get basic video metadata from oembed
   let title = `YouTube Video ${videoId}`;
   let author = 'Unknown';
   let duration = 'Unknown';
@@ -166,32 +161,20 @@ async function createStructuredFallback(videoId: string): Promise<string> {
     console.warn("Failed to fetch oembed metadata:", error);
   }
   
-  // Create structured fallback content
-  const fallbackContent = `# 🎥 ${title}
+  const fallbackContent = `This YouTube video could not be automatically transcribed. Common reasons:
 
-**Source:** https://www.youtube.com/watch?v=${videoId}
-**Author:** ${author}
-**Duration:** ${duration}
-**Type:** Video Note
+- **No Captions Available**: Video doesn't have auto-generated or manual captions
+- **Private/Restricted Content**: Video has access restrictions
+- **Live Stream**: Live content may not have stable captions
+- **Language Barriers**: Non-English content without proper language detection
+- **Technical Issues**: Temporary service limitations or API restrictions
 
----
+### 💡 Alternative Options
 
-## 📝 Notes
-
-This video's transcript could not be automatically extracted. Common reasons include:
-
-- Video doesn't have auto-generated or manual captions available
-- Private or restricted content with limited access
-- Live stream content without stable captions
-- Language barriers or unsupported content types
-- Temporary service limitations or API restrictions
-
-### 💡 What you can do:
-
-1. **Check YouTube directly**: Visit the video and look for the CC (closed captions) button
-2. **Manual notes**: Watch the video and create your own summary below
-3. **Key timestamps**: Note important moments and topics
-4. **Voice notes**: Use speech-to-text to capture your thoughts while watching
+1. **Check YouTube Captions**: Visit the video directly and look for CC button
+2. **Manual Summary**: Watch and create your own key points below
+3. **Audio Recording**: Use voice notes to summarize while watching
+4. **Third-party Tools**: Try external transcription services
 
 ---
 
@@ -215,7 +198,7 @@ This video's transcript could not be automatically extracted. Common reasons inc
 
 ---
 
-*Note: This content was saved automatically when transcript extraction was unavailable. You can edit this note to add your own insights and observations.*`;
+*Note: This content was saved automatically when transcription was unavailable. You can edit this note to add your own insights and observations.*`;
 
   return fallbackContent;
 }
