@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.0.0";
 
@@ -49,20 +50,18 @@ serve(async (req) => {
         break;
       
       case "fetch_transcript":
-        // Enhanced transcript fetching with extended timeout for longer videos
-        result = await fetchTranscriptWithExtendedRetry(videoId, options?.extendedTimeout || false);
+        result = await fetchTranscriptWithRetry(videoId);
         break;
       
       case "process_complete":
-        // Fetch both metadata and transcript with enhanced handling
+        // Fetch both metadata and transcript
         const metadata = await fetchVideoMetadata(videoId);
-        const transcript = await fetchTranscriptWithExtendedRetry(videoId, true);
+        const transcript = await fetchTranscriptWithRetry(videoId);
         
         result = {
           metadata,
           transcript: transcript.transcript,
-          success: metadata.success && transcript.success,
-          isLongVideo: transcript.isLongVideo || false
+          success: metadata.success && transcript.success
         };
         break;
       
@@ -157,15 +156,10 @@ async function fetchVideoMetadata(videoId: string): Promise<{ success: boolean; 
   }
 }
 
-async function fetchTranscriptWithExtendedRetry(videoId: string, extendedTimeout: boolean = false, maxRetries: number = 3): Promise<{ success: boolean; transcript?: string; error?: string; isLongVideo?: boolean }> {
-  const baseTimeout = extendedTimeout ? 90000 : 45000; // 90s for extended, 45s for normal
-  
+async function fetchTranscriptWithRetry(videoId: string, maxRetries: number = 3): Promise<{ success: boolean; transcript?: string; error?: string }> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`Extended transcript fetch attempt ${attempt} for video ${videoId} (timeout: ${baseTimeout}ms)`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), baseTimeout);
+      console.log(`Transcript fetch attempt ${attempt} for video ${videoId}`);
       
       const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
       const response = await fetch(videoUrl, {
@@ -173,11 +167,8 @@ async function fetchTranscriptWithExtendedRetry(videoId: string, extendedTimeout
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
-        },
-        signal: controller.signal
+        }
       });
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch video page: ${response.status}`);
@@ -185,7 +176,7 @@ async function fetchTranscriptWithExtendedRetry(videoId: string, extendedTimeout
       
       const html = await response.text();
       
-      // Extract caption tracks with enhanced parsing for longer videos
+      // Extract caption tracks
       const playerResponseRegex = /"ytInitialPlayerResponse"\s*:\s*({.+?})\s*;/;
       const playerResponseMatch = html.match(playerResponseRegex);
       
@@ -212,7 +203,7 @@ async function fetchTranscriptWithExtendedRetry(videoId: string, extendedTimeout
         }
       }
       
-      // Fetch caption content with extended timeout
+      // Fetch caption content
       let captionUrl = selectedTrack.baseUrl;
       if (!captionUrl.startsWith('http')) {
         captionUrl = `https://www.youtube.com${captionUrl}`;
@@ -223,65 +214,46 @@ async function fetchTranscriptWithExtendedRetry(videoId: string, extendedTimeout
         captionUrl += captionUrl.includes('?') ? '&fmt=vtt' : '?fmt=vtt';
       }
       
-      const captionController = new AbortController();
-      const captionTimeoutId = setTimeout(() => captionController.abort(), baseTimeout);
-      
-      const captionResponse = await fetch(captionUrl, {
-        signal: captionController.signal
-      });
-      
-      clearTimeout(captionTimeoutId);
-      
+      const captionResponse = await fetch(captionUrl);
       if (!captionResponse.ok) {
         throw new Error(`Failed to fetch captions: ${captionResponse.status}`);
       }
       
       const captionContent = await captionResponse.text();
-      const transcript = parseTranscriptWithEnhancedHandling(captionContent);
+      const transcript = parseTranscript(captionContent);
       
       if (!transcript) {
         throw new Error("Failed to parse transcript content");
       }
       
-      // Detect if this is a long video based on transcript length
-      const isLongVideo = transcript.length > 5000;
-      
-      console.log(`✅ ${isLongVideo ? 'Long video' : 'Standard video'} transcript extracted: ${transcript.length} characters`);
-      
-      return { 
-        success: true, 
-        transcript,
-        isLongVideo
-      };
+      return { success: true, transcript };
       
     } catch (error) {
-      console.error(`Extended attempt ${attempt} failed:`, error);
+      console.error(`Attempt ${attempt} failed:`, error);
       
       if (attempt === maxRetries) {
         return { 
           success: false, 
-          error: `Failed after ${maxRetries} extended attempts: ${error.message}` 
+          error: `Failed after ${maxRetries} attempts: ${error.message}` 
         };
       }
       
-      // Progressive backoff for longer videos
-      const delay = attempt === 1 ? 2000 : (attempt === 2 ? 5000 : 10000);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
   
-  return { success: false, error: "Unexpected error in extended retry logic" };
+  return { success: false, error: "Unexpected error in retry logic" };
 }
 
-function parseTranscriptWithEnhancedHandling(captionContent: string): string | null {
+function parseTranscript(captionContent: string): string | null {
   try {
     const segments = [];
     
     if (captionContent.includes('WEBVTT')) {
-      // Enhanced parsing for longer videos with better memory management
+      // Parse WebVTT format
       const lines = captionContent.split('\n');
       let currentCue = null;
-      let processedSegments = 0;
       
       for (const line of lines) {
         const trimmedLine = line.trim();
@@ -290,19 +262,13 @@ function parseTranscriptWithEnhancedHandling(captionContent: string): string | n
           continue;
         }
         
-        // Enhanced timestamp parsing for longer videos
-        const timestampRegex = /^(\d{1,2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{1,2}:\d{2}:\d{2}\.\d{3})/;
+        // Timestamp line
+        const timestampRegex = /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/;
         const timestampMatch = trimmedLine.match(timestampRegex);
         
         if (timestampMatch) {
           if (currentCue?.text) {
             segments.push(currentCue);
-            processedSegments++;
-            
-            // Log progress for very long videos
-            if (processedSegments % 100 === 0) {
-              console.log(`Processed ${processedSegments} transcript segments...`);
-            }
           }
           
           currentCue = {
@@ -324,30 +290,19 @@ function parseTranscriptWithEnhancedHandling(captionContent: string): string | n
       if (currentCue?.text) {
         segments.push(currentCue);
       }
-      
-      console.log(`✅ Parsed ${segments.length} transcript segments`);
     }
     
     if (segments.length === 0) {
       return null;
     }
     
-    // Enhanced formatting for longer videos with chunked processing
-    const chunkSize = 50; // Process in chunks to avoid memory issues
-    const formattedChunks = [];
-    
-    for (let i = 0; i < segments.length; i += chunkSize) {
-      const chunk = segments.slice(i, i + chunkSize);
-      const formattedChunk = chunk
-        .map(segment => `[${segment.start.substring(0, 8)} - ${segment.end.substring(0, 8)}] ${segment.text}`)
-        .join('\n');
-      formattedChunks.push(formattedChunk);
-    }
-    
-    return formattedChunks.join('\n');
+    // Format transcript with timestamps
+    return segments
+      .map(segment => `[${segment.start.substring(0, 8)} - ${segment.end.substring(0, 8)}] ${segment.text}`)
+      .join('\n');
       
   } catch (error) {
-    console.error("Error parsing enhanced transcript:", error);
+    console.error("Error parsing transcript:", error);
     return null;
   }
 }

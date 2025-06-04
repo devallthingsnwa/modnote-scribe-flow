@@ -1,3 +1,4 @@
+
 import { corsHeaders } from "./utils.ts";
 import { TranscriptOptions, TranscriptSegment, TranscriptResponse } from "./transcriptExtractor.ts";
 
@@ -5,10 +6,10 @@ export class FallbackMethods {
   
   async tryAllMethods(videoId: string, options: TranscriptOptions = {}): Promise<Response | null> {
     const methods = [
-      () => this.methodYouTubeAPI(videoId, options),
       () => this.methodYouTubeWatch(videoId, options),
       () => this.methodYouTubeCaption(videoId, options),
-      () => this.methodYouTubeEmbed(videoId, options)
+      () => this.methodYouTubeEmbed(videoId, options),
+      () => this.methodAlternativeAPI(videoId, options)
     ];
 
     for (let i = 0; i < methods.length; i++) {
@@ -28,78 +29,6 @@ export class FallbackMethods {
     return null;
   }
 
-  private async methodYouTubeAPI(videoId: string, options: TranscriptOptions): Promise<Response | null> {
-    try {
-      console.log("Attempting YouTube Data API v3...");
-      
-      const apiKey = Deno.env.get('YOUTUBE_API_KEY');
-      if (!apiKey) {
-        console.log("YouTube API key not found, skipping API method");
-        return null;
-      }
-
-      // Get video details first
-      const videoResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet`
-      );
-
-      if (!videoResponse.ok) {
-        throw new Error(`YouTube API error: ${videoResponse.status}`);
-      }
-
-      const videoData = await videoResponse.json();
-      
-      if (!videoData.items || videoData.items.length === 0) {
-        throw new Error("Video not found");
-      }
-
-      // Try to get captions
-      const captionsResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/captions?videoId=${videoId}&key=${apiKey}&part=snippet`
-      );
-
-      if (captionsResponse.ok) {
-        const captionsData = await captionsResponse.json();
-        
-        if (captionsData.items && captionsData.items.length > 0) {
-          // Find English captions or first available
-          const caption = captionsData.items.find((item: any) => 
-            item.snippet.language === 'en' || item.snippet.language === options.language
-          ) || captionsData.items[0];
-
-          console.log("Found captions via YouTube API");
-          
-          const transcriptResponse: TranscriptResponse = {
-            success: true,
-            transcript: "Captions found but content extraction requires additional permissions. You can add your own notes about this video.",
-            segments: [],
-            metadata: {
-              videoId,
-              title: videoData.items[0].snippet.title,
-              author: videoData.items[0].snippet.channelTitle,
-              language: caption.snippet.language || 'en',
-              duration: 0,
-              segmentCount: 0,
-              extractionMethod: 'youtube-api-captions-found'
-            }
-          };
-
-          return new Response(
-            JSON.stringify(transcriptResponse),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
-      }
-
-      return null;
-    } catch (error) {
-      console.error("YouTube API method failed:", error);
-      return null;
-    }
-  }
-
   private async methodYouTubeWatch(videoId: string, options: TranscriptOptions): Promise<Response | null> {
     try {
       console.log("Attempting YouTube watch page scraping...");
@@ -107,9 +36,8 @@ export class FallbackMethods {
       const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
       const response = await fetch(watchUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         }
       });
 
@@ -119,28 +47,13 @@ export class FallbackMethods {
 
       const html = await response.text();
       
-      // Enhanced regex patterns for finding caption data
-      const patterns = [
-        /"captionTracks":\[([^\]]+)\]/,
-        /"captions":\{"playerCaptionsTracklistRenderer":\{"captionTracks":\[([^\]]+)\]/,
-        /\"captionTracks\":\[([^\]]*)\]/
-      ];
+      // Look for caption tracks in the page
+      const captionRegex = /"captionTracks":\[([^\]]+)\]/;
+      const match = html.match(captionRegex);
       
-      let captionTracks = null;
-      
-      for (const pattern of patterns) {
-        const match = html.match(pattern);
-        if (match) {
-          try {
-            captionTracks = JSON.parse(`[${match[1]}]`);
-            break;
-          } catch (e) {
-            continue;
-          }
-        }
-      }
-      
-      if (captionTracks && captionTracks.length > 0) {
+      if (match) {
+        const captionTracks = JSON.parse(`[${match[1]}]`);
+        
         // Find English captions or first available
         const englishTrack = captionTracks.find((track: any) => 
           track.languageCode === 'en' || track.languageCode === options.language
@@ -153,6 +66,7 @@ export class FallbackMethods {
           const segments = this.parseXMLCaptions(captionXml);
           
           if (segments.length > 0) {
+            // Format as natural flowing text like your example
             const naturalTranscript = this.formatAsNaturalText(segments);
             
             const transcriptResponse: TranscriptResponse = {
@@ -189,11 +103,11 @@ export class FallbackMethods {
     try {
       console.log("Attempting direct caption API...");
       
+      // Try direct caption API endpoints
       const captionUrls = [
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${options.language || 'en'}&fmt=srv3`,
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
-        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv3`,
-        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv3`
       ];
 
       for (const url of captionUrls) {
@@ -271,16 +185,31 @@ export class FallbackMethods {
     }
   }
 
+  private async methodAlternativeAPI(videoId: string, options: TranscriptOptions): Promise<Response | null> {
+    try {
+      console.log("Attempting alternative transcript services...");
+      
+      // This could call external transcript services if available
+      console.log("No alternative APIs configured");
+      
+      return null;
+    } catch (error) {
+      console.error("Alternative API method failed:", error);
+      return null;
+    }
+  }
+
   private parseXMLCaptions(xmlContent: string): TranscriptSegment[] {
     const segments: TranscriptSegment[] = [];
     
     try {
+      // Parse XML caption format
       const textRegex = /<text start="([^"]*)"(?:\s+dur="([^"]*)")?>([^<]*)<\/text>/g;
       let match;
       
       while ((match = textRegex.exec(xmlContent)) !== null) {
         const start = parseFloat(match[1] || '0');
-        const duration = parseFloat(match[2] || '3');
+        const duration = parseFloat(match[2] || '3'); // Default 3 seconds if no duration
         const text = this.decodeXMLEntities(match[3] || '').trim();
         
         if (text && text.length > 0) {
@@ -311,14 +240,29 @@ export class FallbackMethods {
   }
 
   private formatAsNaturalText(segments: TranscriptSegment[]): string {
+    // Format transcript as natural flowing text like the example
     let transcript = segments.map(segment => segment.text).join(' ');
     
+    // Clean up and format the text naturally
     transcript = transcript
-      .replace(/\s+/g, ' ')
-      .replace(/([.!?])\s+/g, '$1 ')
-      .replace(/,\s+/g, ', ')
+      .replace(/\s+/g, ' ') // Multiple spaces to single space
+      .replace(/([.!?])\s+/g, '$1 ') // Proper sentence spacing
+      .replace(/,\s+/g, ', ') // Proper comma spacing
       .trim();
     
     return transcript;
+  }
+
+  private formatTranscriptText(segments: TranscriptSegment[]): string {
+    return segments.map(segment => {
+      const timestamp = this.formatTimestamp(segment.start);
+      return `[${timestamp}] ${segment.text}`;
+    }).join('\n');
+  }
+
+  private formatTimestamp(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 }
