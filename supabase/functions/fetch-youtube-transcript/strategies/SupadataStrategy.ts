@@ -20,41 +20,43 @@ export class SupadataStrategy implements ITranscriptStrategy {
       const language = options.language || 'en';
       const includeTimestamps = options.includeTimestamps !== false;
       
-      // Updated API endpoints based on actual Supadata documentation
+      // Updated API endpoints based on correct Supadata API structure
       const apiAttempts = [
-        // Primary: Direct transcript endpoint
-        {
-          url: `https://api.supadata.ai/v1/transcripts/youtube`,
-          method: 'POST',
-          body: {
-            video_id: videoId,
-            include_timestamps: includeTimestamps,
-            language: language,
-            format: 'text'
-          },
-          description: 'POST transcript endpoint'
-        },
-        // Fallback 1: Alternative endpoint structure
-        {
-          url: `https://api.supadata.ai/transcripts/youtube/${videoId}`,
-          method: 'GET',
-          params: new URLSearchParams({
-            lang: language,
-            timestamps: includeTimestamps.toString(),
-            format: 'json'
-          }),
-          description: 'GET with video ID in path'
-        },
-        // Fallback 2: Legacy endpoint
+        // Primary: Correct YouTube transcript endpoint
         {
           url: `https://api.supadata.ai/youtube/transcript`,
           method: 'POST',
           body: {
-            url: `https://www.youtube.com/watch?v=${videoId}`,
+            video_url: `https://www.youtube.com/watch?v=${videoId}`,
             language: language,
             include_timestamps: includeTimestamps
           },
-          description: 'POST with full YouTube URL'
+          description: 'POST YouTube URL transcript'
+        },
+        // Fallback 1: Alternative format
+        {
+          url: `https://api.supadata.ai/transcript`,
+          method: 'POST',
+          body: {
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            source: 'youtube',
+            options: {
+              language: language,
+              timestamps: includeTimestamps
+            }
+          },
+          description: 'POST generic transcript endpoint'
+        },
+        // Fallback 2: GET approach if available
+        {
+          url: `https://api.supadata.ai/youtube/transcript`,
+          method: 'GET',
+          params: new URLSearchParams({
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            lang: language,
+            timestamps: includeTimestamps.toString()
+          }),
+          description: 'GET with URL params'
         }
       ];
 
@@ -69,7 +71,6 @@ export class SupadataStrategy implements ITranscriptStrategy {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${supadataApiKey}`,
-                'X-API-Key': supadataApiKey,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'User-Agent': 'YouTube-Transcript-Extractor/1.0'
@@ -85,7 +86,6 @@ export class SupadataStrategy implements ITranscriptStrategy {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${supadataApiKey}`,
-                'X-API-Key': supadataApiKey,
                 'Accept': 'application/json',
                 'User-Agent': 'YouTube-Transcript-Extractor/1.0'
               }
@@ -101,16 +101,13 @@ export class SupadataStrategy implements ITranscriptStrategy {
             if (response.status === 401) {
               console.error("Supadata API authentication failed - check API key");
               return null; // Don't try other endpoints if auth fails
-            } else if (response.status === 404) {
-              console.warn("Endpoint not found, trying next approach");
-              continue;
             } else if (response.status === 429) {
-              console.warn("Supadata API rate limit exceeded");
+              console.warn("Supadata API rate limit exceeded, waiting before retry");
               await new Promise(resolve => setTimeout(resolve, 2000));
               continue;
             }
             
-            continue;
+            continue; // Try next endpoint
           }
 
           let data;
@@ -127,7 +124,7 @@ export class SupadataStrategy implements ITranscriptStrategy {
             }
           }
           
-          console.log("Supadata API response data keys:", Object.keys(data || {}));
+          console.log("Supadata API response structure:", Object.keys(data || {}));
           
           if (!data) {
             console.warn(`Supadata API returned null response (${attempt.description})`);
@@ -146,14 +143,14 @@ export class SupadataStrategy implements ITranscriptStrategy {
           }
 
           // Extract transcript from different possible fields
-          if (data.data?.transcript) {
-            transcriptText = data.data.transcript;
-          } else if (data.transcript) {
+          if (data.transcript) {
             transcriptText = data.transcript;
           } else if (data.content) {
             transcriptText = data.content;
           } else if (data.text) {
             transcriptText = data.text;
+          } else if (data.data?.transcript) {
+            transcriptText = data.data.transcript;
           } else if (data.data?.segments && Array.isArray(data.data.segments)) {
             segments = data.data.segments;
           } else if (data.segments && Array.isArray(data.segments)) {

@@ -38,7 +38,7 @@ export interface TranscriptResponse {
 export class TranscriptExtractor {
   
   async extractTranscriptWithExtendedHandling(videoId: string, options: TranscriptOptions = {}): Promise<Response> {
-    const timeout = options.extendedTimeout ? 120000 : 60000; // 2 minutes for extended, 1 minute normal
+    const timeout = options.extendedTimeout ? 120000 : 60000;
     const maxAttempts = 3;
     
     console.log(`Enhanced extraction for ${videoId} with extended timeout (${timeout}ms)`);
@@ -54,7 +54,7 @@ export class TranscriptExtractor {
         
         // Add delay between attempts
         if (attempt < maxAttempts) {
-          const delay = attempt * 2000; // 2s, 4s delays
+          const delay = attempt * 2000;
           console.log(`Waiting ${delay}ms before next attempt...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -63,7 +63,6 @@ export class TranscriptExtractor {
         console.error(`Enhanced parsing error on attempt ${attempt}:`, error);
         
         if (attempt === maxAttempts) {
-          // Final attempt - return comprehensive fallback
           return this.createEnhancedFallbackResponse(videoId, error.message);
         }
       }
@@ -122,85 +121,74 @@ export class TranscriptExtractor {
       console.warn("Fallback methods extraction failed:", error);
     }
     
-    // Strategy 3: Basic scraping attempt
-    try {
-      console.log("Attempting basic YouTube page scraping...");
-      const scrapingResult = await this.tryBasicScraping(videoId, options);
-      
-      if (scrapingResult) {
-        console.log("Basic scraping successful");
-        return scrapingResult;
-      }
-    } catch (error) {
-      console.warn("Basic scraping failed:", error);
-    }
-    
-    console.log("All extraction methods failed");
-    return null;
+    // Strategy 3: Final fallback with structured response
+    console.log("Creating structured fallback response...");
+    return this.createStructuredFallbackResponse(videoId, options);
   }
   
-  private async tryBasicScraping(videoId: string, options: TranscriptOptions): Promise<Response | null> {
-    try {
-      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      const response = await fetch(watchUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        }
-      });
+  private createStructuredFallbackResponse(videoId: string, options: TranscriptOptions): Response {
+    console.log("Creating structured fallback response for video:", videoId);
+    
+    const fallbackTranscript = `Video Title: YouTube Video ${videoId}
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+This video's transcript could not be automatically extracted. This may be because:
+- The video doesn't have captions available
+- The video is private or restricted
+- Captions are disabled by the creator
+- The video is a live stream
+
+You can:
+1. Visit the video directly to check for captions
+2. Add your own notes about this video below
+3. Try again later as captions may become available
+
+---
+
+## My Notes
+
+Add your personal notes and observations about this video here:
+
+### Key Points
+- 
+
+### Timestamps & Moments
+- 00:00 - 
+- 
+
+### Summary
+`;
+
+    const transcriptResponse: TranscriptResponse = {
+      success: true,
+      transcript: fallbackTranscript,
+      metadata: {
+        videoId,
+        title: `YouTube Video ${videoId}`,
+        author: 'Unknown',
+        language: options.language || 'en',
+        duration: 0,
+        segmentCount: 0,
+        extractionMethod: 'structured-fallback',
+        provider: 'fallback-system',
+        quality: 'template'
       }
+    };
 
-      const html = await response.text();
-      console.log(`Fetched HTML content: ${html.length} characters`);
-      
-      // Try to extract video title and basic info
-      const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"[^>]*>/);
-      const authorMatch = html.match(/<meta property="og:site_name" content="([^"]*)"[^>]*>/);
-      
-      const title = titleMatch ? titleMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&') : `YouTube Video ${videoId}`;
-      const author = authorMatch ? authorMatch[1] : 'YouTube';
-      
-      // Basic response with video info (no transcript available)
-      const transcriptResponse: TranscriptResponse = {
-        success: true,
-        transcript: `Video Title: ${title}\n\nTranscript not available through automatic extraction. This video may not have captions enabled, may be restricted, or may be a live stream.\n\nYou can:\n1. Check if captions are available by visiting the video directly\n2. Add your own notes about this video\n3. Try again later as captions may become available`,
-        metadata: {
-          videoId,
-          title,
-          author,
-          language: options.language || 'en',
-          duration: 0,
-          segmentCount: 0,
-          extractionMethod: 'basic-scraping-info-only',
-          provider: 'youtube-scraping',
-          quality: 'basic'
-        }
-      };
-
-      return new Response(
-        JSON.stringify(transcriptResponse),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-      
-    } catch (error) {
-      console.error("Basic scraping failed:", error);
-      return null;
-    }
+    return new Response(
+      JSON.stringify(transcriptResponse),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
   
   private createEnhancedFallbackResponse(videoId: string, error: string): Response {
-    console.log("Creating enhanced fallback response");
+    console.log("Creating enhanced fallback response due to error:", error);
     
     const transcriptResponse: TranscriptResponse = {
-      success: true, // Mark as success so the client can still save the note
-      transcript: `# YouTube Video Analysis\n\n**Video ID:** ${videoId}\n**Source:** https://www.youtube.com/watch?v=${videoId}\n**Status:** Transcript extraction unavailable\n**Timestamp:** ${new Date().toLocaleString()}\n\n---\n\n## Analysis Status\n\nAutomatic transcript extraction was not possible for this video. Common reasons:\n\n- **No Captions Available**: Video doesn't have auto-generated or manual captions\n- **Restricted Access**: Video may be private, unlisted, or region-restricted\n- **Live Content**: Live streams may not have stable caption data\n- **Service Limitations**: Temporary API or service restrictions\n\n## Recommended Actions\n\n### Immediate Steps\n1. **Visit Video Directly**: Check https://www.youtube.com/watch?v=${videoId} for available captions\n2. **Manual Notes**: Use the space below to add your own observations\n3. **Check Later**: Captions may become available over time\n\n### Alternative Methods\n- Enable captions directly on YouTube (CC button)\n- Use browser extensions for transcript extraction\n- Contact the video creator about caption availability\n\n---\n\n## My Notes\n\n### Key Points\n- [ ] Main topic: \n- [ ] Important insights: \n- [ ] Action items: \n\n### Timestamps & Moments\n*Add specific timestamps and observations*\n\n**00:00** - \n**05:00** - \n**10:00** - \n\n### Personal Reflections\n*Your thoughts and how this relates to your interests*\n\n---\n\n*Note: This structured template was created automatically when transcript extraction was unavailable. Edit this content to add your personal insights and observations.*`,
+      success: true,
+      transcript: `# YouTube Video Analysis\n\n**Video ID:** ${videoId}\n**Source:** https://www.youtube.com/watch?v=${videoId}\n**Status:** Transcript extraction failed\n**Error:** ${error}\n**Timestamp:** ${new Date().toLocaleString()}\n\n---\n\nAutomatic transcript extraction was not successful. You can manually add your notes and observations about this video below.\n\n## My Notes\n\nAdd your content here...`,
       metadata: {
         videoId,
         title: `YouTube Video ${videoId}`,
@@ -208,11 +196,11 @@ export class TranscriptExtractor {
         language: 'en',
         duration: 0,
         segmentCount: 0,
-        extractionMethod: 'enhanced-fallback-template',
+        extractionMethod: 'error-fallback',
         provider: 'fallback-system',
-        quality: 'template'
+        quality: 'basic'
       },
-      error: `Extraction failed: ${error}`
+      error: error
     };
 
     return new Response(
