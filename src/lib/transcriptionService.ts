@@ -1,4 +1,6 @@
+
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { YouTubeService } from "./transcription/youtubeService";
 import { ExternalProviderService } from "./transcription/externalProviderService";
 import { MediaTypeDetector } from "./transcription/mediaTypeDetector";
@@ -96,12 +98,12 @@ export class TranscriptionService {
               language: 'auto',
               format: 'text',
               qualityLevel: 'high',
-              fastMode: true // New optimization flag
+              fastMode: true
             }
           }
         }),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Fast transcript timeout')), 30000) // Reduced timeout
+          setTimeout(() => reject(new Error('Fast transcript timeout')), 30000)
         )
       ]);
 
