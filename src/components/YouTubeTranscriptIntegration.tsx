@@ -83,7 +83,7 @@ export function YouTubeTranscriptIntegration({
         setExtractedTranscript(result.text);
         setVideoInfo(metadata);
 
-        // Format the enhanced content
+        // Create properly formatted content with single header
         const title = metadata?.title || `YouTube Video ${videoId}`;
         const author = metadata?.author || 'Unknown';
         const duration = metadata?.duration || 'Unknown';
@@ -101,7 +101,9 @@ export function YouTubeTranscriptIntegration({
         enhancedContent += `\n---\n\n`;
         enhancedContent += `## 📝 ${isWarning ? 'Notes' : 'Transcript'}\n\n`;
         enhancedContent += result.text;
-        enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+        if (!isWarning) {
+          enhancedContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
+        }
 
         onTranscriptExtracted(enhancedContent);
 

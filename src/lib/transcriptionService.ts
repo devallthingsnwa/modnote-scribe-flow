@@ -54,16 +54,7 @@ export class TranscriptionService {
           const isWarningContent = youtubeResult.text.includes('could not be automatically transcribed') || 
                                   youtubeResult.metadata?.isWarning;
           
-          let finalText = youtubeResult.text;
-          
-          // If it's not a warning (actual transcript), format it properly
-          if (!isWarningContent) {
-            finalText = await this.formatTranscriptContent(youtubeResult.text, url);
-          } else {
-            // For warning content, ensure proper formatting without duplicates
-            finalText = await this.formatWarningContent(youtubeResult.text, url);
-          }
-          
+          // Return the raw text without additional formatting - let the frontend handle formatting
           toast({
             title: isWarningContent ? "📝 Smart Note Created" : "✅ Transcript Extracted",
             description: isWarningContent ? "Transcript unavailable - created structured note for manual input" : "Successfully extracted YouTube captions"
@@ -71,7 +62,7 @@ export class TranscriptionService {
           
           return {
             ...youtubeResult,
-            text: finalText,
+            text: youtubeResult.text, // Return raw text without additional formatting
             metadata: {
               ...youtubeResult.metadata,
               retryCount: attempt,
@@ -266,36 +257,18 @@ export class TranscriptionService {
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const processingTime = Date.now() - startTime;
     
-    // Create structured fallback content matching the requested format
-    const title = isYouTube ? `YouTube Video ${videoId || 'Unknown'}` : 'Media Content';
-    
-    let fallbackContent = `# 🎥 ${title}\n\n`;
-    fallbackContent += `**Source:** ${url}\n`;
-    fallbackContent += `**Author:** Unknown\n`;
-    fallbackContent += `**Duration:** Unknown\n`;
-    fallbackContent += `**Type:** Video Note\n\n`;
-    fallbackContent += `---\n\n`;
-    fallbackContent += `## 📝 Notes\n\n`;
-    
-    if (isYouTube) {
-      fallbackContent += `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
-      fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
-      fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
-      fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
-      fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
-      fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
-      fallbackContent += `### 💡 Alternative Options\n\n`;
-      fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
-      fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
-      fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
-      fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
-    } else {
-      fallbackContent += `This content could not be automatically transcribed. You can still:\n\n`;
-      fallbackContent += `- **Manual Notes**: Add your own observations and summaries\n`;
-      fallbackContent += `- **Key Timestamps**: Note important moments if it's a time-based media\n`;
-      fallbackContent += `- **Reference Links**: Add related resources and follow-up materials\n\n`;
-    }
-    
+    // Create simple fallback content without headers - let frontend handle formatting
+    let fallbackContent = `This YouTube video could not be automatically transcribed. Common reasons:\n\n`;
+    fallbackContent += `- **No Captions Available**: Video doesn't have auto-generated or manual captions\n`;
+    fallbackContent += `- **Private/Restricted Content**: Video has access restrictions\n`;
+    fallbackContent += `- **Live Stream**: Live content may not have stable captions\n`;
+    fallbackContent += `- **Language Barriers**: Non-English content without proper language detection\n`;
+    fallbackContent += `- **Technical Issues**: Temporary service limitations or API restrictions\n\n`;
+    fallbackContent += `### 💡 Alternative Options\n\n`;
+    fallbackContent += `1. **Check YouTube Captions**: Visit the video directly and look for CC button\n`;
+    fallbackContent += `2. **Manual Summary**: Watch and create your own key points below\n`;
+    fallbackContent += `3. **Audio Recording**: Use voice notes to summarize while watching\n`;
+    fallbackContent += `4. **Third-party Tools**: Try external transcription services\n\n`;
     fallbackContent += `---\n\n`;
     fallbackContent += `## 📝 My Notes\n\n`;
     fallbackContent += `### 🎯 Key Points\n`;
@@ -303,22 +276,19 @@ export class TranscriptionService {
     fallbackContent += `- [ ] Important insights:\n`;
     fallbackContent += `- [ ] Action items:\n`;
     fallbackContent += `- [ ] Questions raised:\n\n`;
-    
     fallbackContent += `### ⏰ Timestamps & Moments\n`;
     fallbackContent += `*Add specific timestamps and what happens at those moments*\n\n`;
     fallbackContent += `- **00:00** - \n`;
     fallbackContent += `- **05:00** - \n`;
     fallbackContent += `- **10:00** - \n\n`;
-    
     fallbackContent += `### 💭 Personal Reflections\n`;
     fallbackContent += `*Your thoughts, opinions, and how this relates to your interests*\n\n`;
-    
     fallbackContent += `---\n\n`;
     fallbackContent += `*Note: This content was saved automatically when transcription was unavailable. You can edit this note to add your own insights and observations.*`;
 
     toast({
       title: "📝 Smart Note Created",
-      description: "Transcription unavailable - created structured note for manual input",
+      description: "Transcript unavailable - created structured note for manual input",
       variant: "default"
     });
 
