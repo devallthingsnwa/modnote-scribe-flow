@@ -6,8 +6,8 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Redirect to the enhanced ModNote dashboard
-    navigate("/enhanced-dashboard");
+    // Redirect to the landing page
+    navigate("/");
   }, [navigate]);
 
   return (

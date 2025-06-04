@@ -10,7 +10,6 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useDeleteNote } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-
 interface Note {
   id: string;
   title: string;
@@ -26,12 +25,11 @@ interface Note {
     color: string;
   }>;
 }
-
 interface NotesListPanelProps {
   notes: Note[];
   selectedNoteId: string | null;
   onNoteSelect: (noteId: string) => void;
-  onNewNote?: () => void;
+  onNewNote: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   isLoading?: boolean;
@@ -43,7 +41,6 @@ interface NotesListPanelProps {
   onSelectModeToggle?: () => void;
   onBulkDelete?: () => void;
 }
-
 export function NotesListPanel({
   notes,
   selectedNoteId,
@@ -117,9 +114,9 @@ export function NotesListPanel({
           </Button>
         </div>
         <div className="flex-1 flex flex-col items-center gap-3 p-3">
-          {onNewNote && <Button onClick={onNewNote} size="icon" className="h-9 w-9 bg-primary hover:bg-primary/90">
+          <Button onClick={onNewNote} size="icon" className="h-9 w-9 bg-primary hover:bg-primary/90">
             <Plus className="h-4 w-4" />
-          </Button>}
+          </Button>
           {onImport && <Button onClick={onImport} variant="outline" size="icon" className="h-9 w-9 hover:bg-muted">
               <Upload className="h-4 w-4" />
             </Button>}
@@ -203,10 +200,10 @@ export function NotesListPanel({
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first note to get started
               </p>
-              {onNewNote && <Button onClick={onNewNote} className="shadow-sm">
+              <Button onClick={onNewNote} className="shadow-sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Note
-              </Button>}
+              </Button>
             </div>
           </div> : <div className="p-3 space-y-2">
             {notes.map(note => <Card key={note.id} className={cn("p-4 cursor-pointer transition-all duration-200 border group hover:shadow-md", selectedNoteId === note.id && !isSelectMode ? "bg-primary/5 border-primary/30 shadow-sm ring-1 ring-primary/20" : "hover:bg-muted/30 border-border/50 hover:border-border", selectedNoteIds.includes(note.id) && isSelectMode ? "bg-primary/5 border-primary/30 ring-1 ring-primary/20" : "")} onClick={() => onNoteSelect(note.id)}>

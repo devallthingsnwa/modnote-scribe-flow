@@ -16,7 +16,7 @@ export function Logo({ className, size = "md" }: LogoProps) {
   return (
     <div className={cn("flex items-center", className)}>
       <img 
-        src="/lovable-uploads/65d399ec-f795-4dbc-ac45-68ad9dcaeb92.png" 
+        src="/lovable-uploads/16e636a2-65fe-45ab-bfb0-be6ddd3797d0.png" 
         alt="ModNote" 
         className={cn("object-contain", sizeClasses[size])}
       />

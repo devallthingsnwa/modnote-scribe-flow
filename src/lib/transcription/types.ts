@@ -13,7 +13,7 @@ export interface TranscriptionResult {
   text?: string;
   metadata?: {
     title?: string;
-    duration?: string; // Changed from number to string to match YouTube format (e.g., "5:35")
+    duration?: number;
     speaker_segments?: Array<{
       speaker: string;
       start: number;
@@ -50,7 +50,6 @@ export interface TranscriptionResult {
     failureReason?: string;
     successRate?: number;
     confidenceScore?: number;
-    author?: string; // Added author field that was missing
   };
   error?: string;
   provider?: string;

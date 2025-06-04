@@ -13,13 +13,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Upload, Video, Mic, Globe, FileText, Plus } from "lucide-react";
+import { Upload, Video, Mic, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
 import { UrlImporter } from './UrlImporter';
-import { FileImportForm } from './FileImportForm';
-import { NewNoteForm } from './NewNoteForm';
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -40,8 +38,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const { user } = useAuth();
   const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
   const [isAudioImporting, setIsAudioImporting] = useState(false);
-  const [isFileImporting, setIsFileImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'new-note' | 'youtube' | 'audio' | 'url' | 'file'>('new-note');
+  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url'>('youtube');
 
   const saveToSupabase = async (content: {
     title: string;
@@ -108,38 +105,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
     console.log("🔍 Note verification successful:", verifyNote.title);
     return insertedNote;
-  };
-
-  const handleNewNote = async (processedContent: {
-    title: string;
-    content: string;
-  }) => {
-    try {
-      // Save to Supabase first
-      await saveToSupabase({
-        ...processedContent,
-        is_transcription: false
-      });
-      
-      // Then trigger the dashboard import handler
-      onImport({
-        ...processedContent,
-        is_transcription: false
-      });
-      onClose();
-      
-      toast({
-        title: "Note Created",
-        description: "Successfully created a new note.",
-      });
-    } catch (error) {
-      console.error("💥 New note creation error:", error);
-      toast({
-        title: "Creation failed",
-        description: error.message || "Failed to create note. Please try again.",
-        variant: "destructive",
-      });
-    }
   };
 
   const handleYoutubeImport = async (processedContent: {
@@ -237,43 +202,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     }
   };
 
-  const handleFileImport = async (processedContent: {
-    title: string;
-    content: string;
-    is_transcription?: boolean;
-  }) => {
-    setIsFileImporting(true);
-    
-    try {
-      // Save to Supabase first
-      await saveToSupabase({
-        ...processedContent,
-        is_transcription: processedContent.is_transcription || false
-      });
-      
-      // Then trigger the dashboard import handler
-      onImport({
-        ...processedContent,
-        is_transcription: processedContent.is_transcription || false
-      });
-      onClose();
-      
-      toast({
-        title: "File Imported",
-        description: "Successfully imported content from file as a new note.",
-      });
-    } catch (error) {
-      console.error("💥 File import error:", error);
-      toast({
-        title: "Import failed",
-        description: error.message || "Failed to import file content. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFileImporting(false);
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -283,16 +211,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
           </DialogTitle>
           <DialogDescription>
-            Create a new note or import content from YouTube videos, audio files, web URLs, or local files
+            Import content from YouTube videos, audio files, or web URLs
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="new-note" className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              New Note
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="youtube" className="flex items-center gap-2">
               <Video className="h-4 w-4" />
               YouTube
@@ -305,17 +229,9 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
               <Globe className="h-4 w-4" />
               Web URL
             </TabsTrigger>
-            <TabsTrigger value="file" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              File
-            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-auto">
-            <TabsContent value="new-note" className="mt-4 h-full">
-              <NewNoteForm onNoteCreated={handleNewNote} />
-            </TabsContent>
-
             <TabsContent value="youtube" className="mt-4 h-full">
               <YoutubeImportForm
                 onContentImported={handleYoutubeImport}
@@ -332,13 +248,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
             <TabsContent value="url" className="mt-4 h-full">
               <UrlImporter onContentImported={handleUrlImport} />
-            </TabsContent>
-
-            <TabsContent value="file" className="mt-4 h-full">
-              <FileImportForm
-                onContentImported={handleFileImport}
-                isLoading={isFileImporting}
-              />
             </TabsContent>
           </div>
         </Tabs>

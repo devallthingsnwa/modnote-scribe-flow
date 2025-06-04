@@ -29,86 +29,162 @@ serve(async (req) => {
 
     const startTime = Date.now();
 
-    // Corrected Supadata API endpoints for audio transcription
-    const audioTranscriptionMethods = [
-      // Method 1: Direct video transcription (most efficient)
+    // Updated Supadata API endpoints for audio extraction
+    const audioExtractionMethods = [
+      // Method 1: Direct audio extraction
       {
-        url: 'https://api.supadata.ai/youtube/transcribe',
+        url: 'https://api.supadata.ai/v1/audio/extract',
         body: {
+          source: 'youtube',
           video_id: videoId,
-          audio_format: options.audioFormat || 'mp3',
-          language: options.language || 'en',
+          format: options.audioFormat || 'mp3',
           quality: options.quality || 'medium'
         },
-        description: 'Direct video transcription'
+        description: 'Direct audio extraction endpoint'
       },
-      // Method 2: Two-step process - extract then transcribe
+      // Method 2: Alternative endpoint structure
+      {
+        url: 'https://api.supadata.ai/extract/audio',
+        body: {
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          output_format: options.audioFormat || 'mp3',
+          quality: options.quality || 'medium'
+        },
+        description: 'Alternative audio extraction endpoint'
+      },
+      // Method 3: Legacy endpoint
+      {
+        url: 'https://api.supadata.ai/youtube/audio',
+        body: {
+          video_id: videoId,
+          format: options.audioFormat || 'mp3'
+        },
+        description: 'Legacy audio extraction endpoint'
+      }
+    ];
+
+    let audioData = null;
+    let extractionMethod = '';
+
+    // Try different audio extraction methods
+    for (const method of audioExtractionMethods) {
+      try {
+        console.log(`Trying audio extraction method: ${method.description}`);
+        
+        const audioExtractionResponse = await fetch(method.url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supadataApiKey}`,
+            'X-API-Key': supadataApiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(method.body),
+        });
+
+        if (!audioExtractionResponse.ok) {
+          const errorText = await audioExtractionResponse.text();
+          console.warn(`Audio extraction failed with ${method.description}: ${audioExtractionResponse.status} - ${errorText}`);
+          continue;
+        }
+
+        audioData = await audioExtractionResponse.json();
+        extractionMethod = method.description;
+        console.log(`Audio extraction successful with: ${method.description}`);
+        break;
+        
+      } catch (error) {
+        console.warn(`Audio extraction method failed: ${method.description}`, error);
+        continue;
+      }
+    }
+
+    if (!audioData || (!audioData.audioUrl && !audioData.audioContent && !audioData.url && !audioData.download_url)) {
+      throw new Error('No audio content received from any extraction method');
+    }
+
+    // Step 2: Transcribe the extracted audio using Supadata Speech-to-Text
+    console.log('Transcribing extracted audio...');
+    
+    // Determine audio source
+    const audioSource = audioData.audioUrl || audioData.url || audioData.download_url;
+    const audioContent = audioData.audioContent || audioData.content;
+    
+    let transcriptionResponse;
+    
+    // Updated transcription endpoints
+    const transcriptionMethods = [
+      // Method 1: Direct audio content
+      ...(audioContent ? [{
+        url: 'https://api.supadata.ai/v1/transcribe',
+        body: {
+          audio: audioContent,
+          format: options.audioFormat || 'mp3',
+          language: options.language || 'en',
+          model: 'whisper-1'
+        },
+        description: 'Direct audio content transcription'
+      }] : []),
+      // Method 2: Audio URL
+      ...(audioSource ? [{
+        url: 'https://api.supadata.ai/v1/transcribe/url',
+        body: {
+          audio_url: audioSource,
+          language: options.language || 'en',
+          model: 'whisper-1'
+        },
+        description: 'Audio URL transcription'
+      }] : []),
+      // Method 3: Legacy transcription endpoint
       {
         url: 'https://api.supadata.ai/transcribe',
         body: {
-          source: 'youtube',
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          language: options.language || 'en',
-          format: options.audioFormat || 'mp3'
-        },
-        description: 'URL-based transcription'
-      },
-      // Method 3: Audio extraction first, then transcription
-      {
-        url: 'https://api.supadata.ai/audio/transcribe',
-        body: {
-          video_id: videoId,
-          source: 'youtube',
+          audio: audioContent || audioSource,
           language: options.language || 'en'
         },
-        description: 'Audio extraction and transcription'
+        description: 'Legacy transcription endpoint'
       }
     ];
 
     let transcriptionData = null;
     let transcriptionMethod = '';
 
-    // Try different transcription methods
-    for (const method of audioTranscriptionMethods) {
+    for (const method of transcriptionMethods) {
       try {
         console.log(`Trying transcription method: ${method.description}`);
         
-        const transcriptionResponse = await fetch(method.url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${supadataApiKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(method.body),
-        });
-
-        console.log(`Transcription response status: ${transcriptionResponse.status}`);
-
-        if (!transcriptionResponse.ok) {
-          const errorText = await transcriptionResponse.text();
-          console.warn(`Transcription failed with ${method.description}: ${transcriptionResponse.status} - ${errorText}`);
-          
-          if (transcriptionResponse.status === 401) {
-            console.error("Authentication failed - check API key");
-            break; // Don't try other methods if auth fails
-          }
-          
-          continue;
-        }
-
-        const responseText = await transcriptionResponse.text();
-        try {
-          transcriptionData = JSON.parse(responseText);
-        } catch (parseError) {
-          console.warn("Failed to parse transcription response as JSON");
-          if (responseText.trim().length > 50) {
-            transcriptionData = { text: responseText.trim() };
-          } else {
+        // If we have an audio URL, download it first
+        if (method.body.audio_url && !method.body.audio) {
+          try {
+            const audioResponse = await fetch(method.body.audio_url);
+            if (audioResponse.ok) {
+              const audioBuffer = await audioResponse.arrayBuffer();
+              const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+              method.body.audio = base64Audio;
+              delete method.body.audio_url;
+            }
+          } catch (downloadError) {
+            console.warn('Failed to download audio from URL:', downloadError);
             continue;
           }
         }
 
+        transcriptionResponse = await fetch(method.url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supadataApiKey}`,
+            'X-API-Key': supadataApiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(method.body),
+        });
+
+        if (!transcriptionResponse.ok) {
+          const errorText = await transcriptionResponse.text();
+          console.warn(`Transcription failed with ${method.description}: ${transcriptionResponse.status} - ${errorText}`);
+          continue;
+        }
+
+        transcriptionData = await transcriptionResponse.json();
         transcriptionMethod = method.description;
         console.log(`Transcription successful with: ${method.description}`);
         break;
@@ -135,8 +211,6 @@ serve(async (req) => {
       transcript = transcriptionData.data.text.trim();
     } else if (transcriptionData.result?.text) {
       transcript = transcriptionData.result.text.trim();
-    } else if (transcriptionData.content) {
-      transcript = transcriptionData.content.trim();
     }
 
     if (!transcript || transcript.length < 10) {
@@ -145,7 +219,7 @@ serve(async (req) => {
 
     const processingTime = Date.now() - startTime;
 
-    console.log(`Audio transcription completed: ${transcript.length} characters in ${processingTime}ms`);
+    console.log(`Audio extraction and transcription completed: ${transcript.length} characters in ${processingTime}ms`);
 
     return new Response(
       JSON.stringify({
@@ -153,8 +227,8 @@ serve(async (req) => {
         transcript: transcript,
         metadata: {
           videoId,
-          extractionMethod: `youtube-audio-supadata (${transcriptionMethod})`,
-          audioQuality: options.quality || 'medium',
+          extractionMethod: `youtube-audio-supadata (${extractionMethod} + ${transcriptionMethod})`,
+          audioQuality: audioData.quality || options.quality || 'medium',
           language: transcriptionData.language || options.language || 'en',
           duration: transcriptionData.duration,
           confidence: transcriptionData.confidence,
