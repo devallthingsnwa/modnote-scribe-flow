@@ -54,7 +54,7 @@ export class YouTubeTranscriptService {
       };
     }
 
-    console.log(`🚀 Starting transcript extraction for video: ${videoId}`);
+    console.log(`🚀 Starting enhanced transcript extraction for video: ${videoId}`);
 
     try {
       const result = await SupadataService.processWithFallbackChain(videoId);
@@ -64,14 +64,13 @@ export class YouTubeTranscriptService {
         metadata = await this.fetchVideoMetadata(videoId);
       }
 
-      if (result.success && result.transcript) {
+      if (result.success && result.transcript && result.transcript.trim().length > 20) {
         const source = this.mapMethodToSource(result.method || 'unknown');
-        console.log(`✅ Transcript extraction successful via ${source}`);
+        console.log(`✅ Transcript extraction successful via ${source}: ${result.transcript.length} characters`);
         
-        // Return raw transcript as-is
         return {
           success: true,
-          transcript: result.transcript,
+          transcript: result.transcript.trim(),
           segments: result.segments,
           metadata,
           source,
@@ -79,13 +78,13 @@ export class YouTubeTranscriptService {
         };
       }
 
-      console.log(`⚠️ Transcript extraction failed`);
+      console.log(`⚠️ Transcript extraction failed or returned insufficient content`);
       return {
         success: false,
-        error: result.error || 'All transcription methods failed',
+        error: result.error || 'Unable to extract transcript. This video may not have captions available or may be restricted.',
         metadata,
         source: 'fallback',
-        retryable: result.retryable
+        retryable: result.retryable !== false
       };
 
     } catch (error) {
@@ -94,7 +93,7 @@ export class YouTubeTranscriptService {
       const metadata = await this.fetchVideoMetadata(videoId);
       return {
         success: false,
-        error: error.message || 'Failed to extract transcript',
+        error: error.message || 'Failed to extract transcript. Please check if the video is public and has captions available.',
         metadata,
         source: 'fallback',
         retryable: true
@@ -110,18 +109,18 @@ export class YouTubeTranscriptService {
     let lastResult: TranscriptResult | null = null;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      console.log(`🔄 Transcript extraction attempt ${attempt + 1}/${maxRetries}`);
+      console.log(`🔄 Enhanced transcript extraction attempt ${attempt + 1}/${maxRetries}`);
       
       const result = await this.extractTranscriptWithFallback(videoUrl);
       
-      if (result.success || !result.retryable) {
+      if (result.success && result.transcript && result.transcript.trim().length > 20) {
         return result;
       }
       
       lastResult = result;
       
       if (attempt < maxRetries - 1) {
-        const delay = (attempt + 1) * 5000;
+        const delay = (attempt + 1) * 3000; // Shorter delays for better UX
         console.log(`⏳ Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -129,7 +128,7 @@ export class YouTubeTranscriptService {
     
     return lastResult || {
       success: false,
-      error: 'All extraction attempts failed',
+      error: 'All extraction attempts failed. This video may not have captions available or may be restricted.',
       source: 'fallback',
       retryable: false
     };
@@ -137,7 +136,9 @@ export class YouTubeTranscriptService {
 
   private static mapMethodToSource(method: string): 'captions' | 'audio-transcription' | 'external' | 'fallback' {
     switch (method) {
-      case 'captions': return 'captions';
+      case 'captions':
+      case 'direct-captions':
+      case 'page-scraping': return 'captions';
       case 'audio-transcription': return 'audio-transcription';
       case 'podsqueeze':
       case 'whisper':
