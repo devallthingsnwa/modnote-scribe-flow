@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Clock, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
 import { UrlInput } from "./UrlInput";
@@ -31,6 +31,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const [contentType, setContentType] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [hasWarning, setHasWarning] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
 
   const resetState = () => {
@@ -51,6 +52,61 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUrl(e.target.value);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setIsProcessing(true);
+      setStatus("Processing file...");
+      setProgress(30);
+      
+      // Simulate file processing
+      setTimeout(() => {
+        setMetadata({
+          title: file.name,
+          author: "File Upload",
+          description: `Uploaded file: ${file.name}`
+        });
+        setTranscript(`File uploaded: ${file.name}\n\nAdd your notes about this file here...`);
+        setContentType('file');
+        setStatus("✅ File uploaded successfully!");
+        setProgress(100);
+        setIsProcessing(false);
+      }, 1500);
+    }
+  };
+
+  const handleVoiceRecording = () => {
+    if (isRecording) {
+      // Stop recording
+      setIsRecording(false);
+      setIsProcessing(true);
+      setStatus("Processing voice recording...");
+      setProgress(50);
+      
+      // Simulate voice processing
+      setTimeout(() => {
+        setMetadata({
+          title: "Voice Recording",
+          author: "Voice Note",
+          description: "Audio recording transcription"
+        });
+        setTranscript("Your voice recording transcript would appear here...\n\nAdd additional notes below:");
+        setContentType('voice');
+        setStatus("✅ Voice recording processed!");
+        setProgress(100);
+        setIsProcessing(false);
+      }, 2000);
+    } else {
+      // Start recording
+      setIsRecording(true);
+      setStatus("🎤 Recording... Click again to stop");
+      toast({
+        title: "Recording Started",
+        description: "Speak now. Click the microphone again to stop recording.",
+      });
+    }
   };
 
   const processUrl = async () => {
@@ -167,16 +223,24 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       return;
     }
 
-    const noteContent = contentType === 'youtube' ? 
-      `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Transcript unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Transcript'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...` :
-      `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Article/Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    let noteContent = '';
+    
+    if (contentType === 'youtube') {
+      noteContent = `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Transcript unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Transcript'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    } else if (contentType === 'voice') {
+      noteContent = `# 🎤 ${metadata.title}\n\n**Type:** Voice Recording\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    } else if (contentType === 'file') {
+      noteContent = `# 📄 ${metadata.title}\n\n**Type:** File Upload\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Content\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    } else {
+      noteContent = `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Article/Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    }
 
     onImport({
       title: metadata.title,
       content: noteContent,
-      source_url: url,
+      source_url: contentType === 'youtube' || contentType === 'article' ? url : undefined,
       thumbnail: metadata.thumbnail,
-      is_transcription: contentType === 'youtube' && !hasWarning
+      is_transcription: (contentType === 'youtube' && !hasWarning) || contentType === 'voice'
     });
 
     handleClose();
@@ -195,13 +259,79 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
         <div className="space-y-6">
           {/* URL Input */}
-          <UrlInput 
-            url={url}
-            onChange={handleUrlChange}
-            onFetchPreview={processUrl}
-            isLoading={isProcessing}
-            disabled={false}
-          />
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium">Import from URL</h3>
+            <UrlInput 
+              url={url}
+              onChange={handleUrlChange}
+              onFetchPreview={processUrl}
+              isLoading={isProcessing}
+              disabled={false}
+              buttonText="Extract"
+            />
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or upload files
+              </span>
+            </div>
+          </div>
+
+          {/* File Upload Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium">Upload Files</h3>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">Drop files here or click to upload</p>
+                <p className="text-xs text-gray-500">Supports PDF, DOCX, TXT, audio, and video files</p>
+              </div>
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                accept=".pdf,.docx,.txt,.mp3,.mp4,.wav,.m4a"
+              />
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or record voice
+              </span>
+            </div>
+          </div>
+
+          {/* Voice Recording Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium">Voice Recording</h3>
+            <div className="text-center">
+              <Button
+                onClick={handleVoiceRecording}
+                variant={isRecording ? "destructive" : "outline"}
+                size="lg"
+                className={`w-full ${isRecording ? 'animate-pulse' : ''}`}
+                disabled={isProcessing && !isRecording}
+              >
+                <Mic className="h-5 w-5 mr-2" />
+                {isRecording ? "Stop Recording" : "Start Voice Recording"}
+              </Button>
+              {isRecording && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  🎤 Recording in progress... Click "Stop Recording" when done
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Processing Status */}
           {isProcessing && (
