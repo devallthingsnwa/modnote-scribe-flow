@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Video, Loader2, Download, Play, AlertCircle, AlertTriangle, Mic } from "lucide-react";
+import { Video, Loader2, Download, Play, AlertCircle, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
 import { AudioRecorder } from "@/components/audio/AudioRecorder";
@@ -269,14 +269,6 @@ ${extractedTranscript}
                 </div>
               </div>
             )}
-
-            <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-blue-700 dark:text-blue-300">
-                <p className="font-medium mb-1">How to use:</p>
-                <p>Paste a YouTube URL in your note content, then click "Extract Transcript" to fetch the video's captions and add them to your note. If transcript isn't available, a note will still be created with a warning.</p>
-              </div>
-            </div>
           </TabsContent>
 
           <TabsContent value="speech" className="space-y-4 mt-4">
@@ -294,14 +286,6 @@ ${extractedTranscript}
             </div>
           </TabsContent>
         </Tabs>
-
-        <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-amber-700 dark:text-amber-300">
-            <p className="font-medium mb-1">Smart Fallback System:</p>
-            <p>When transcripts aren't available, the system automatically creates a note with a warning message, so you can still save and organize your video references.</p>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );
