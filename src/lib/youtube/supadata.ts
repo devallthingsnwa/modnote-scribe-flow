@@ -33,7 +33,9 @@ export class SupadataService {
         };
       }
 
-      throw new Error('No transcript available from Supadata');
+      // If we get here, the API call succeeded but no transcript was available
+      console.log("⚠️ Supadata transcript API succeeded but no transcript available");
+      throw new Error('No transcript available from Supadata - video may not have captions');
       
     } catch (error) {
       console.error("❌ Supadata transcript failed:", error);
@@ -54,8 +56,7 @@ export class SupadataService {
           method: 'audio-transcription',
           options: {
             includeTimestamps: false,
-            language: 'auto',
-            audioQuality: 'high'
+            language: 'auto'
           }
         }
       });
@@ -74,7 +75,9 @@ export class SupadataService {
         };
       }
 
-      throw new Error('Audio transcription failed via Supadata');
+      // If we get here, the API call succeeded but transcription failed
+      console.log("⚠️ Supadata audio transcription API succeeded but no transcript available");
+      throw new Error('Audio transcription failed via Supadata - video may not be accessible');
       
     } catch (error) {
       console.error("❌ Supadata audio transcription failed:", error);

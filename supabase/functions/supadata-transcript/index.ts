@@ -83,17 +83,16 @@ serve(async (req) => {
 async function fetchTranscriptFromCaptions(videoId: string, apiKey: string, options: any) {
   console.log('📝 Fetching transcript from captions...');
   
-  const response = await fetch('https://api.supadata.ai/v1/transcript', {
+  const response = await fetch('https://api.supadata.ai/v1/youtube/transcript', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      url: `https://www.youtube.com/watch?v=${videoId}`,
+      video_id: videoId,
       include_timestamps: options.includeTimestamps ?? true,
-      language: options.language || 'auto',
-      format: 'detailed'
+      language: options.language || 'auto'
     }),
   });
 
@@ -118,15 +117,14 @@ async function fetchTranscriptFromCaptions(videoId: string, apiKey: string, opti
 async function transcribeVideoAudio(videoId: string, apiKey: string, options: any) {
   console.log('🎵 Transcribing video audio...');
   
-  const response = await fetch('https://api.supadata.ai/v1/transcribe-audio', {
+  const response = await fetch('https://api.supadata.ai/v1/youtube/transcribe', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      url: `https://www.youtube.com/watch?v=${videoId}`,
-      audio_quality: options.audioQuality || 'high',
+      video_id: videoId,
       language: options.language || 'auto',
       include_timestamps: options.includeTimestamps ?? false
     }),

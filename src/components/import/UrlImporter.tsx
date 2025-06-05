@@ -19,6 +19,7 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [scrapedContent, setScrapedContent] = useState<any>(null);
   const [youtubeResult, setYoutubeResult] = useState<any>(null);
+  const [processingStep, setProcessingStep] = useState<string>('');
   const { toast } = useToast();
 
   const isYouTubeUrl = (url: string): boolean => {
@@ -38,27 +39,33 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const handleYouTubeTranscription = async () => {
     setIsLoading(true);
     setYoutubeResult(null);
+    setProcessingStep('Starting YouTube transcript extraction...');
     
     try {
       console.log('🎯 Starting YouTube transcript extraction for:', url);
+      setProcessingStep('Attempting to extract captions...');
       
-      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 2);
+      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 3);
       
       if (result.success && result.transcript) {
         setYoutubeResult(result);
+        setProcessingStep('');
         toast({
           title: "✅ YouTube transcript extracted!",
           description: `Successfully extracted ${result.transcript.length} characters via ${result.source}`,
         });
       } else {
+        setProcessingStep('');
+        console.error('Transcript extraction failed:', result.error);
         toast({
           title: "❌ Transcript extraction failed",
-          description: result.error || "Unable to extract transcript from this video",
+          description: result.error || "Unable to extract transcript from this video. This video may not have captions available or may be restricted.",
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error('YouTube transcription error:', error);
+      setProcessingStep('');
       toast({
         title: "YouTube processing error",
         description: error instanceof Error ? error.message : "Failed to process YouTube video",
@@ -177,7 +184,14 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
             </Button>
           </div>
 
-          {isYouTubeUrl(url) && (
+          {processingStep && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 p-2 rounded">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {processingStep}
+            </div>
+          )}
+
+          {isYouTubeUrl(url) && !processingStep && (
             <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
               🎥 <strong>YouTube detected:</strong> Will extract captions first, then fallback to audio transcription if needed
             </div>
