@@ -1,3 +1,4 @@
+
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -45,19 +46,6 @@ export function isPlaylist(url: string): boolean {
 export function extractPlaylistId(url: string): string | null {
   const match = url.match(/[?&]list=([^&]+)/);
   return match ? match[1] : null;
-}
-
-export function formatCurrentDateTime(): string {
-  const now = new Date();
-  return now.toLocaleString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
 }
 
 export function extractVideoTitle(html: string): string {
