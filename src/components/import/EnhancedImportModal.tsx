@@ -38,7 +38,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const { user } = useAuth();
   const [isAudioImporting, setIsAudioImporting] = useState(false);
   const [isFileImporting, setIsFileImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'audio' | 'url' | 'files'>('audio');
+  const [activeTab, setActiveTab] = useState<'audio' | 'url' | 'files'>('url');
 
   const saveToSupabase = async (content: {
     title: string;
@@ -154,11 +154,15 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   const handleUrlImport = async (content: { title: string; content: string; sourceUrl: string }) => {
     try {
+      // Determine if this is a YouTube transcript based on content format
+      const isYouTubeTranscript = content.sourceUrl.includes('youtube.com') || content.sourceUrl.includes('youtu.be');
+      
       const processedContent = {
         title: content.title,
         content: content.content,
         source_url: content.sourceUrl,
-        is_transcription: false
+        is_transcription: isYouTubeTranscript,
+        thumbnail: isYouTubeTranscript ? `https://img.youtube.com/vi/${extractVideoId(content.sourceUrl)}/maxresdefault.jpg` : undefined
       };
       
       await saveToSupabase(processedContent);
@@ -166,17 +170,23 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       onClose();
       
       toast({
-        title: "URL Content Imported",
-        description: "Successfully imported content from URL as a new note.",
+        title: isYouTubeTranscript ? "YouTube Transcript Imported" : "URL Content Imported",
+        description: `Successfully imported "${content.title}" as a new note.`,
       });
     } catch (error) {
       console.error("💥 URL import error:", error);
       toast({
         title: "Import failed",
-        description: error.message || "Failed to import URL content. Please try again.",
+        description: error.message || "Failed to import content. Please try again.",
         variant: "destructive",
       });
     }
+  };
+
+  const extractVideoId = (url: string): string => {
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : '';
   };
 
   return (
@@ -188,19 +198,19 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
           </DialogTitle>
           <DialogDescription>
-            Import content from audio files, web URLs, or upload documents
+            Import content from YouTube videos, audio files, web URLs, or upload documents
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="audio" className="flex items-center gap-2">
-              <Mic className="h-4 w-4" />
-              Audio
-            </TabsTrigger>
             <TabsTrigger value="url" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               Web URL
+            </TabsTrigger>
+            <TabsTrigger value="audio" className="flex items-center gap-2">
+              <Mic className="h-4 w-4" />
+              Audio
             </TabsTrigger>
             <TabsTrigger value="files" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -209,15 +219,15 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           </TabsList>
 
           <div className="flex-1 overflow-auto">
+            <TabsContent value="url" className="mt-4 h-full">
+              <UrlImporter onContentImported={handleUrlImport} />
+            </TabsContent>
+
             <TabsContent value="audio" className="mt-4 h-full">
               <AudioImportForm
                 onContentImported={handleAudioImport}
                 isLoading={isAudioImporting}
               />
-            </TabsContent>
-
-            <TabsContent value="url" className="mt-4 h-full">
-              <UrlImporter onContentImported={handleUrlImport} />
             </TabsContent>
 
             <TabsContent value="files" className="mt-4 h-full">
