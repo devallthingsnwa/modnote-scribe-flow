@@ -59,7 +59,8 @@ export class ContentParser {
             title: metadata?.title || 'Unknown Video',
             author: metadata?.author || 'Unknown Channel',
             url: metadata?.url || '',
-            language: metadata?.language || 'en'
+            language: metadata?.language || 'en',
+            extractionMethod: source
           }
         }),
         {
@@ -81,7 +82,7 @@ export class ContentParser {
       .filter(text => text.length > 0)
       .join(' ');
 
-    // Clean and standardize music/sound tags
+    // Clean and standardize music/sound tags while preserving them
     rawText = rawText
       .replace(/\[Music\]/gi, '[Musika]')
       .replace(/\[♪\]/gi, '[Musika]')
@@ -92,7 +93,6 @@ export class ContentParser {
       .replace(/\[Applause\]/gi, '[Palakpakan]')
       .replace(/\[Laughter\]/gi, '[Tawa]')
       .replace(/\[Inaudible\]/gi, '[Hindi marinig]')
-      // Keep other bracketed content as is
       .replace(/\s+/g, ' ') // Normalize spaces
       .trim();
 
