@@ -1,4 +1,3 @@
-
 import { corsHeaders, formatCurrentDateTime } from "./utils.ts";
 
 interface TranscriptSegment {
@@ -25,29 +24,36 @@ export class ContentParser {
     try {
       let transcript: TranscriptSegment[] = [];
       
+      console.log(`🔄 Processing content from ${source}, length: ${content.length}`);
+      
       if (content.includes('WEBVTT') || content.includes('-->')) {
+        console.log("📝 Parsing as WebVTT format");
         transcript = this.parseWebVTT(content);
       } else if (content.includes('<text')) {
+        console.log("📝 Parsing as XML format");
         transcript = this.parseXML(content);
       } else if (typeof content === 'string' && content.length > 0) {
-        // Try to parse as simple text
+        console.log("📝 Parsing as simple text");
         transcript = this.parseSimpleText(content);
       }
       
+      console.log(`📊 Extracted ${transcript.length} transcript segments`);
+      
       if (transcript.length === 0) {
-        console.log("No transcript segments extracted from content");
+        console.log("❌ No transcript segments extracted from content");
         return null;
       }
       
-      // Format as natural flowing text in markdown format
-      const formattedTranscript = this.formatAsMarkdown(transcript, metadata);
+      // Format as RAW transcript text - NO MARKDOWN
+      const rawTranscript = this.formatRawTranscript(transcript);
 
-      console.log(`Successfully extracted ${transcript.length} transcript segments via ${source}`);
+      console.log(`✅ Successfully extracted ${transcript.length} transcript segments via ${source}`);
+      console.log(`📝 Raw transcript preview: ${rawTranscript.substring(0, 200)}...`);
       
       return new Response(
         JSON.stringify({ 
           success: true,
-          transcript: formattedTranscript,
+          transcript: rawTranscript, // RAW TEXT ONLY - no markdown
           metadata: {
             segments: transcript.length,
             duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
@@ -67,88 +73,31 @@ export class ContentParser {
       );
       
     } catch (error) {
-      console.error("Error processing transcript content:", error);
+      console.error("❌ Error processing transcript content:", error);
       return null;
     }
   }
 
-  private formatAsMarkdown(segments: TranscriptSegment[], metadata?: VideoMetadata): string {
-    // Extract just the text and join naturally
-    let naturalText = segments
+  private formatRawTranscript(segments: TranscriptSegment[]): string {
+    // Return ONLY the raw transcript text - no formatting, headers, or markdown
+    let rawText = segments
       .map(segment => segment.text.trim())
       .filter(text => text.length > 0)
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Clean up common transcript artifacts
-    naturalText = naturalText
-      .replace(/\[Music\]/gi, '(music)')
-      .replace(/\[Applause\]/gi, '(applause)')
-      .replace(/\[Laughter\]/gi, '(laughter)')
-      .replace(/\[Inaudible\]/gi, '(inaudible)')
-      .replace(/\[.*?\]/g, '') // Remove other bracketed content
+    // Preserve special tags but clean up transcript artifacts
+    rawText = rawText
+      .replace(/\[Music\]/gi, '[Musika]') // Standardize music tags
+      .replace(/\[Applause\]/gi, '[Applause]')
+      .replace(/\[Laughter\]/gi, '[Laughter]')
+      .replace(/\[Inaudible\]/gi, '[Inaudible]')
+      // Keep other bracketed content as-is
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Add proper spacing and punctuation
-    naturalText = this.improveTextFlow(naturalText);
-
-    // Create the full markdown document
-    const title = metadata?.title || 'Unknown Video';
-    const author = metadata?.author || 'Unknown Channel';
-    const url = metadata?.url || '';
-    const currentDateTime = formatCurrentDateTime();
-    
-    return `# 🎥 ${author} - ${title}
-**Source:** ${url}
-**Type:** Video Transcript
-**Imported:** ${currentDateTime}
----
-## 📝 Transcript
-${naturalText}
----
-## 📝 My Notes
-Add your personal notes and thoughts here...`;
-  }
-
-  private improveTextFlow(text: string): string {
-    // Split into sentences and improve flow
-    let sentences = text.split(/([.!?]+)/).filter(s => s.trim());
-    let result = '';
-    let currentParagraph = '';
-    
-    for (let i = 0; i < sentences.length; i += 2) {
-      const sentence = sentences[i]?.trim();
-      const punctuation = sentences[i + 1]?.trim() || '';
-      
-      if (sentence) {
-        const fullSentence = sentence + punctuation;
-        
-        // Start new paragraph every 3-4 sentences or at natural breaks
-        if (currentParagraph.length > 300 || 
-            (currentParagraph.split('.').length > 3 && 
-             (sentence.toLowerCase().includes('so ') || 
-              sentence.toLowerCase().includes('now ') ||
-              sentence.toLowerCase().includes('but ') ||
-              sentence.toLowerCase().includes('and ')))) {
-          
-          if (currentParagraph.trim()) {
-            result += currentParagraph.trim() + '\n\n';
-            currentParagraph = '';
-          }
-        }
-        
-        currentParagraph += (currentParagraph ? ' ' : '') + fullSentence;
-      }
-    }
-    
-    // Add the last paragraph
-    if (currentParagraph.trim()) {
-      result += currentParagraph.trim();
-    }
-    
-    return result || text;
+    return rawText;
   }
 
   private parseWebVTT(content: string): TranscriptSegment[] {
@@ -193,22 +142,32 @@ Add your personal notes and thoughts here...`;
   private parseXML(content: string): TranscriptSegment[] {
     const transcript: TranscriptSegment[] = [];
     
-    // Match XML text elements with start and dur attributes
-    const textRegex = /<text start="([^"]*)"(?:\s+dur="([^"]*)")?[^>]*>([^<]*)<\/text>/g;
-    let match;
+    // Enhanced XML parsing patterns
+    const xmlPatterns = [
+      /<text start="([^"]*)"(?:\s+dur="([^"]*)")?[^>]*>([^<]*)<\/text>/g,
+      /<p t="([^"]*)"(?:\s+d="([^"]*)")?>([^<]*)<\/p>/g,
+      /<subtitle start="([^"]*)"(?:\s+duration="([^"]*)")?>([^<]*)<\/subtitle>/g,
+    ];
     
-    while ((match = textRegex.exec(content)) !== null) {
-      const start = parseFloat(match[1]);
-      const duration = match[2] ? parseFloat(match[2]) : 3; // Default 3 seconds if no duration
-      const text = this.cleanText(match[3]);
+    for (const pattern of xmlPatterns) {
+      pattern.lastIndex = 0; // Reset regex
+      let match;
       
-      if (text && text.trim()) {
-        transcript.push({
-          start: start,
-          end: start + duration,
-          text: text.trim()
-        });
+      while ((match = pattern.exec(content)) !== null) {
+        const start = parseFloat(match[1] || '0');
+        const duration = parseFloat(match[2] || '3'); // Default 3 seconds
+        const text = this.cleanText(match[3] || '').trim();
+        
+        if (text && text.length > 0) {
+          transcript.push({
+            start: start,
+            end: start + duration,
+            text: text
+          });
+        }
       }
+      
+      if (transcript.length > 0) break; // Use first successful pattern
     }
     
     return transcript.sort((a, b) => a.start - b.start);
@@ -251,8 +210,13 @@ Add your personal notes and thoughts here...`;
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
       .replace(/&nbsp;/g, ' ')
+      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+      .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
       .replace(/<[^>]*>/g, '') // Remove any HTML tags
+      .replace(/\n/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
   }
 

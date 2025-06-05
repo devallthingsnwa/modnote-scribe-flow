@@ -1,4 +1,3 @@
-
 import { corsHeaders, extractVideoId, validateVideoId, extractVideoTitle, extractChannelName } from "./utils.ts";
 import { ContentParser } from "./contentParser.ts";
 
@@ -22,230 +21,293 @@ export class FallbackMethods {
       return this.createErrorResponse("Invalid YouTube video URL or ID", 400);
     }
 
+    console.log(`🎯 Starting transcript extraction for video: ${videoId}`);
+
     const methods = [
       () => this.methodYouTubeCaption(videoId, videoUrl, options),
       () => this.methodYouTubeWatch(videoId, videoUrl, options),
-      () => this.methodYouTubeAPI(videoId, videoUrl, options),
+      () => this.methodAlternativeAPIs(videoId, videoUrl, options),
       () => this.methodYouTubeEmbed(videoId, videoUrl, options)
     ];
 
+    const methodNames = ['Direct Caption API', 'Watch Page Scraping', 'Alternative APIs', 'Embed Scraping'];
+    let lastError = '';
+
     for (let i = 0; i < methods.length; i++) {
       try {
-        console.log(`Trying fallback method ${i + 1}/${methods.length}`);
+        console.log(`🔍 Testing Method ${i + 1}: ${methodNames[i]}`);
         const result = await methods[i]();
         
         if (result) {
-          console.log(`Fallback method ${i + 1} successful`);
+          console.log(`✅ SUCCESS: Method ${i + 1} (${methodNames[i]}) extracted transcript`);
           return result;
         }
+        console.log(`❌ Method ${i + 1} (${methodNames[i]}) failed - no content found`);
       } catch (error) {
-        console.log(`Fallback method ${i + 1} failed:`, error.message);
+        const errorMsg = `Method ${i + 1} (${methodNames[i]}): ${error.message}`;
+        console.log(`❌ ${errorMsg}`);
+        lastError += errorMsg + '. ';
       }
     }
 
-    return this.createErrorResponse("No transcript available for this video", 404);
+    return this.createErrorResponse(`All extraction methods failed. ${lastError}`, 404);
   }
 
   private async methodYouTubeCaption(videoId: string, videoUrl: string, options: TranscriptOptions): Promise<Response | null> {
-    try {
-      console.log("Attempting direct caption API...");
-      
-      const captionUrls = [
-        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${options.language || 'en'}&fmt=srv3`,
-        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
-        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv3`,
-        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`
-      ];
+    console.log("🔍 Testing Method 1: Direct Caption API");
+    
+    // Comprehensive list of caption URL formats to try
+    const captionUrls = [
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3&auto=1`,
+      `https://video.google.com/timedtext?lang=en&v=${videoId}`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=srv1`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=ttml`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&tlang=en`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${options.language || 'en'}&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=vtt`
+    ];
 
-      for (const url of captionUrls) {
-        try {
-          const response = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-
-          if (response.ok) {
-            const xmlContent = await response.text();
-            
-            if (xmlContent.includes('<text')) {
-              // Get video metadata
-              const { title, author } = await this.getVideoMetadata(videoId);
-              
-              const metadata = {
-                videoId,
-                title,
-                author,
-                url: videoUrl,
-                language: options.language || 'en',
-                extractionMethod: 'direct-caption-api'
-              };
-              
-              return await this.contentParser.processTranscriptContent(
-                xmlContent,
-                'direct-caption-api',
-                metadata
-              );
-            }
+    for (let i = 0; i < captionUrls.length; i++) {
+      const url = captionUrls[i];
+      try {
+        console.log(`📊 URL ${i + 1}: ${url}`);
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/xml,application/xml,text/plain,*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
           }
-        } catch (error) {
-          console.log(`Caption URL failed: ${url}`, error.message);
-        }
-      }
+        });
 
-      return null;
-    } catch (error) {
-      console.error("Caption API method failed:", error);
-      return null;
+        console.log(`📊 Response Status: ${response.status}`);
+        console.log(`📄 Content Type: ${response.headers.get('content-type')}`);
+
+        if (response.ok) {
+          const content = await response.text();
+          console.log(`📝 Content Length: ${content.length}`);
+          console.log(`📝 Content Preview: ${content.substring(0, 200)}...`);
+          console.log(`✅ Has <text> tags: ${content.includes('<text')}`);
+          
+          if (content.length > 100 && (content.includes('<text') || content.includes('WEBVTT'))) {
+            const { title, author } = await this.getVideoMetadata(videoId);
+            
+            const metadata = {
+              videoId,
+              title,
+              author,
+              url: videoUrl,
+              language: options.language || 'en',
+              extractionMethod: 'direct-caption-api'
+            };
+            
+            return await this.contentParser.processTranscriptContent(
+              content,
+              'direct-caption-api',
+              metadata
+            );
+          }
+        }
+      } catch (error) {
+        console.log(`❌ Caption URL ${i + 1} failed: ${error.message}`);
+      }
     }
+
+    return null;
   }
 
   private async methodYouTubeWatch(videoId: string, videoUrl: string, options: TranscriptOptions): Promise<Response | null> {
+    console.log("🔍 Testing Method 2: Watch Page Scraping");
+    
     try {
-      console.log("Attempting YouTube watch page scraping...");
-      
       const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      console.log(`📊 Fetching: ${watchUrl}`);
+      
       const response = await fetch(watchUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Cache-Control': 'no-cache',
         }
       });
+
+      console.log(`📊 Watch page status: ${response.status}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const html = await response.text();
+      console.log(`📝 HTML length: ${html.length}`);
       
       // Extract video metadata from HTML
       const title = extractVideoTitle(html);
       const author = extractChannelName(html);
+      console.log(`📊 Video: "${title}" by ${author}`);
       
-      // Enhanced regex patterns for finding caption data
-      const patterns = [
-        /"captionTracks":\[([^\]]+)\]/,
-        /"captions":\{"playerCaptionsTracklistRenderer":\{"captionTracks":\[([^\]]+)\]/,
-        /\"captionTracks\":\[([^\]]*)\]/
+      // Modern caption patterns for 2024 YouTube
+      const modernCaptionPatterns = [
+        /"captionTracks":\s*\[([^\]]+)\]/,
+        /"captions":\s*\{[^}]*"playerCaptionsTracklistRenderer":\s*\{[^}]*"captionTracks":\s*\[([^\]]+)\]/,
+        /var\s+ytInitialPlayerResponse\s*=\s*\{[^}]*"captions":[^}]*"captionTracks":\s*\[([^\]]+)\]/,
+        /"playerMicroformatRenderer":[^}]*"captions":[^}]*"captionTracks":\s*\[([^\]]+)\]/,
+        /\"captionTracks\":\[([^\]]*)\]/,
+        /"playerResponse".*?"captions".*?"captionTracks":\[([^\]]+)\]/
       ];
       
       let captionTracks = null;
       
-      for (const pattern of patterns) {
+      for (let i = 0; i < modernCaptionPatterns.length; i++) {
+        const pattern = modernCaptionPatterns[i];
         const match = html.match(pattern);
+        console.log(`📊 Pattern ${i + 1} match: ${match ? 'FOUND' : 'not found'}`);
+        
         if (match) {
           try {
             captionTracks = JSON.parse(`[${match[1]}]`);
+            console.log(`✅ Parsed ${captionTracks.length} caption tracks`);
             break;
           } catch (e) {
+            console.log(`❌ Failed to parse pattern ${i + 1}: ${e.message}`);
             continue;
           }
         }
       }
       
-      if (captionTracks && captionTracks.length > 0) {
-        // Find preferred language track
-        const preferredTrack = captionTracks.find((track: any) => 
-          track.languageCode === (options.language || 'en')
-        ) || captionTracks.find((track: any) => 
-          track.languageCode === 'en'
-        ) || captionTracks[0];
-        
-        if (preferredTrack && preferredTrack.baseUrl) {
-          const captionResponse = await fetch(preferredTrack.baseUrl);
-          const captionXml = await captionResponse.text();
-          
-          const metadata = {
-            videoId,
-            title,
-            author,
-            url: videoUrl,
-            language: preferredTrack.languageCode || 'en',
-            extractionMethod: 'youtube-watch-scraping'
-          };
-          
-          return await this.contentParser.processTranscriptContent(
-            captionXml,
-            'youtube-watch-scraping',
-            metadata
-          );
-        }
-      }
-
-      return null;
-    } catch (error) {
-      console.error("YouTube watch method failed:", error);
-      return null;
-    }
-  }
-
-  private async methodYouTubeAPI(videoId: string, videoUrl: string, options: TranscriptOptions): Promise<Response | null> {
-    try {
-      console.log("Attempting YouTube Data API v3...");
-      
-      const apiKey = Deno.env.get('YOUTUBE_API_KEY');
-      if (!apiKey) {
-        console.log("YouTube API key not found, skipping API method");
+      if (!captionTracks || captionTracks.length === 0) {
+        console.log("❌ No caption tracks found in HTML");
         return null;
       }
 
-      // Get video details
-      const videoResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet`
-      );
-
-      if (!videoResponse.ok) {
-        throw new Error(`YouTube API error: ${videoResponse.status}`);
-      }
-
-      const videoData = await videoResponse.json();
+      // Find best caption track
+      const languagePriority = [options.language || 'en', 'en', 'auto', 'en-US', 'en-GB'];
+      let selectedTrack = null;
       
-      if (!videoData.items || videoData.items.length === 0) {
-        throw new Error("Video not found");
-      }
-
-      // Try to get captions list
-      const captionsResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/captions?videoId=${videoId}&key=${apiKey}&part=snippet`
-      );
-
-      if (captionsResponse.ok) {
-        const captionsData = await captionsResponse.json();
-        
-        if (captionsData.items && captionsData.items.length > 0) {
-          // Create metadata for the placeholder content
-          const metadata = {
-            videoId,
-            title: videoData.items[0].snippet.title,
-            author: videoData.items[0].snippet.channelTitle,
-            url: videoUrl,
-            language: captionsData.items[0].snippet.language || 'en',
-            extractionMethod: 'youtube-api-detection'
-          };
-
-          // Note: API method can detect captions but downloading requires OAuth
-          const placeholderContent = `Captions detected for this video but content extraction requires OAuth authentication. The video "${metadata.title}" by ${metadata.author} has ${captionsData.items.length} caption track(s) available. Try using the direct caption API methods instead for automatic extraction.`;
-          
-          return await this.contentParser.processTranscriptContent(
-            placeholderContent,
-            'youtube-api',
-            metadata
-          );
+      for (const lang of languagePriority) {
+        selectedTrack = captionTracks.find((track: any) => track.languageCode === lang);
+        if (selectedTrack) {
+          console.log(`✅ Selected track language: ${lang}`);
+          break;
         }
       }
+      
+      if (!selectedTrack) {
+        selectedTrack = captionTracks[0];
+        console.log(`✅ Using first available track: ${selectedTrack.languageCode}`);
+      }
+      
+      if (!selectedTrack?.baseUrl) {
+        console.log("❌ No baseUrl found in selected track");
+        return null;
+      }
 
-      return null;
+      // Download caption content
+      console.log(`📊 Downloading captions from: ${selectedTrack.baseUrl}`);
+      const captionResponse = await fetch(selectedTrack.baseUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/xml,application/xml,*/*',
+        }
+      });
+
+      if (!captionResponse.ok) {
+        throw new Error(`Caption download failed: ${captionResponse.status}`);
+      }
+
+      const captionContent = await captionResponse.text();
+      console.log(`📝 Caption content length: ${captionContent.length}`);
+      console.log(`📝 Caption preview: ${captionContent.substring(0, 200)}...`);
+
+      if (captionContent.length < 50) {
+        console.log("❌ Caption content too short");
+        return null;
+      }
+
+      const metadata = {
+        videoId,
+        title,
+        author,
+        url: videoUrl,
+        language: selectedTrack.languageCode || 'en',
+        extractionMethod: 'youtube-watch-scraping'
+      };
+      
+      return await this.contentParser.processTranscriptContent(
+        captionContent,
+        'youtube-watch-scraping',
+        metadata
+      );
+
     } catch (error) {
-      console.error("YouTube API method failed:", error);
+      console.error(`❌ Watch page scraping failed: ${error.message}`);
       return null;
     }
   }
 
+  private async methodAlternativeAPIs(videoId: string, videoUrl: string, options: TranscriptOptions): Promise<Response | null> {
+    console.log("🔍 Testing Method 3: Alternative APIs");
+    
+    // Try alternative caption endpoints
+    const altEndpoints = [
+      `https://video.google.com/timedtext?lang=auto&v=${videoId}`,
+      `https://video.google.com/timedtext?lang=en&v=${videoId}&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&asr_langs=en,auto&caps=asr&exp=xftt,yt6&xoaf=4&hl=en&ip=0.0.0.0&ipbits=0&expire=1999999999&sparams=ip,ipbits,expire,v,asr_langs,caps,exp,xoaf&signature=dummy&key=dummy`
+    ];
+
+    for (let i = 0; i < altEndpoints.length; i++) {
+      const url = altEndpoints[i];
+      try {
+        console.log(`📊 Alternative API ${i + 1}: ${url}`);
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            'Accept': 'text/xml,application/xml,*/*'
+          }
+        });
+
+        console.log(`📊 Alt API ${i + 1} status: ${response.status}`);
+
+        if (response.ok) {
+          const content = await response.text();
+          console.log(`📝 Alt API ${i + 1} content length: ${content.length}`);
+          
+          if (content.length > 100 && content.includes('<text')) {
+            const { title, author } = await this.getVideoMetadata(videoId);
+            
+            const metadata = {
+              videoId,
+              title,
+              author,
+              url: videoUrl,
+              language: options.language || 'en',
+              extractionMethod: 'alternative-api'
+            };
+            
+            return await this.contentParser.processTranscriptContent(
+              content,
+              'alternative-api',
+              metadata
+            );
+          }
+        }
+      } catch (error) {
+        console.log(`❌ Alternative API ${i + 1} failed: ${error.message}`);
+      }
+    }
+
+    return null;
+  }
+
   private async methodYouTubeEmbed(videoId: string, videoUrl: string, options: TranscriptOptions): Promise<Response | null> {
+    console.log("🔍 Testing Method 4: Embed Scraping");
+    
     try {
-      console.log("Attempting YouTube embed scraping...");
-      
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       const response = await fetch(embedUrl, {
         headers: {
@@ -253,19 +315,51 @@ export class FallbackMethods {
         }
       });
 
+      console.log(`📊 Embed page status: ${response.status}`);
+
       if (response.ok) {
         const html = await response.text();
+        console.log(`📝 Embed HTML length: ${html.length}`);
         
-        // Look for any caption data in embed page
-        console.log("Embed page loaded, but caption extraction not yet implemented");
-        
-        // This method could be expanded to extract captions from embed pages
-        // For now, it serves as a fallback placeholder
+        // Look for caption tracks in embed page
+        const captionMatch = html.match(/"captionTracks":\s*\[([^\]]+)\]/);
+        if (captionMatch) {
+          try {
+            const tracks = JSON.parse(`[${captionMatch[1]}]`);
+            if (tracks.length > 0 && tracks[0].baseUrl) {
+              console.log(`✅ Found ${tracks.length} caption tracks in embed`);
+              
+              const captionResponse = await fetch(tracks[0].baseUrl);
+              const captionContent = await captionResponse.text();
+              
+              if (captionContent.length > 50) {
+                const { title, author } = await this.getVideoMetadata(videoId);
+                
+                const metadata = {
+                  videoId,
+                  title,
+                  author,
+                  url: videoUrl,
+                  language: tracks[0].languageCode || 'en',
+                  extractionMethod: 'embed-scraping'
+                };
+                
+                return await this.contentParser.processTranscriptContent(
+                  captionContent,
+                  'embed-scraping',
+                  metadata
+                );
+              }
+            }
+          } catch (e) {
+            console.log(`❌ Failed to parse embed captions: ${e.message}`);
+          }
+        }
       }
 
       return null;
     } catch (error) {
-      console.error("Embed method failed:", error);
+      console.error(`❌ Embed scraping failed: ${error.message}`);
       return null;
     }
   }
@@ -296,45 +390,13 @@ export class FallbackMethods {
   }
 
   private createErrorResponse(message: string, status: number): Response {
-    const errorMarkdown = `# ❌ Transcript Fetch Error
-
-**Error:** ${message}
-**Status:** ${status}
-**Type:** Error Response
-**Imported:** ${new Date().toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })}
-
----
-
-## 📝 Troubleshooting
-
-The transcript could not be fetched for this video. This could be due to:
-
-- Video does not have captions/subtitles enabled
-- Captions are disabled by the video creator
-- Video is private or restricted
-- Video has been removed or is unavailable
-- Network connectivity issues
-
-Try using a different YouTube video that you know has captions enabled.
-
----
-
-## 📝 My Notes
-Add your notes about this error here...`;
-
+    console.log(`❌ Creating error response: ${message}`);
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: message,
-        transcript: errorMarkdown,
+        transcript: `Unable to fetch transcript - ${message.toLowerCase()}`,
         metadata: {
           videoId: '',
           title: 'Error',
