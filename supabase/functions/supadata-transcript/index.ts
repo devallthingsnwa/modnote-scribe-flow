@@ -83,66 +83,70 @@ serve(async (req) => {
 async function fetchTranscriptFromCaptions(videoId: string, apiKey: string, options: any) {
   console.log('📝 Fetching transcript from captions...');
   
-  const response = await fetch('https://api.supadata.ai/v1/youtube/transcript', {
+  // Updated endpoint - using the correct Supadata API structure
+  const response = await fetch('https://api.supadata.ai/transcript', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      video_id: videoId,
-      include_timestamps: options.includeTimestamps ?? true,
-      language: options.language || 'auto'
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      format: 'json',
+      timestamps: options.includeTimestamps ?? true
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`Supadata API error: ${response.status} - ${errorText}`);
     throw new Error(`Supadata captions API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   
-  if (!data.transcript && !data.text) {
+  if (!data.transcript && !data.text && !data.content) {
     throw new Error('No transcript text received from Supadata captions');
   }
 
   return {
-    transcript: data.transcript || data.text,
-    segments: data.segments,
-    metadata: data.metadata
+    transcript: data.transcript || data.text || data.content,
+    segments: data.segments || data.chunks,
+    metadata: data.metadata || data.video_info
   };
 }
 
 async function transcribeVideoAudio(videoId: string, apiKey: string, options: any) {
   console.log('🎵 Transcribing video audio...');
   
-  const response = await fetch('https://api.supadata.ai/v1/youtube/transcribe', {
+  // Updated endpoint for audio transcription
+  const response = await fetch('https://api.supadata.ai/transcribe', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      video_id: videoId,
-      language: options.language || 'auto',
-      include_timestamps: options.includeTimestamps ?? false
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      audio_format: 'mp3',
+      language: options.language || 'auto'
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`Supadata audio API error: ${response.status} - ${errorText}`);
     throw new Error(`Supadata audio transcription API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   
-  if (!data.transcript && !data.text) {
+  if (!data.transcript && !data.text && !data.content) {
     throw new Error('No transcript text received from Supadata audio transcription');
   }
 
   return {
-    transcript: data.transcript || data.text,
-    metadata: data.metadata
+    transcript: data.transcript || data.text || data.content,
+    metadata: data.metadata || data.video_info
   };
 }

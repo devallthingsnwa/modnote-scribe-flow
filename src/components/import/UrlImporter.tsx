@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Globe, Check, AlertCircle, Video, Play } from 'lucide-react';
+import { Loader2, Globe, Check, AlertCircle, Video, Play, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UrlContentScraper } from '@/lib/scraper/urlContentScraper';
 import { YouTubeTranscriptService } from '@/lib/youtube/transcriptService';
@@ -20,6 +20,8 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const [scrapedContent, setScrapedContent] = useState<any>(null);
   const [youtubeResult, setYoutubeResult] = useState<any>(null);
   const [processingStep, setProcessingStep] = useState<string>('');
+  const [retryCount, setRetryCount] = useState(0);
+  const [lastError, setLastError] = useState<string>('');
   const { toast } = useToast();
 
   const isYouTubeUrl = (url: string): boolean => {
@@ -36,39 +38,67 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
     }
   };
 
+  const handleRetry = async () => {
+    setRetryCount(prev => prev + 1);
+    setLastError('');
+    await handleYouTubeTranscription();
+  };
+
   const handleYouTubeTranscription = async () => {
     setIsLoading(true);
     setYoutubeResult(null);
-    setProcessingStep('Starting YouTube transcript extraction...');
+    setLastError('');
+    const currentRetry = retryCount;
     
     try {
-      console.log('🎯 Starting YouTube transcript extraction for:', url);
-      setProcessingStep('Attempting to extract captions...');
+      console.log(`🎯 Starting YouTube transcript extraction for: ${url} (Attempt ${currentRetry + 1})`);
       
-      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 3);
+      // Enhanced status updates
+      setProcessingStep('🔍 Analyzing YouTube video...');
+      await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for UX
+      
+      setProcessingStep('📝 Attempting to extract captions...');
+      
+      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 2);
       
       if (result.success && result.transcript) {
         setYoutubeResult(result);
         setProcessingStep('');
+        setRetryCount(0); // Reset retry count on success
+        
+        const sourceMethod = result.source === 'captions' ? 'captions' : 'audio transcription';
+        console.log(`✅ YouTube transcript extraction successful via ${sourceMethod}`);
+        
         toast({
           title: "✅ YouTube transcript extracted!",
-          description: `Successfully extracted ${result.transcript.length} characters via ${result.source}`,
+          description: `Successfully extracted ${result.transcript.length} characters via ${sourceMethod}`,
         });
       } else {
+        const errorMsg = result.error || "Unable to extract transcript from this video. This video may not have captions available or may be restricted.";
+        setLastError(errorMsg);
         setProcessingStep('');
-        console.error('Transcript extraction failed:', result.error);
+        
+        console.error('Transcript extraction failed:', errorMsg);
+        
+        // Show retry option for certain errors
+        const canRetry = currentRetry < 2 && !errorMsg.includes('restricted') && !errorMsg.includes('private');
+        
         toast({
           title: "❌ Transcript extraction failed",
-          description: result.error || "Unable to extract transcript from this video. This video may not have captions available or may be restricted.",
+          description: canRetry ? `${errorMsg} Click retry to try again.` : errorMsg,
           variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('YouTube transcription error:', error);
+      const errorMsg = error instanceof Error ? error.message : "Failed to process YouTube video";
+      setLastError(errorMsg);
       setProcessingStep('');
+      
+      console.error('YouTube transcription error:', error);
+      
       toast({
-        title: "YouTube processing error",
-        description: error instanceof Error ? error.message : "Failed to process YouTube video",
+        title: "YouTube processing error", 
+        description: `${errorMsg}${currentRetry < 2 ? ' Click retry to try again.' : ''}`,
         variant: "destructive"
       });
     } finally {
@@ -87,14 +117,18 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
     }
 
     setIsLoading(true);
+    setProcessingStep('🌐 Scraping web content...');
+    
     try {
       const content = await UrlContentScraper.scrapeUrl(url);
       setScrapedContent(content);
+      setProcessingStep('');
       toast({
         title: "Content Scraped",
         description: "Successfully extracted content from URL"
       });
     } catch (error) {
+      setProcessingStep('');
       toast({
         title: "Scraping Failed",
         description: error instanceof Error ? error.message : "Failed to scrape content",
@@ -125,8 +159,11 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
         sourceUrl: url
       });
       
+      // Reset state
       setYoutubeResult(null);
       setUrl('');
+      setRetryCount(0);
+      setLastError('');
     }
   };
 
@@ -182,16 +219,44 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
                 'Scrape'
               )}
             </Button>
+            
+            {/* Retry button for YouTube failures */}
+            {isYouTubeUrl(url) && lastError && !isLoading && retryCount < 2 && (
+              <Button 
+                onClick={handleRetry}
+                variant="outline"
+                size="sm"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Retry
+              </Button>
+            )}
           </div>
 
           {processingStep && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 p-2 rounded">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 p-3 rounded-md">
               <Loader2 className="h-4 w-4 animate-spin" />
               {processingStep}
             </div>
           )}
 
-          {isYouTubeUrl(url) && !processingStep && (
+          {/* Error display */}
+          {lastError && !isLoading && (
+            <div className="flex items-start gap-2 text-sm text-destructive bg-red-50 p-3 rounded-md">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium">Extraction Failed</p>
+                <p className="text-xs mt-1">{lastError}</p>
+                {retryCount < 2 && (
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    You can try again with the retry button above.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isYouTubeUrl(url) && !processingStep && !lastError && (
             <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
               🎥 <strong>YouTube detected:</strong> Will extract captions first, then fallback to audio transcription if needed
             </div>
