@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Mic, Upload, FileAudio, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { TranscriptionService } from '@/lib/transcriptionService';
 
 interface AudioImportFormProps {
   onContentImported: (content: {
@@ -21,7 +20,6 @@ export function AudioImportForm({ onContentImported, isLoading }: AudioImportFor
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [podcastUrl, setPodcastUrl] = useState('');
   const [processingStatus, setProcessingStatus] = useState<string>('');
-  const [transcriptionProgress, setTranscriptionProgress] = useState(0);
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,52 +43,33 @@ export function AudioImportForm({ onContentImported, isLoading }: AudioImportFor
     if (!selectedFile) return;
 
     try {
-      setProcessingStatus('Uploading audio file...');
-      setTranscriptionProgress(25);
-
-      // Convert file to base64 for API transmission
-      const base64Audio = await fileToBase64(selectedFile);
-      
-      setProcessingStatus('Transcribing audio with AI...');
-      setTranscriptionProgress(50);
-
-      // Use external providers for audio transcription
-      const transcriptionResult = await TranscriptionService.transcribeWithFallback(base64Audio);
-      
-      if (!transcriptionResult.success) {
-        throw new Error(transcriptionResult.error || 'Audio transcription failed');
-      }
-
-      setProcessingStatus('Processing complete!');
-      setTranscriptionProgress(100);
+      setProcessingStatus('Creating note template...');
 
       const title = `Audio: ${selectedFile.name.replace(/\.[^/.]+$/, "")}`;
-      const content = `# 🎵 ${title}\n\n**File:** ${selectedFile.name}\n**Size:** ${formatFileSize(selectedFile.size)}\n**Type:** Audio Transcription\n\n---\n\n## 📝 Transcript\n\n${transcriptionResult.text}`;
+      const content = `# 🎵 ${title}\n\n**File:** ${selectedFile.name}\n**Size:** ${formatFileSize(selectedFile.size)}\n**Type:** Audio Note\n\n---\n\n## 📝 Notes\n\nAdd your notes about this audio file here...\n\n## 🎧 Summary\n\nAdd a summary of the audio content here...`;
 
       onContentImported({
         title,
         content,
-        is_transcription: true
+        is_transcription: false
       });
 
       // Reset form
       setSelectedFile(null);
       setProcessingStatus('');
-      setTranscriptionProgress(0);
       
       toast({
-        title: "✅ Audio Transcribed",
-        description: `Successfully transcribed "${selectedFile.name}" using ${transcriptionResult.provider}`
+        title: "✅ Audio Note Created",
+        description: `Created note template for "${selectedFile.name}"`
       });
 
     } catch (error) {
       console.error('Audio import error:', error);
       setProcessingStatus('');
-      setTranscriptionProgress(0);
       
       toast({
-        title: "Transcription Failed",
-        description: error.message || "Failed to transcribe audio file",
+        title: "Import Failed",
+        description: error.message || "Failed to create audio note",
         variant: "destructive"
       });
     }
@@ -100,72 +79,37 @@ export function AudioImportForm({ onContentImported, isLoading }: AudioImportFor
     if (!podcastUrl.trim()) return;
 
     try {
-      setProcessingStatus('Fetching podcast episode...');
-      setTranscriptionProgress(25);
+      setProcessingStatus('Creating podcast note...');
 
-      // Detect media type and validate URL
-      const mediaType = TranscriptionService.detectMediaType(podcastUrl);
-      if (mediaType === 'unknown') {
-        throw new Error('Unsupported podcast URL format');
-      }
-
-      setProcessingStatus('Transcribing podcast with Podsqueeze...');
-      setTranscriptionProgress(50);
-
-      // Use transcription service with podcast-optimized settings
-      const transcriptionResult = await TranscriptionService.transcribeWithFallback(podcastUrl);
-      
-      if (!transcriptionResult.success) {
-        throw new Error(transcriptionResult.error || 'Podcast transcription failed');
-      }
-
-      setProcessingStatus('Processing complete!');
-      setTranscriptionProgress(100);
-
-      const title = transcriptionResult.metadata?.title || `Podcast Episode`;
-      const content = `# 🎙️ ${title}\n\n**Source:** ${podcastUrl}\n**Duration:** ${transcriptionResult.metadata?.duration || 'Unknown'}\n**Type:** Podcast Transcript\n\n---\n\n## 📝 Transcript\n\n${transcriptionResult.text}`;
+      const title = `Podcast Episode`;
+      const content = `# 🎙️ ${title}\n\n**Source:** ${podcastUrl}\n**Type:** Podcast Note\n\n---\n\n## 📝 Notes\n\nAdd your notes about this podcast episode here...\n\n## 🎧 Summary\n\nAdd a summary of the podcast content here...`;
 
       onContentImported({
         title,
         content,
         source_url: podcastUrl,
-        is_transcription: true
+        is_transcription: false
       });
 
       // Reset form
       setPodcastUrl('');
       setProcessingStatus('');
-      setTranscriptionProgress(0);
       
       toast({
-        title: "✅ Podcast Transcribed",
-        description: `Successfully transcribed podcast using ${transcriptionResult.provider}`
+        title: "✅ Podcast Note Created",
+        description: "Created podcast note template"
       });
 
     } catch (error) {
       console.error('Podcast import error:', error);
       setProcessingStatus('');
-      setTranscriptionProgress(0);
       
       toast({
-        title: "Transcription Failed",
-        description: error.message || "Failed to transcribe podcast",
+        title: "Import Failed",
+        description: error.message || "Failed to create podcast note",
         variant: "destructive"
       });
     }
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        // Remove data:audio/...;base64, prefix
-        resolve(base64.split(',')[1]);
-      };
-      reader.onerror = error => reject(error);
-    });
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -213,7 +157,7 @@ export function AudioImportForm({ onContentImported, isLoading }: AudioImportFor
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Transcribe
+                      Create Note
                     </>
                   )}
                 </Button>
@@ -260,18 +204,8 @@ export function AudioImportForm({ onContentImported, isLoading }: AudioImportFor
           <CardContent className="pt-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
-                {transcriptionProgress === 100 ? (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                )}
+                <CheckCircle className="h-4 w-4 text-green-500" />
                 {processingStatus}
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${transcriptionProgress}%` }}
-                />
               </div>
             </div>
           </CardContent>

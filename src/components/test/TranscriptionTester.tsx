@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Play, TestTube, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { TranscriptionService } from '@/lib/transcriptionService';
-import { ExternalProviderService } from '@/lib/transcription/externalProviderService';
 
 interface TestResult {
   provider: string;
@@ -28,83 +26,27 @@ export function TranscriptionTester() {
   const runComprehensiveTest = async () => {
     setIsRunning(true);
     setTestResults([]);
-    setCurrentTest('Starting comprehensive transcription test...');
+    setCurrentTest('Starting test suite...');
 
     try {
-      // Test 1: Full transcription with fallback system
-      setCurrentTest('Testing full transcription with fallback system...');
-      const startTime = Date.now();
-      
-      const result = await TranscriptionService.transcribeWithFallback(testUrl);
-      const duration = Date.now() - startTime;
-      
-      const fullTestResult: TestResult = {
-        provider: 'full-system',
-        success: result.success,
-        duration,
-        textLength: result.text?.length || 0,
-        error: result.error,
-        metadata: result.metadata
-      };
-      
-      setTestResults(prev => [...prev, fullTestResult]);
-      
-      // Test 2: Individual provider tests
-      const providers = ['podsqueeze', 'whisper', 'riverside'];
-      
-      for (const provider of providers) {
-        setCurrentTest(`Testing ${provider} provider...`);
-        const providerStartTime = Date.now();
-        
-        try {
-          const providerResult = await ExternalProviderService.callTranscriptionAPI(
-            provider,
-            testUrl,
-            { include_metadata: true, include_timestamps: true }
-          );
-          
-          const providerDuration = Date.now() - providerStartTime;
-          
-          const providerTestResult: TestResult = {
-            provider,
-            success: providerResult.success,
-            duration: providerDuration,
-            textLength: providerResult.text?.length || 0,
-            error: providerResult.error,
-            metadata: providerResult.metadata
-          };
-          
-          setTestResults(prev => [...prev, providerTestResult]);
-          
-        } catch (error) {
-          const providerTestResult: TestResult = {
-            provider,
-            success: false,
-            duration: Date.now() - providerStartTime,
-            textLength: 0,
-            error: error.message
-          };
-          
-          setTestResults(prev => [...prev, providerTestResult]);
+      // Simulate test results since transcription service was removed
+      const mockResults: TestResult[] = [
+        {
+          provider: 'test-system',
+          success: false,
+          duration: 1000,
+          textLength: 0,
+          error: 'Transcription services have been removed from the system'
         }
-        
-        // Small delay between tests
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      ];
       
-      // Test 3: YouTube metadata extraction
-      setCurrentTest('Testing YouTube metadata extraction...');
-      const videoId = TranscriptionService.extractVideoId(testUrl);
-      if (videoId) {
-        const metadata = await TranscriptionService.getYouTubeMetadata(videoId);
-        console.log('YouTube Metadata Test:', metadata);
-      }
-      
+      setTestResults(mockResults);
       setCurrentTest('Test completed!');
       
       toast({
-        title: "✅ Transcription Test Complete",
-        description: `Tested ${testResults.length} providers. Check results below.`
+        title: "❌ Test Complete",
+        description: "Transcription services are no longer available.",
+        variant: "destructive"
       });
       
     } catch (error) {
@@ -123,15 +65,9 @@ export function TranscriptionTester() {
   const getStatusIcon = (result: TestResult) => {
     if (result.success) {
       return <CheckCircle className="h-4 w-4 text-green-500" />;
-    } else if (result.error?.includes('failed') || result.error?.includes('error')) {
-      return <XCircle className="h-4 w-4 text-red-500" />;
     } else {
-      return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      return <XCircle className="h-4 w-4 text-red-500" />;
     }
-  };
-
-  const getProviderConfig = () => {
-    return ExternalProviderService.getProviderStatus();
   };
 
   return (
@@ -144,12 +80,23 @@ export function TranscriptionTester() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-yellow-800">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Notice</span>
+            </div>
+            <p className="text-yellow-700 text-sm mt-1">
+              Transcription services have been removed from the system. This tester is no longer functional.
+            </p>
+          </div>
+
           <div className="flex gap-2">
             <Input
               placeholder="Enter YouTube URL to test..."
               value={testUrl}
               onChange={(e) => setTestUrl(e.target.value)}
               className="flex-1"
+              disabled
             />
             <Button 
               onClick={runComprehensiveTest}
@@ -175,30 +122,6 @@ export function TranscriptionTester() {
               {currentTest}
             </div>
           )}
-
-          {/* Provider Configuration Display */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {getProviderConfig().map((provider) => (
-              <Card key={provider.name} className="border-2">
-                <CardContent className="pt-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{provider.name}</h4>
-                      <Badge variant="outline">Priority {provider.priority}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{provider.description}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {provider.capabilities.map((cap) => (
-                        <Badge key={cap} variant="secondary" className="text-xs">
-                          {cap}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </CardContent>
       </Card>
 
@@ -216,8 +139,8 @@ export function TranscriptionTester() {
                     <div className="flex items-center gap-2">
                       {getStatusIcon(result)}
                       <h4 className="font-medium capitalize">{result.provider}</h4>
-                      <Badge variant={result.success ? "default" : "destructive"}>
-                        {result.success ? "Success" : "Failed"}
+                      <Badge variant="destructive">
+                        Failed
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -225,37 +148,9 @@ export function TranscriptionTester() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Text Length:</span>
-                      <p className="font-mono">{result.textLength} chars</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Duration:</span>
-                      <p className="font-mono">{result.duration}ms</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Provider:</span>
-                      <p className="font-mono">{result.metadata?.provider || result.provider}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Method:</span>
-                      <p className="font-mono">{result.metadata?.extractionMethod || 'N/A'}</p>
-                    </div>
-                  </div>
-                  
                   {result.error && (
                     <div className="mt-2 p-2 bg-red-50 rounded text-sm text-red-700">
                       <strong>Error:</strong> {result.error}
-                    </div>
-                  )}
-                  
-                  {result.metadata && !result.error && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
-                      <strong>Metadata:</strong>
-                      <pre className="mt-1 overflow-x-auto">
-                        {JSON.stringify(result.metadata, null, 2)}
-                      </pre>
                     </div>
                   )}
                 </div>

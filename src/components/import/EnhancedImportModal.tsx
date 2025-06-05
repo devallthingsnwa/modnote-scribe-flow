@@ -13,9 +13,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Upload, Video, Mic, Globe, FileText } from "lucide-react";
+import { Upload, Mic, Globe, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
 import { UrlImporter } from './UrlImporter';
 import { FileUploadForm } from './FileUploadForm';
@@ -37,10 +36,9 @@ interface EnhancedImportModalProps {
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
   const [isAudioImporting, setIsAudioImporting] = useState(false);
   const [isFileImporting, setIsFileImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url' | 'files'>('youtube');
+  const [activeTab, setActiveTab] = useState<'audio' | 'url' | 'files'>('audio');
 
   const saveToSupabase = async (content: {
     title: string;
@@ -93,53 +91,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       createdAt: insertedNote.created_at
     });
 
-    // Verify the note was actually saved
-    const { data: verifyNote, error: verifyError } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('id', insertedNote.id)
-      .single();
-
-    if (verifyError || !verifyNote) {
-      console.error("❌ Note verification failed:", verifyError);
-      throw new Error("Note was saved but could not be verified");
-    }
-
-    console.log("🔍 Note verification successful:", verifyNote.title);
     return insertedNote;
-  };
-
-  const handleYoutubeImport = async (processedContent: {
-    title: string;
-    content: string;
-    source_url?: string;
-    thumbnail?: string;
-    is_transcription?: boolean;
-  }) => {
-    setIsYoutubeImporting(true);
-    
-    try {
-      // Save to Supabase first
-      await saveToSupabase(processedContent);
-      
-      // Then trigger the dashboard import handler
-      onImport(processedContent);
-      onClose();
-      
-      toast({
-        title: "YouTube Content Imported",
-        description: "Successfully imported content from YouTube as a new note.",
-      });
-    } catch (error) {
-      console.error("💥 YouTube import error:", error);
-      toast({
-        title: "Import failed",
-        description: error.message || "Failed to import YouTube content. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsYoutubeImporting(false);
-    }
   };
 
   const handleAudioImport = async (processedContent: {
@@ -151,10 +103,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setIsAudioImporting(true);
     
     try {
-      // Save to Supabase first
       await saveToSupabase(processedContent);
-      
-      // Then trigger the dashboard import handler
       onImport(processedContent);
       onClose();
       
@@ -183,10 +132,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setIsFileImporting(true);
     
     try {
-      // Save to Supabase first
       await saveToSupabase(processedContent);
-      
-      // Then trigger the dashboard import handler
       onImport(processedContent);
       onClose();
       
@@ -215,10 +161,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         is_transcription: false
       };
       
-      // Save to Supabase first
       await saveToSupabase(processedContent);
-      
-      // Then trigger the dashboard import handler
       onImport(processedContent);
       onClose();
       
@@ -245,16 +188,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
           </DialogTitle>
           <DialogDescription>
-            Import content from YouTube videos, audio files, web URLs, or upload documents
+            Import content from audio files, web URLs, or upload documents
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="youtube" className="flex items-center gap-2">
-              <Video className="h-4 w-4" />
-              YouTube
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="audio" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
               Audio
@@ -270,13 +209,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           </TabsList>
 
           <div className="flex-1 overflow-auto">
-            <TabsContent value="youtube" className="mt-4 h-full">
-              <YoutubeImportForm
-                onContentImported={handleYoutubeImport}
-                isLoading={isYoutubeImporting}
-              />
-            </TabsContent>
-
             <TabsContent value="audio" className="mt-4 h-full">
               <AudioImportForm
                 onContentImported={handleAudioImport}

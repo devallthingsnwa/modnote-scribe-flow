@@ -7,12 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Card, CardContent } from "@/components/ui/card";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
-import { TranscriptPanel } from "@/components/video/TranscriptPanel";
 import { NoteEditor } from "@/components/NoteEditor";
 import { ExportPanel } from "@/components/ExportPanel";
 import { DeepResearchPanel } from "@/components/research/DeepResearchPanel";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 
 interface EnhancedVideoNoteLayoutProps {
   note: any;
@@ -28,90 +26,14 @@ export function EnhancedVideoNoteLayout({
   onSave 
 }: EnhancedVideoNoteLayoutProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<string>("transcript");
+  const [activeTab, setActiveTab] = useState<string>("notes");
   const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
   const [isVideoReady, setIsVideoReady] = useState<boolean>(false);
-  const [isRefreshingTranscript, setIsRefreshingTranscript] = useState<boolean>(false);
   const playerRef = useRef<any>(null);
-
-  const handleTimestampClick = (timestamp: number) => {
-    setCurrentTimestamp(timestamp);
-    if (playerRef.current && isVideoReady) {
-      try {
-        playerRef.current.seekTo(timestamp);
-        console.log(`Seeking to timestamp: ${timestamp}`);
-        toast({
-          title: "Jumped to timestamp",
-          description: `Now playing at ${Math.floor(timestamp / 60)}:${String(Math.floor(timestamp % 60)).padStart(2, '0')}`,
-        });
-      } catch (error) {
-        console.error("Error seeking to timestamp:", error);
-        toast({
-          title: "Seek failed",
-          description: "Unable to jump to the selected timestamp.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleTranscriptRefresh = async () => {
-    if (!videoId || !note.id) return;
-    
-    setIsRefreshingTranscript(true);
-    
-    try {
-      console.log("Refreshing transcript for video:", videoId);
-      
-      const { data: transcriptResult, error: transcriptError } = await supabase.functions.invoke('fetch-youtube-transcript', {
-        body: { 
-          videoId,
-          options: {
-            includeTimestamps: true,
-            language: 'en',
-            maxRetries: 2
-          }
-        }
-      });
-      
-      if (transcriptError) {
-        throw new Error(`Function error: ${transcriptError.message}`);
-      }
-      
-      if (transcriptResult?.transcript) {
-        const currentTitle = note?.title || `YouTube Video ${videoId}`;
-        const newContent = `# 🎥 ${currentTitle}\n\n**Source:** ${note?.source_url}\n**Type:** Video Transcript\n**Last Updated:** ${new Date().toLocaleString()}\n\n---\n\n## 📝 Transcript\n\n${transcriptResult.transcript}`;
-        
-        updateNoteMutation.mutate({
-          id: note.id,
-          updates: {
-            content: newContent,
-            updated_at: new Date().toISOString(),
-          },
-        });
-        
-        toast({
-          title: "✅ Transcript updated!",
-          description: `Successfully fetched transcript with enhanced accuracy.`,
-        });
-      } else {
-        throw new Error('No transcript data received');
-      }
-    } catch (error) {
-      console.error("Error fetching transcript:", error);
-      toast({
-        title: "Transcript fetch failed",
-        description: `Could not fetch the transcript: ${error.message}`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshingTranscript(false);
-    }
-  };
 
   return (
     <ResizablePanelGroup direction="horizontal" className="h-full">
-      {/* Left Panel: Video & Transcript */}
+      {/* Left Panel: Video */}
       <ResizablePanel defaultSize={45} minSize={35}>
         <div className="h-full flex flex-col bg-gradient-to-b from-background to-muted/10">
           <div className="p-6 flex-1 overflow-auto space-y-6">
@@ -126,55 +48,34 @@ export function EnhancedVideoNoteLayout({
                     setIsVideoReady(true);
                     toast({
                       title: "✅ Video player ready!",
-                      description: "You can now watch the video and interact with timestamps.",
+                      description: "You can now watch the video.",
                     });
                   }}
                 />
               </CardContent>
             </Card>
             
-            {/* Enhanced Interactive Transcript */}
+            {/* Video Info */}
             <Card className="flex-1 overflow-hidden border-border/50 shadow-lg">
               <CardContent className="p-6 h-full flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                     <MessageSquare className="h-5 w-5 text-primary" />
-                    Interactive Transcript
+                    Video Notes
                   </h3>
-                  <div className="flex items-center gap-2">
-                    {isVideoReady && (
-                      <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
-                        <Play className="h-3 w-3 mr-1" />
-                        Click to jump
-                      </Badge>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleTranscriptRefresh}
-                      disabled={isRefreshingTranscript}
-                      className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-                    >
-                      {isRefreshingTranscript ? (
-                        <>
-                          <div className="h-4 w-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mr-2" />
-                          Fetching...
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="h-4 w-4 mr-2" />
-                          Refresh
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  {isVideoReady && (
+                    <Badge variant="outline" className="text-xs bg-green-50 border-green-200 text-green-700">
+                      <Play className="h-3 w-3 mr-1" />
+                      Ready
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex-1 overflow-auto">
-                  <TranscriptPanel
-                    transcript={note.content || ''}
-                    currentTime={currentTimestamp}
-                    onTimestampClick={handleTimestampClick}
-                  />
+                  <div className="prose prose-sm max-w-none">
+                    <p className="text-muted-foreground">
+                      Use the Notes tab on the right to add your thoughts and observations about this video.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -189,9 +90,9 @@ export function EnhancedVideoNoteLayout({
         <div className="h-full flex flex-col">
           <div className="bg-muted/30 px-6 py-3 border-b border-border/50">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="bg-background/50 border border-border/50 grid w-full grid-cols-4">
+              <TabsList className="bg-background/50 border border-border/50 grid w-full grid-cols-3">
                 <TabsTrigger 
-                  value="transcript" 
+                  value="notes" 
                   className="data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"
                 >
                   <FileText className="h-4 w-4 mr-2" />
@@ -217,7 +118,7 @@ export function EnhancedVideoNoteLayout({
           
           <div className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/10">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsContent value="transcript" className="m-0 h-full">
+              <TabsContent value="notes" className="m-0 h-full">
                 <div className="p-6 h-full">
                   <NoteEditor 
                     initialNote={{
