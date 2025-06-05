@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -245,16 +244,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-3">YouTube URL</label>
+              <label className="block text-sm font-medium mb-3 text-gray-200">YouTube URL</label>
               <Input
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4"
+                className="mb-4 bg-gray-700 border-gray-600 text-white placeholder-gray-400"
               />
-              <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                <h4 className="font-medium text-blue-900 mb-2">What we'll extract:</h4>
-                <ul className="text-sm text-blue-700 space-y-1">
+              <div className="bg-blue-900/30 border border-blue-800 p-4 rounded-lg mb-4">
+                <h4 className="font-medium text-blue-300 mb-2">What we'll extract:</h4>
+                <ul className="text-sm text-blue-200 space-y-1">
                   <li>• Video transcript with timestamps</li>
                   <li>• AI-generated summary and key points</li>
                   <li>• Automatic tags and categorization</li>
@@ -264,7 +263,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
               <Button
                 onClick={processUrl}
                 disabled={isProcessing || !url.trim()}
-                className="w-full bg-red-500 hover:bg-red-600 text-white"
+                className="w-full bg-red-600 hover:bg-red-700 text-white border-0"
               >
                 {isProcessing ? (
                   <>
@@ -286,17 +285,17 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-3">Website URL</label>
+              <label className="block text-sm font-medium mb-3 text-gray-200">Website URL</label>
               <Input
                 placeholder="https://example.com/article..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4"
+                className="mb-4 bg-gray-700 border-gray-600 text-white placeholder-gray-400"
               />
               <Button
                 onClick={processUrl}
                 disabled={isProcessing || !url.trim()}
-                className="w-full"
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white"
               >
                 {isProcessing ? (
                   <>
@@ -317,10 +316,10 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       case "file":
         return (
           <div className="space-y-6">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+            <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-gray-500 transition-colors bg-gray-800/50">
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <div className="space-y-2">
-                <p className="text-sm text-gray-600">Drop files here or click to upload</p>
+                <p className="text-sm text-gray-300">Drop files here or click to upload</p>
                 <p className="text-xs text-gray-500">Supports PDF, DOCX, TXT files</p>
               </div>
               <input
@@ -341,22 +340,22 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 onClick={handleVoiceRecording}
                 variant={isRecording ? "destructive" : "outline"}
                 size="lg"
-                className={`w-full ${isRecording ? 'animate-pulse' : ''}`}
+                className={`w-full ${isRecording ? 'animate-pulse bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600 text-white border-gray-600'}`}
                 disabled={isProcessing && !isRecording}
               >
                 <Mic className="h-5 w-5 mr-2" />
                 {isRecording ? "Stop Recording" : "Start Voice Recording"}
               </Button>
               {isRecording && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-gray-400">
                   🎤 Recording in progress... Click "Stop Recording" when done
                 </p>
               )}
               
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+              <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-gray-500 transition-colors bg-gray-800/50">
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-600">Or upload audio files</p>
+                  <p className="text-sm text-gray-300">Or upload audio files</p>
                   <p className="text-xs text-gray-500">Supports MP3, WAV, M4A files</p>
                 </div>
                 <input
@@ -375,7 +374,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           <div className="space-y-6">
             <div className="text-center py-8">
               <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-sm text-gray-600">Manual text input coming soon</p>
+              <p className="text-sm text-gray-400">Manual text input coming soon</p>
             </div>
           </div>
         );
@@ -387,20 +386,20 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gray-900 border-gray-700 text-white">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-white">
             Import Content
-            <Badge variant="secondary" className="text-xs">AI-Powered</Badge>
+            <Badge variant="secondary" className="text-xs bg-blue-600 text-white">AI-Powered</Badge>
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-gray-400">
             Choose your content source and let AI create intelligent notes
           </p>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Tabs */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+          <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -409,8 +408,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
                     activeTab === tab.id
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-gray-700 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -428,17 +427,17 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           {/* Processing Status */}
           {isProcessing && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-gray-400">
                 <Clock className="h-4 w-4 animate-spin" />
                 <span>{status}</span>
               </div>
-              <Progress value={progress} className="w-full" />
+              <Progress value={progress} className="w-full bg-gray-700" />
             </div>
           )}
 
           {/* Success Status */}
           {!isProcessing && transcript && (
-            <div className={`flex items-center gap-2 text-sm ${hasWarning ? 'text-orange-600' : 'text-green-600'}`}>
+            <div className={`flex items-center gap-2 text-sm ${hasWarning ? 'text-orange-400' : 'text-green-400'}`}>
               {hasWarning ? (
                 <AlertCircle className="h-4 w-4" />
               ) : (
@@ -459,12 +458,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
           {/* Action Buttons */}
           <div className="flex justify-between">
-            <Button variant="outline" onClick={handleClose}>
+            <Button variant="outline" onClick={handleClose} className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
               Cancel
             </Button>
             
             {metadata && transcript && (
-              <Button onClick={handleImport} className="bg-primary hover:bg-primary/90">
+              <Button onClick={handleImport} className="bg-blue-600 hover:bg-blue-700 text-white">
                 <FileText className="h-4 w-4 mr-2" />
                 {hasWarning ? 'Save Note with Warning' : 'Import to Notes'}
               </Button>
