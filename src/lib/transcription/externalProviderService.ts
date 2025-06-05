@@ -3,180 +3,123 @@ import { supabase } from "@/integrations/supabase/client";
 import { TranscriptionResult } from "./types";
 
 export class ExternalProviderService {
-  // Enhanced provider configuration with optimized settings
-  private static readonly PROVIDERS = [
-    {
-      name: 'podsqueeze',
-      priority: 1,
-      timeout: 45000, // 45 seconds
-      capabilities: ['youtube', 'podcast', 'audio'],
-      description: 'Premium AI transcription with speaker detection',
-      accuracyScore: 95
-    },
-    {
-      name: 'whisper',
-      priority: 2,
-      timeout: 60000, // 60 seconds
-      capabilities: ['audio', 'video', 'youtube'],
-      description: 'OpenAI Whisper - High accuracy speech recognition',
-      accuracyScore: 92
-    },
-    {
-      name: 'riverside',
-      priority: 3,
-      timeout: 50000, // 50 seconds
-      capabilities: ['video', 'podcast', 'youtube'],
-      description: 'Professional video/audio transcription',
-      accuracyScore: 88
-    }
-  ];
+  // Provider priority: Podsqueeze (default) → Whisper (OSS) → Riverside.fm (fallback)
+  private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
 
   static async callTranscriptionAPI(
     provider: string,
     url: string,
-    options: any = {}
+    options?: any
   ): Promise<TranscriptionResult> {
-    const providerConfig = this.PROVIDERS.find(p => p.name === provider);
-    if (!providerConfig) {
-      throw new Error(`Unknown provider: ${provider}`);
-    }
-
-    console.log(`🚀 Starting ${provider} transcription with optimized settings...`);
-    const startTime = Date.now();
-
     try {
-      // Enhanced options for better accuracy
-      const enhancedOptions = {
-        include_metadata: true,
-        include_timestamps: true,
-        language: 'auto',
-        format: 'detailed',
-        quality: 'high',
-        speaker_detection: true,
-        noise_reduction: true,
-        ...options
-      };
-
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('multimedia-transcription', {
-          body: {
-            provider,
-            url,
-            options: enhancedOptions
+      console.log(`📡 Calling ${provider} transcription API...`);
+      
+      const { data, error } = await supabase.functions.invoke('multimedia-transcription', {
+        body: { 
+          provider,
+          url,
+          options: {
+            include_metadata: true,
+            include_timestamps: true,
+            language: 'auto',
+            ...options
           }
-        }),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error(`${provider} timeout after ${providerConfig.timeout}ms`)), providerConfig.timeout)
-        )
-      ]);
+        }
+      });
 
       if (error) {
-        throw new Error(`${provider} API error: ${error.message}`);
+        console.error(`${provider} API error:`, error);
+        throw error;
       }
 
-      if (!data?.transcription && !data?.text) {
-        throw new Error(`${provider} returned empty transcription`);
+      // Validate response has actual content
+      if (!data?.transcription || data.transcription.length < 50) {
+        throw new Error(`${provider} returned empty or very short transcription`);
       }
 
-      const processingTime = Date.now() - startTime;
-      const transcriptionText = data.transcription || data.text;
-
-      // Enhanced quality validation
-      if (transcriptionText.length < 20) {
-        throw new Error(`${provider} returned suspiciously short transcript (${transcriptionText.length} chars)`);
-      }
-
-      // Quality score based on length and processing time - fix arithmetic operations
-      const lengthScore = Math.min(50, transcriptionText.length / 100);
-      const timeBonus = Math.max(0, 30 - (processingTime / 1000));
-      const qualityScore = Math.min(100, Math.max(50, 
-        lengthScore + providerConfig.accuracyScore + timeBonus
-      ));
-
-      console.log(`✅ ${provider} completed: ${transcriptionText.length} chars in ${processingTime}ms (quality: ${qualityScore.toFixed(1)}%)`);
+      console.log(`✅ ${provider} transcription successful: ${data.transcription.length} characters`);
 
       return {
         success: true,
-        text: transcriptionText,
+        text: data.transcription,
         metadata: {
           ...data.metadata,
           provider,
-          processingTime,
-          qualityScore: qualityScore.toFixed(1),
-          extractionMethod: `${provider}-enhanced`,
-          transcriptionLength: transcriptionText.length,
-          providerPriority: providerConfig.priority,
-          capabilities: providerConfig.capabilities
+          extractionMethod: provider,
+          processingTime: data.metadata?.processingTime
         },
         provider
       };
-
     } catch (error) {
-      const processingTime = Date.now() - startTime;
-      console.error(`❌ ${provider} failed after ${processingTime}ms:`, error);
-      
+      console.error(`❌ ${provider} transcription failed:`, error);
       return {
         success: false,
-        error: `${provider}: ${error.message}`,
-        metadata: {
-          provider,
-          processingTime,
-          extractionMethod: `${provider}-failed`,
-          errorType: error.name || 'TranscriptionError'
-        },
+        error: error.message || `${provider} transcription failed`,
         provider
       };
     }
   }
 
-  static getProviderStatus() {
-    return this.PROVIDERS.map(provider => ({
-      name: provider.name.charAt(0).toUpperCase() + provider.name.slice(1),
-      priority: provider.priority,
-      capabilities: provider.capabilities,
-      description: provider.description,
-      timeout: provider.timeout,
-      accuracyScore: provider.accuracyScore
-    }));
-  }
-
-  // Enhanced parallel processing for multiple providers
-  static async callMultipleProviders(url: string, options: any = {}) {
-    const enabledProviders = this.PROVIDERS.slice(0, 2); // Use top 2 for speed
+  static async tryExternalProviders(url: string, options?: any): Promise<TranscriptionResult> {
+    console.log('🔄 Starting external provider fallback sequence...');
     
-    console.log(`🔄 Running parallel transcription with ${enabledProviders.length} providers...`);
-    
-    const results = await Promise.allSettled(
-      enabledProviders.map(provider => 
-        this.callTranscriptionAPI(provider.name, url, options)
-      )
-    );
-
-    const successfulResults = results
-      .filter((result): result is PromiseFulfilledResult<TranscriptionResult> => 
-        result.status === 'fulfilled' && result.value.success
-      )
-      .map(result => result.value)
-      .sort((a, b) => {
-        const aScore = typeof a.metadata?.qualityScore === 'string' 
-          ? parseFloat(a.metadata.qualityScore) 
-          : (a.metadata?.qualityScore || 0);
-        const bScore = typeof b.metadata?.qualityScore === 'string' 
-          ? parseFloat(b.metadata.qualityScore) 
-          : (b.metadata?.qualityScore || 0);
-        return bScore - aScore;
-      });
-
-    if (successfulResults.length > 0) {
-      const bestResult = successfulResults[0];
-      bestResult.metadata = {
-        ...bestResult.metadata,
-        providersAttempted: enabledProviders.map(p => p.name).join(', '),
-        alternativeResults: successfulResults.length - 1
-      };
-      return bestResult;
+    for (const provider of this.PROVIDER_PRIORITY) {
+      console.log(`🎯 Attempting transcription with ${provider}...`);
+      
+      try {
+        const result = await this.callTranscriptionAPI(provider, url, options);
+        
+        if (result.success && result.text && result.text.length > 50) {
+          console.log(`✅ Successfully transcribed with ${provider}`);
+          return result;
+        }
+        
+        console.warn(`⚠️ ${provider} failed or returned insufficient content, trying next provider...`);
+        
+      } catch (error) {
+        console.error(`❌ ${provider} provider error:`, error);
+        continue;
+      }
     }
 
-    throw new Error('All providers failed');
+    console.error('❌ All external transcription providers failed');
+    
+    return {
+      success: false,
+      error: `All transcription providers failed (${this.PROVIDER_PRIORITY.join(', ')}). Please try again later or check if the content is accessible.`,
+      metadata: {
+        providersAttempted: this.PROVIDER_PRIORITY.join(', '),
+        extractionMethod: 'all-providers-failed'
+      }
+    };
+  }
+
+  // Get provider configuration for UI display
+  static getProviderStatus(): Array<{
+    name: string;
+    priority: number;
+    description: string;
+    capabilities: string[];
+  }> {
+    return [
+      {
+        name: 'Podsqueeze',
+        priority: 1,
+        description: 'Primary provider optimized for podcasts and YouTube',
+        capabilities: ['YouTube', 'Podcasts', 'Audio Files', 'Metadata Extraction']
+      },
+      {
+        name: 'Whisper (OpenAI)',
+        priority: 2,
+        description: 'High-quality OSS transcription for audio files',
+        capabilities: ['Audio Files', 'Multi-language', 'High Accuracy']
+      },
+      {
+        name: 'Riverside.fm',
+        priority: 3,
+        description: 'Fallback provider with speaker identification',
+        capabilities: ['Video', 'Audio', 'Speaker Labels', 'Timestamps']
+      }
+    ];
   }
 }
