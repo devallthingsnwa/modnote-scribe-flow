@@ -1,4 +1,3 @@
-
 import { corsHeaders, extractVideoId, validateVideoId } from "./utils.ts";
 import { ContentParser } from "./contentParser.ts";
 
@@ -53,7 +52,7 @@ export class FallbackMethods {
     try {
       console.log("🔍 Attempting direct caption API...");
       
-      // Extended list of caption URL formats to try
+      // Extended list of caption URL formats prioritizing working ones
       const captionUrls = [
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=srv3`,
@@ -63,13 +62,13 @@ export class FallbackMethods {
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=ttml`,
         `https://video.google.com/timedtext?lang=en&v=${videoId}`,
         `https://www.youtube.com/api/timedtext?v=${videoId}&tlang=en&fmt=srv3`,
-        // Try with auto-generated flag
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3&kind=asr`,
-        // Try Filipino/Tagalog for your example
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=tl&fmt=srv3`,
         `https://www.youtube.com/api/timedtext?v=${videoId}&lang=fil&fmt=srv3`,
-        // Try without language specification
-        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3&auto=1`
+        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3&auto=1`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=vtt`,
+        `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=vtt`
       ];
 
       for (const url of captionUrls) {
@@ -81,20 +80,27 @@ export class FallbackMethods {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
               'Accept': 'text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,image/png,*/*;q=0.5',
               'Accept-Language': 'en-US,en;q=0.5',
-              'Referer': `https://www.youtube.com/watch?v=${videoId}`
+              'Referer': `https://www.youtube.com/watch?v=${videoId}`,
+              'Cache-Control': 'no-cache'
             }
           });
 
           console.log(`📊 Status: ${response.status}`);
+          console.log(`📊 Content-Type: ${response.headers.get('content-type')}`);
           
           if (response.ok) {
             const content = await response.text();
             console.log(`📄 Content length: ${content.length}`);
             console.log(`📝 Content preview: ${content.substring(0, 200)}...`);
+            console.log(`✅ Has <text> tags: ${content.includes('<text')}`);
+            console.log(`✅ Has WEBVTT: ${content.includes('WEBVTT')}`);
             
-            if (content.includes('<text') && content.length > 100) {
-              console.log(`✅ Found valid XML captions`);
-              return await this.contentParser.processTranscriptContent(content, 'direct-caption-api');
+            if ((content.includes('<text') || content.includes('WEBVTT')) && content.length > 100) {
+              console.log(`✅ Found valid captions, processing...`);
+              const result = await this.contentParser.processTranscriptContent(content, 'direct-caption-api');
+              if (result) {
+                return result;
+              }
             }
           }
         } catch (error) {
@@ -134,7 +140,6 @@ export class FallbackMethods {
       const html = await response.text();
       console.log(`📄 HTML length: ${html.length}`);
 
-      // Enhanced patterns to find caption tracks
       const patterns = [
         /"captionTracks":\s*\[([^\]]+)\]/,
         /"captions":\s*\{[^}]*"playerCaptionsTracklistRenderer":\s*\{[^}]*"captionTracks":\s*\[([^\]]+)\]/,
@@ -162,11 +167,10 @@ export class FallbackMethods {
       }
 
       if (captionTracks && captionTracks.length > 0) {
-        // Try to find the best caption track
         let bestTrack = captionTracks.find((track: any) => track.languageCode === 'en') ||
                       captionTracks.find((track: any) => track.languageCode === 'tl') ||
                       captionTracks.find((track: any) => track.languageCode === 'fil') ||
-                      captionTracks.find((track: any) => track.kind !== 'asr') || // Prefer manual over auto-generated
+                      captionTracks.find((track: any) => track.kind !== 'asr') ||
                       captionTracks[0];
 
         if (bestTrack && bestTrack.baseUrl) {
@@ -205,7 +209,6 @@ export class FallbackMethods {
         return null;
       }
 
-      // Get video details
       const videoResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet`
       );
@@ -223,7 +226,7 @@ export class FallbackMethods {
       }
 
       console.log("✅ Video found via API but caption download requires OAuth");
-      return null; // API method requires OAuth for caption download
+      return null;
     } catch (error) {
       console.error("YouTube API method failed:", error);
       return null;
@@ -234,7 +237,6 @@ export class FallbackMethods {
     try {
       console.log("🔍 Attempting alternate caption methods...");
       
-      // Try alternative endpoints
       const alternateUrls = [
         `https://youtube.googleapis.com/youtube/v3/captions/${videoId}`,
         `https://www.youtube.com/get_video_info?video_id=${videoId}`,
@@ -250,10 +252,8 @@ export class FallbackMethods {
             const content = await response.text();
             console.log(`📄 Alternate content length: ${content.length}`);
             
-            // Check if this contains caption information
             if (content.includes('captionTracks') || content.includes('<text')) {
               console.log(`✅ Found potential captions in alternate method`);
-              // Process the content if it looks like captions
             }
           }
         } catch (error) {
@@ -273,7 +273,7 @@ export class FallbackMethods {
       JSON.stringify({ 
         success: false, 
         error: message,
-        transcript: `Unable to fetch transcript: ${message}`, // RAW TEXT ERROR - no markdown
+        transcript: `Unable to fetch transcript: ${message}`,
         metadata: {
           segments: 0,
           duration: 0,
