@@ -244,12 +244,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-3 text-gray-300">YouTube URL</label>
+              <label className="block text-sm font-medium mb-3 text-white">YouTube URL</label>
               <Input
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#1c1c1c] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
+                className="mb-4 bg-[#1c1c1c] border-[#333] text-white placeholder-gray-400 focus:border-[#555]"
               />
               <Button
                 onClick={processUrl}
@@ -276,12 +276,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         return (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-3 text-gray-300">Website URL</label>
+              <label className="block text-sm font-medium mb-3 text-white">Website URL</label>
               <Input
                 placeholder="https://example.com/article..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#1c1c1c] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
+                className="mb-4 bg-[#1c1c1c] border-[#333] text-white placeholder-gray-400 focus:border-[#555]"
               />
               <Button
                 onClick={processUrl}
@@ -310,8 +310,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
               <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
               <div className="space-y-2">
-                <p className="text-sm text-gray-300">Drop files here or click to upload</p>
-                <p className="text-xs text-gray-500">Supports PDF, DOCX, TXT files</p>
+                <p className="text-sm text-white">Drop files here or click to upload</p>
+                <p className="text-xs text-gray-400">Supports PDF, DOCX, TXT files</p>
               </div>
               <input
                 type="file"
@@ -331,14 +331,14 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 onClick={handleVoiceRecording}
                 variant={isRecording ? "destructive" : "outline"}
                 size="lg"
-                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#1c1c1c] hover:bg-[#2a2a2a] text-gray-100 border-[#333]'}`}
+                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#1c1c1c] hover:bg-[#2a2a2a] text-white border-[#333]'}`}
                 disabled={isProcessing && !isRecording}
               >
                 <Mic className="h-5 w-5 mr-2" />
                 {isRecording ? "Stop Recording" : "Start Voice Recording"}
               </Button>
               {isRecording && (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-white">
                   🎤 Recording in progress... Click "Stop Recording" when done
                 </p>
               )}
@@ -346,8 +346,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
               <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
                 <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-300">Or upload audio files</p>
-                  <p className="text-xs text-gray-500">Supports MP3, WAV, M4A files</p>
+                  <p className="text-sm text-white">Or upload audio files</p>
+                  <p className="text-xs text-gray-400">Supports MP3, WAV, M4A files</p>
                 </div>
                 <input
                   type="file"
@@ -365,7 +365,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           <div className="space-y-6">
             <div className="text-center py-8">
               <FileText className="mx-auto h-12 w-12 text-gray-500 mb-4" />
-              <p className="text-sm text-gray-400">Manual text input coming soon</p>
+              <p className="text-sm text-white">Manual text input coming soon</p>
             </div>
           </div>
         );
@@ -383,7 +383,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
             <Badge variant="secondary" className="text-xs bg-blue-600 text-white">AI-Powered</Badge>
           </DialogTitle>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-white">
             Choose your content source and let AI create intelligent notes
           </p>
         </DialogHeader>
@@ -400,7 +400,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
                     activeTab === tab.id
                       ? 'bg-[#2a2a2a] text-white shadow-sm border border-[#444]'
-                      : 'text-gray-400 hover:text-white hover:bg-[#1f1f1f]'
+                      : 'text-white hover:text-white hover:bg-[#1f1f1f]'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -418,7 +418,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           {/* Processing Status */}
           {isProcessing && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-white">
                 <Clock className="h-4 w-4 animate-spin" />
                 <span>{status}</span>
               </div>
