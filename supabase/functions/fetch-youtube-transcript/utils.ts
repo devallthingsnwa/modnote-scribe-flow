@@ -1,4 +1,3 @@
-
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -32,4 +31,56 @@ export function extractVideoId(url: string): string | null {
   }
   
   return null;
+}
+
+export function normalizeVideoUrl(url: string): string {
+  const videoId = extractVideoId(url);
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
+}
+
+export function isPlaylist(url: string): boolean {
+  return url.includes('list=') && url.includes('youtube.com');
+}
+
+export function extractPlaylistId(url: string): string | null {
+  const match = url.match(/[?&]list=([^&]+)/);
+  return match ? match[1] : null;
+}
+
+export function formatCurrentDateTime(): string {
+  const now = new Date();
+  return now.toLocaleString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+}
+
+export function extractVideoTitle(html: string): string {
+  const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+  if (titleMatch && titleMatch[1]) {
+    return titleMatch[1].replace(' - YouTube', '').trim();
+  }
+  return 'Unknown Video';
+}
+
+export function extractChannelName(html: string): string {
+  const patterns = [
+    /"ownerChannelName":"([^"]+)"/,
+    /"author":"([^"]+)"/,
+    /\"channelName\":\"([^\"]+)\"/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return 'Unknown Channel';
 }

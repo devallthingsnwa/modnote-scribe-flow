@@ -1,5 +1,4 @@
-
-import { corsHeaders } from "./utils.ts";
+import { corsHeaders, formatCurrentDateTime } from "./utils.ts";
 
 interface TranscriptSegment {
   start: number;
@@ -7,8 +6,21 @@ interface TranscriptSegment {
   text: string;
 }
 
+interface VideoMetadata {
+  videoId?: string;
+  title?: string;
+  author?: string;
+  url?: string;
+  language?: string;
+  extractionMethod?: string;
+}
+
 export class ContentParser {
-  async processTranscriptContent(content: string, source: string): Promise<Response | null> {
+  async processTranscriptContent(
+    content: string, 
+    source: string, 
+    metadata?: VideoMetadata
+  ): Promise<Response | null> {
     try {
       let transcript: TranscriptSegment[] = [];
       
@@ -26,13 +38,8 @@ export class ContentParser {
         return null;
       }
       
-      const formattedTranscript = transcript
-        .map((entry) => {
-          const startTime = this.formatTimeWithMilliseconds(entry.start);
-          const endTime = this.formatTimeWithMilliseconds(entry.end);
-          return `[${startTime} - ${endTime}] ${entry.text}`;
-        })
-        .join("\n");
+      // Format as natural flowing text instead of timestamped segments
+      const formattedTranscript = this.formatAsMarkdown(transcript, metadata);
 
       console.log(`Successfully extracted ${transcript.length} transcript segments via ${source}`);
       
@@ -44,7 +51,12 @@ export class ContentParser {
             segments: transcript.length,
             duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
             hasTimestamps: true,
-            source: source
+            source: source,
+            videoId: metadata?.videoId || '',
+            title: metadata?.title || 'Unknown Video',
+            author: metadata?.author || 'Unknown Channel',
+            url: metadata?.url || '',
+            language: metadata?.language || 'en'
           }
         }),
         {
@@ -57,6 +69,59 @@ export class ContentParser {
       console.error("Error processing transcript content:", error);
       return null;
     }
+  }
+
+  private formatAsMarkdown(segments: TranscriptSegment[], metadata?: VideoMetadata): string {
+    // Extract just the text and join naturally
+    const naturalText = segments
+      .map(segment => segment.text.trim())
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Split into sentences for better formatting
+    const sentences = naturalText.split(/([.!?]+)/).filter(s => s.trim());
+    let formattedText = '';
+    let currentLine = '';
+
+    for (let i = 0; i < sentences.length; i += 2) {
+      const sentence = sentences[i]?.trim();
+      const punctuation = sentences[i + 1]?.trim() || '';
+      
+      if (sentence) {
+        const fullSentence = sentence + punctuation;
+        
+        if (currentLine.length + fullSentence.length > 80) {
+          if (currentLine) {
+            formattedText += currentLine.trim() + '\n';
+            currentLine = '';
+          }
+        }
+        
+        currentLine += (currentLine ? ' ' : '') + fullSentence;
+      }
+    }
+    
+    if (currentLine.trim()) {
+      formattedText += currentLine.trim();
+    }
+
+    // Create the full markdown document
+    const title = metadata?.title || 'Unknown Video';
+    const author = metadata?.author || 'Unknown Channel';
+    const url = metadata?.url || '';
+    const currentDateTime = formatCurrentDateTime();
+    
+    return `# 🎥 ${author} - ${title}
+**Source:** ${url}
+**Type:** Video Transcript
+**Imported:** ${currentDateTime}
+---
+## 📝 Transcript
+${formattedText}
+---
+## 📝 My Notes
+Add your personal notes and thoughts here...`;
   }
 
   private parseWebVTT(content: string): TranscriptSegment[] {
