@@ -249,9 +249,9 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#2a3441] border-[#3d4654] text-gray-200 placeholder-gray-500"
+                className="mb-4 bg-[#1a1a1a] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
               />
-              <div className="bg-[#1e293b] border border-[#334155] p-4 rounded-lg mb-4">
+              <div className="bg-[#151515] border border-[#2a2a2a] p-4 rounded-lg mb-4">
                 <h4 className="font-medium text-blue-400 mb-2">What we'll extract:</h4>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>• Video transcript with timestamps</li>
@@ -290,12 +290,12 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 placeholder="https://example.com/article..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#2a3441] border-[#3d4654] text-gray-200 placeholder-gray-500"
+                className="mb-4 bg-[#1a1a1a] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
               />
               <Button
                 onClick={processUrl}
                 disabled={isProcessing || !url.trim()}
-                className="w-full bg-[#374151] hover:bg-[#4b5563] text-white"
+                className="w-full bg-[#2a2a2a] hover:bg-[#3a3a3a] text-white border-[#333]"
               >
                 {isProcessing ? (
                   <>
@@ -316,7 +316,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       case "file":
         return (
           <div className="space-y-6">
-            <div className="border-2 border-dashed border-[#3d4654] rounded-lg p-8 text-center hover:border-[#4b5563] transition-colors bg-[#1e293b]/50">
+            <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
               <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
               <div className="space-y-2">
                 <p className="text-sm text-gray-300">Drop files here or click to upload</p>
@@ -340,7 +340,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 onClick={handleVoiceRecording}
                 variant={isRecording ? "destructive" : "outline"}
                 size="lg"
-                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#2a3441] hover:bg-[#374151] text-gray-200 border-[#3d4654]'}`}
+                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a] text-gray-100 border-[#333]'}`}
                 disabled={isProcessing && !isRecording}
               >
                 <Mic className="h-5 w-5 mr-2" />
@@ -352,7 +352,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 </p>
               )}
               
-              <div className="border-2 border-dashed border-[#3d4654] rounded-lg p-8 text-center hover:border-[#4b5563] transition-colors bg-[#1e293b]/50">
+              <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
                 <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
                 <div className="space-y-2">
                   <p className="text-sm text-gray-300">Or upload audio files</p>
@@ -386,7 +386,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#1e293b] border-[#334155] text-white">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border-[#2a2a2a] text-white">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             Import Content
@@ -399,7 +399,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
         <div className="space-y-6">
           {/* Tabs */}
-          <div className="flex space-x-1 bg-[#0f172a] p-1 rounded-lg">
+          <div className="flex space-x-1 bg-[#151515] p-1 rounded-lg border border-[#2a2a2a]">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -408,8 +408,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
                     activeTab === tab.id
-                      ? 'bg-[#334155] text-white shadow-sm'
-                      : 'text-gray-400 hover:text-white hover:bg-[#2a3441]'
+                      ? 'bg-[#2a2a2a] text-white shadow-sm border border-[#444]'
+                      : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -431,7 +431,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 <Clock className="h-4 w-4 animate-spin" />
                 <span>{status}</span>
               </div>
-              <Progress value={progress} className="w-full bg-[#334155]" />
+              <Progress value={progress} className="w-full bg-[#2a2a2a]" />
             </div>
           )}
 
@@ -458,7 +458,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
           {/* Action Buttons */}
           <div className="flex justify-between">
-            <Button variant="outline" onClick={handleClose} className="bg-[#374151] border-[#4b5563] text-white hover:bg-[#4b5563]">
+            <Button variant="outline" onClick={handleClose} className="bg-[#2a2a2a] border-[#444] text-white hover:bg-[#3a3a3a]">
               Cancel
             </Button>
             
