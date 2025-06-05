@@ -21,21 +21,11 @@ interface TranscriptRequest {
 interface TranscriptResponse {
   success: boolean;
   transcript?: string;
-  segments?: any[];
-  metadata?: {
-    title?: string;
-    channel?: string;
-    duration?: string;
-    thumbnail?: string;
-    reason?: string;
-    method?: string;
-  };
   error?: string;
   processingTime?: number;
   method?: string;
   videoId?: string;
   retryable?: boolean;
-  nextMethod?: string;
 }
 
 serve(async (req) => {
@@ -84,7 +74,6 @@ serve(async (req) => {
       JSON.stringify({ 
         success: false,
         error: error.message || 'Processing failed',
-        timestamp: new Date().toISOString(),
         retryable: true
       }),
       {
@@ -106,10 +95,9 @@ async function processWithFallbackChain(videoId: string, options: any, retryAtte
     console.log('✅ Enhanced caption extraction successful');
     const cleanTranscript = cleanRawTranscript(captionResult.transcript);
     return {
-      ...captionResult,
+      success: true,
       transcript: cleanTranscript,
-      method: 'captions',
-      metadata: { ...captionResult.metadata, method: 'captions' }
+      method: 'captions'
     };
   }
   
@@ -123,10 +111,9 @@ async function processWithFallbackChain(videoId: string, options: any, retryAtte
     console.log('✅ Enhanced page scraping successful');
     const cleanTranscript = cleanRawTranscript(scrapingResult.transcript);
     return {
-      ...scrapingResult,
+      success: true,
       transcript: cleanTranscript,
-      method: 'page-scraping',
-      metadata: { ...scrapingResult.metadata, method: 'page-scraping' }
+      method: 'page-scraping'
     };
   }
   
@@ -140,24 +127,18 @@ async function processWithFallbackChain(videoId: string, options: any, retryAtte
     console.log('✅ Alternative extraction successful');
     const cleanTranscript = cleanRawTranscript(altResult.transcript);
     return {
-      ...altResult,
-      transcript: cleanTranscript
+      success: true,
+      transcript: cleanTranscript,
+      method: altResult.method || 'alternative'
     };
   }
   
-  // Step 4: Create fallback note with metadata
-  console.log('📋 Step 4: Creating fallback note with metadata...');
-  const metadata = await fetchVideoMetadata(videoId);
-  
+  // Return empty transcript instead of fallback content
+  console.log('❌ All extraction methods failed');
   return {
-    success: true,
-    transcript: generateFallbackContent(videoId, metadata),
-    metadata: {
-      ...metadata,
-      method: 'fallback',
-      reason: 'All transcription methods failed'
-    },
-    method: 'fallback'
+    success: false,
+    error: 'No transcript available for this video',
+    method: 'failed'
   };
 }
 
@@ -170,8 +151,8 @@ async function extractYouTubeCaptionsEnhanced(videoId: string, options: any): Pr
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=srv3`,
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=tl&fmt=srv3`, // Filipino
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=fil&fmt=srv3`, // Filipino
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=tl&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=fil&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=vtt`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=ttml`,
@@ -203,9 +184,7 @@ async function extractYouTubeCaptionsEnhanced(videoId: string, options: any): Pr
               
               return {
                 success: true,
-                transcript,
-                segments,
-                metadata: await fetchVideoMetadata(videoId)
+                transcript
               };
             }
           }
@@ -338,9 +317,7 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
 
     return {
       success: true,
-      transcript,
-      segments,
-      metadata: await fetchVideoMetadata(videoId)
+      transcript
     };
 
   } catch (error) {
@@ -409,7 +386,7 @@ async function extractViaEmbedPageEnhanced(videoId: string): Promise<TranscriptR
                 return {
                   success: true,
                   transcript: segments.map(s => s.text).join(' '),
-                  segments
+                  method: 'embed'
                 };
               }
             }
@@ -477,7 +454,8 @@ async function extractViaAlternativeAPIs(videoId: string): Promise<TranscriptRes
               console.log(`Alternative API extraction successful: ${transcript.length} characters`);
               return {
                 success: true,
-                transcript
+                transcript,
+                method: 'alternative-api'
               };
             }
           }
@@ -520,7 +498,7 @@ async function extractViaDirectTranscriptAPI(videoId: string): Promise<Transcrip
               return {
                 success: true,
                 transcript: segments.map(s => s.text).join(' '),
-                segments
+                method: 'direct-api'
               };
             }
           }
@@ -590,13 +568,15 @@ function decodeXMLEntitiesEnhanced(text: string): string {
 }
 
 function cleanRawTranscript(transcript: string): string {
-  // Clean and preserve raw spoken words only
+  // Clean and preserve raw spoken words only, standardize music tags
   return transcript
-    .replace(/^\s*#.*$/gm, '') // Remove headings
-    .replace(/^\s*\*\*.*?\*\*.*$/gm, '') // Remove bold metadata
-    .replace(/^\s*---.*$/gm, '') // Remove separators
-    .replace(/^\s*\[.*?\]\s*/g, '[Musika] ') // Standardize music indicators
-    .replace(/\s+/g, ' ') // Normalize spaces
+    .replace(/\[Music\]/gi, '[Musika]')
+    .replace(/\[♪\]/gi, '[Musika]')
+    .replace(/\[♫\]/gi, '[Musika]')
+    .replace(/\[música\]/gi, '[Musika]')
+    .replace(/\[Applause\]/gi, '[Palakpakan]')
+    .replace(/\[Laughter\]/gi, '[Tawa]')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -612,66 +592,4 @@ async function transcribeVideoAudio(videoId: string, options: any): Promise<Tran
     error: 'Audio transcription not implemented',
     retryable: false
   };
-}
-
-async function fetchVideoMetadata(videoId: string) {
-  console.log(`📊 Fetching metadata for video: ${videoId}`);
-  
-  try {
-    const oembedResponse = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-    );
-    
-    if (oembedResponse.ok) {
-      const oembedData = await oembedResponse.json();
-      return {
-        title: oembedData.title,
-        channel: oembedData.author_name,
-        duration: 'Unknown',
-        thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-      };
-    }
-  } catch (error) {
-    console.warn('Failed to fetch video metadata:', error);
-  }
-
-  return {
-    title: `YouTube Video ${videoId}`,
-    channel: 'Unknown',
-    duration: 'Unknown',
-    thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-  };
-}
-
-function generateFallbackContent(videoId: string, metadata: any): string {
-  const timestamp = new Date().toISOString();
-  
-  return `# 🎥 ${metadata.title || `YouTube Video ${videoId}`}
-
-**Channel:** ${metadata.channel || 'Unknown'}
-**Duration:** ${metadata.duration || 'Unknown'}
-**Import Date:** ${new Date(timestamp).toLocaleDateString()}
-**Source:** https://www.youtube.com/watch?v=${videoId}
-
----
-
-## ⚠️ Transcript Not Available
-
-**Status:** Audio extraction failed
-
-We couldn't fetch the transcript for this video. This could be due to:
-- Video is private or restricted
-- Captions are disabled
-- Audio quality is too poor for transcription
-- Video contains primarily music or non-speech content
-
-## 📝 Manual Notes
-
-You can add your own notes about this video here:
-
-*Click to start adding your notes...*
-
----
-
-**Note:** You can try importing this video again later, or check if the video is publicly available.`;
 }
