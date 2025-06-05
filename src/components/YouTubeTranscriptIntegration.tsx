@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Video, Loader2, Download, Play, AlertCircle, Mic } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -188,13 +187,7 @@ ${extractedTranscript}
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Video className="h-5 w-5 text-primary" />
-          Enhanced Transcript Extractor
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-6">
         <Tabs defaultValue="youtube" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="youtube" className="flex items-center gap-2">
