@@ -249,17 +249,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#1a1a1a] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
+                className="mb-4 bg-[#1c1c1c] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
               />
-              <div className="bg-[#151515] border border-[#2a2a2a] p-4 rounded-lg mb-4">
-                <h4 className="font-medium text-blue-400 mb-2">What we'll extract:</h4>
-                <ul className="text-sm text-gray-300 space-y-1">
-                  <li>• Video transcript with timestamps</li>
-                  <li>• AI-generated summary and key points</li>
-                  <li>• Automatic tags and categorization</li>
-                  <li>• Video metadata and thumbnail</li>
-                </ul>
-              </div>
               <Button
                 onClick={processUrl}
                 disabled={isProcessing || !url.trim()}
@@ -290,7 +281,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 placeholder="https://example.com/article..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="mb-4 bg-[#1a1a1a] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
+                className="mb-4 bg-[#1c1c1c] border-[#333] text-gray-100 placeholder-gray-500 focus:border-[#555]"
               />
               <Button
                 onClick={processUrl}
@@ -340,7 +331,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 onClick={handleVoiceRecording}
                 variant={isRecording ? "destructive" : "outline"}
                 size="lg"
-                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#1a1a1a] hover:bg-[#2a2a2a] text-gray-100 border-[#333]'}`}
+                className={`w-full ${isRecording ? 'animate-pulse bg-[#dc2626] hover:bg-[#b91c1c]' : 'bg-[#1c1c1c] hover:bg-[#2a2a2a] text-gray-100 border-[#333]'}`}
                 disabled={isProcessing && !isRecording}
               >
                 <Mic className="h-5 w-5 mr-2" />
@@ -386,7 +377,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border-[#2a2a2a] text-white">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0f0f0f] border-[#2a2a2a] text-white">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             Import Content
@@ -399,7 +390,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
         <div className="space-y-6">
           {/* Tabs */}
-          <div className="flex space-x-1 bg-[#151515] p-1 rounded-lg border border-[#2a2a2a]">
+          <div className="flex space-x-1 bg-[#1a1a1a] p-1 rounded-lg border border-[#2a2a2a]">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -409,7 +400,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
                     activeTab === tab.id
                       ? 'bg-[#2a2a2a] text-white shadow-sm border border-[#444]'
-                      : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
+                      : 'text-gray-400 hover:text-white hover:bg-[#1f1f1f]'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
