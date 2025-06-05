@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   Dialog,
@@ -13,13 +12,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Upload, Mic, Globe, FileText } from "lucide-react";
+import { Upload, Video, Mic, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { YoutubeImportForm } from "./YoutubeImportForm";
 import { AudioImportForm } from "./AudioImportForm";
+
 import { UrlImporter } from './UrlImporter';
-import { FileUploadForm } from './FileUploadForm';
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 
 interface EnhancedImportModalProps {
   isOpen: boolean;
@@ -28,165 +26,63 @@ interface EnhancedImportModalProps {
     title: string;
     content: string;
     source_url?: string;
-    thumbnail?: string;
     is_transcription?: boolean;
   }) => void;
 }
 
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
   const [isAudioImporting, setIsAudioImporting] = useState(false);
-  const [isFileImporting, setIsFileImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'audio' | 'url' | 'files'>('url');
+  const [activeTab, setActiveTab] = useState<'youtube' | 'audio' | 'url'>('youtube');
 
-  const saveToSupabase = async (content: {
+  const handleYoutubeImport = (processedContent: {
     title: string;
     content: string;
     source_url?: string;
-    thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    if (!user) {
-      throw new Error("You must be logged in to import content");
-    }
-
-    console.log("💾 Saving content to Supabase:", {
-      title: content.title,
-      contentLength: content.content.length,
-      sourceUrl: content.source_url,
-      isTranscription: content.is_transcription
+    setIsYoutubeImporting(true);
+    onImport(processedContent);
+    onClose();
+    toast({
+      title: "YouTube Content Imported",
+      description: "Successfully imported content from YouTube as a new note.",
     });
-
-    const noteData = {
-      user_id: user.id,
-      title: content.title,
-      content: content.content,
-      source_url: content.source_url || null,
-      thumbnail: content.thumbnail || null,
-      is_transcription: content.is_transcription || false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { data: insertedNote, error: insertError } = await supabase
-      .from('notes')
-      .insert([noteData])
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("❌ Supabase insert error:", insertError);
-      throw new Error(`Failed to save note to database: ${insertError.message}`);
-    }
-
-    if (!insertedNote) {
-      console.error("❌ No note data returned after insert");
-      throw new Error("Failed to save note - no data returned");
-    }
-
-    console.log("✅ Note successfully saved to Supabase:", {
-      id: insertedNote.id,
-      title: insertedNote.title,
-      createdAt: insertedNote.created_at
-    });
-
-    return insertedNote;
+    setIsYoutubeImporting(false);
   };
 
-  const handleAudioImport = async (processedContent: {
+  const handleAudioImport = (processedContent: {
     title: string;
     content: string;
     source_url?: string;
     is_transcription?: boolean;
   }) => {
     setIsAudioImporting(true);
+    onImport(processedContent);
+    onClose();
+    toast({
+      title: "Audio Content Imported",
+      description: "Successfully imported content from audio as a new note.",
+    });
+    setIsAudioImporting(false);
+  };
+
+  const handleUrlImport = (content: { title: string; content: string; sourceUrl: string }) => {
+    const processedContent = {
+      title: content.title,
+      content: content.content,
+      source_url: content.sourceUrl,
+      is_transcription: false
+    };
     
-    try {
-      await saveToSupabase(processedContent);
-      onImport(processedContent);
-      onClose();
-      
-      toast({
-        title: "Audio Content Imported",
-        description: "Successfully imported content from audio as a new note.",
-      });
-    } catch (error) {
-      console.error("💥 Audio import error:", error);
-      toast({
-        title: "Import failed",
-        description: error.message || "Failed to import audio content. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAudioImporting(false);
-    }
-  };
-
-  const handleFileImport = async (processedContent: {
-    title: string;
-    content: string;
-    source_url?: string;
-    is_transcription?: boolean;
-  }) => {
-    setIsFileImporting(true);
+    onImport(processedContent);
+    onClose();
     
-    try {
-      await saveToSupabase(processedContent);
-      onImport(processedContent);
-      onClose();
-      
-      toast({
-        title: "File Imported",
-        description: "Successfully imported file as a new note.",
-      });
-    } catch (error) {
-      console.error("💥 File import error:", error);
-      toast({
-        title: "Import failed",
-        description: error.message || "Failed to import file. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFileImporting(false);
-    }
-  };
-
-  const handleUrlImport = async (content: { title: string; content: string; sourceUrl: string }) => {
-    try {
-      // Determine if this is a YouTube transcript based on content format
-      const isYouTubeTranscript = content.sourceUrl.includes('youtube.com') || content.sourceUrl.includes('youtu.be');
-      
-      const processedContent = {
-        title: content.title,
-        content: content.content,
-        source_url: content.sourceUrl,
-        is_transcription: isYouTubeTranscript,
-        thumbnail: isYouTubeTranscript ? `https://img.youtube.com/vi/${extractVideoId(content.sourceUrl)}/maxresdefault.jpg` : undefined
-      };
-      
-      await saveToSupabase(processedContent);
-      onImport(processedContent);
-      onClose();
-      
-      toast({
-        title: isYouTubeTranscript ? "YouTube Transcript Imported" : "URL Content Imported",
-        description: `Successfully imported "${content.title}" as a new note.`,
-      });
-    } catch (error) {
-      console.error("💥 URL import error:", error);
-      toast({
-        title: "Import failed",
-        description: error.message || "Failed to import content. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const extractVideoId = (url: string): string => {
-    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-    const match = url.match(regex);
-    return match ? match[1] : '';
+    toast({
+      title: "URL Content Imported",
+      description: "Successfully imported content from URL as a new note.",
+    });
   };
 
   return (
@@ -198,29 +94,32 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             Import Content
           </DialogTitle>
           <DialogDescription>
-            Import content from YouTube videos, audio files, web URLs, or upload documents
+            Import content from YouTube videos, audio files, or web URLs
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="url" className="flex items-center gap-2">
-              <Globe className="h-4 w-4" />
-              Web URL
+            <TabsTrigger value="youtube" className="flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              YouTube
             </TabsTrigger>
             <TabsTrigger value="audio" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
               Audio
             </TabsTrigger>
-            <TabsTrigger value="files" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Files
+            <TabsTrigger value="url" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Web URL
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-auto">
-            <TabsContent value="url" className="mt-4 h-full">
-              <UrlImporter onContentImported={handleUrlImport} />
+            <TabsContent value="youtube" className="mt-4 h-full">
+              <YoutubeImportForm
+                onContentImported={handleYoutubeImport}
+                isLoading={isYoutubeImporting}
+              />
             </TabsContent>
 
             <TabsContent value="audio" className="mt-4 h-full">
@@ -230,11 +129,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
               />
             </TabsContent>
 
-            <TabsContent value="files" className="mt-4 h-full">
-              <FileUploadForm
-                onContentImported={handleFileImport}
-                isLoading={isFileImporting}
-              />
+            <TabsContent value="url" className="mt-4 h-full">
+              <UrlImporter onContentImported={handleUrlImport} />
             </TabsContent>
           </div>
         </Tabs>

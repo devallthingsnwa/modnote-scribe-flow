@@ -12,15 +12,3 @@ verify_jwt = true
 
 [functions.youtube-metadata]
 verify_jwt = true
-
-[functions.process-content-with-mistral]
-verify_jwt = true
-
-[functions.pinecone-operations]
-verify_jwt = true
-
-[functions.youtube-audio-transcription]
-verify_jwt = true
-
-[functions.supadata-speech-to-text]
-verify_jwt = true

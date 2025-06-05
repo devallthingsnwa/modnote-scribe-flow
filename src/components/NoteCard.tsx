@@ -1,13 +1,13 @@
 
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDistanceToNow, isValid, parseISO } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 
 export interface NoteCardProps {
   id: string; // Changed from number to string to match our database IDs
   title: string;
   content: string;
-  date: Date | string; // Accept both Date objects and date strings
+  date: Date;
   tags: {
     id: string; // Changed from number to string
     name: string;
@@ -33,31 +33,6 @@ export function NoteCard({
   onClick,
   className,
 }: NoteCardProps) {
-  // Safely format the date with proper validation
-  const formatDate = (dateValue: Date | string) => {
-    try {
-      let parsedDate: Date;
-      
-      if (typeof dateValue === 'string') {
-        // Try to parse ISO string first, then fallback to regular Date parsing
-        parsedDate = dateValue.includes('T') ? parseISO(dateValue) : new Date(dateValue);
-      } else {
-        parsedDate = dateValue;
-      }
-      
-      // Check if the date is valid
-      if (!isValid(parsedDate)) {
-        console.warn('Invalid date received in NoteCard:', dateValue);
-        return 'Recently';
-      }
-      
-      return formatDistanceToNow(parsedDate, { addSuffix: true });
-    } catch (error) {
-      console.warn('Error formatting date in NoteCard:', error, dateValue);
-      return 'Recently';
-    }
-  };
-
   return (
     <Card 
       onClick={onClick} 
@@ -78,7 +53,7 @@ export function NoteCard({
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-lg line-clamp-2">{title}</CardTitle>
         <CardDescription className="text-xs">
-          {formatDate(date)}
+          {formatDistanceToNow(date, { addSuffix: true })}
           {notebook && ` • ${notebook.name}`}
         </CardDescription>
       </CardHeader>

@@ -12,7 +12,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AISearchNavbar } from "@/components/AISearchNavbar";
 import { SearchBar } from "@/components/SearchBar";
 import { Button } from "@/components/ui/button";
-import { useNoteIndexing } from "@/hooks/useNoteIndexing";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -27,7 +26,6 @@ export default function Dashboard() {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   
   const { data: notes, isLoading, error, refetch } = useNotes();
-  const { indexNote } = useNoteIndexing();
 
   const handleNoteSelect = (noteId: string) => {
     if (isSelectMode) {
@@ -48,39 +46,18 @@ export default function Dashboard() {
     navigate("/new");
   };
 
-  const handleImport = async (note: {
+  const handleImport = (note: {
     title: string;
     content: string;
     source_url?: string;
     thumbnail?: string;
     is_transcription?: boolean;
   }) => {
-    console.log('📥 Importing note:', note.title);
-    
-    // Show immediate feedback
     toast({
       title: "Content imported successfully",
       description: `Your content "${note.title}" has been imported and is available in your notes.`,
     });
-    
-    // Refresh the notes list to show the new import
-    await refetch();
-    
-    // Index the note for semantic search if it has content
-    if (note.content) {
-      try {
-        // Find the newly imported note and index it
-        const updatedNotes = await refetch();
-        const importedNote = updatedNotes.data?.find(n => n.title === note.title);
-        
-        if (importedNote) {
-          await indexNote(importedNote);
-          console.log('✅ Note indexed for semantic search');
-        }
-      } catch (error) {
-        console.warn('⚠️ Failed to index imported note:', error);
-      }
-    }
+    refetch();
   };
 
   const handleNoteDeleted = () => {
