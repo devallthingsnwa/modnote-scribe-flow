@@ -2,12 +2,12 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic, Video, Link, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
-import { UrlInput } from "./UrlInput";
 import { SimplifiedPreviewSection } from "./SimplifiedPreviewSection";
 
 interface EnhancedImportModalProps {
@@ -22,13 +22,15 @@ interface EnhancedImportModalProps {
   }) => void;
 }
 
+type ContentType = "youtube" | "url" | "file" | "audio" | "text";
+
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
+  const [activeTab, setActiveTab] = useState<ContentType>("youtube");
   const [url, setUrl] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [metadata, setMetadata] = useState<any>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
-  const [contentType, setContentType] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [hasWarning, setHasWarning] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -38,11 +40,11 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setUrl("");
     setMetadata(null);
     setTranscript(null);
-    setContentType("");
     setProgress(0);
     setStatus("");
     setIsProcessing(false);
     setHasWarning(false);
+    setIsRecording(false);
   };
 
   const handleClose = () => {
@@ -50,9 +52,13 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     onClose();
   };
 
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUrl(e.target.value);
-  };
+  const tabs = [
+    { id: "youtube" as ContentType, label: "YouTube", icon: Video },
+    { id: "url" as ContentType, label: "URL", icon: Link },
+    { id: "file" as ContentType, label: "File", icon: File },
+    { id: "audio" as ContentType, label: "Audio", icon: Mic },
+    { id: "text" as ContentType, label: "Text", icon: FileText },
+  ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -61,7 +67,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       setStatus("Processing file...");
       setProgress(30);
       
-      // Simulate file processing
       setTimeout(() => {
         setMetadata({
           title: file.name,
@@ -69,7 +74,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           description: `Uploaded file: ${file.name}`
         });
         setTranscript(`File uploaded: ${file.name}\n\nAdd your notes about this file here...`);
-        setContentType('file');
         setStatus("✅ File uploaded successfully!");
         setProgress(100);
         setIsProcessing(false);
@@ -79,13 +83,11 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
   const handleVoiceRecording = () => {
     if (isRecording) {
-      // Stop recording
       setIsRecording(false);
       setIsProcessing(true);
       setStatus("Processing voice recording...");
       setProgress(50);
       
-      // Simulate voice processing
       setTimeout(() => {
         setMetadata({
           title: "Voice Recording",
@@ -93,13 +95,11 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           description: "Audio recording transcription"
         });
         setTranscript("Your voice recording transcript would appear here...\n\nAdd additional notes below:");
-        setContentType('voice');
         setStatus("✅ Voice recording processed!");
         setProgress(100);
         setIsProcessing(false);
       }, 2000);
     } else {
-      // Start recording
       setIsRecording(true);
       setStatus("🎤 Recording... Click again to stop");
       toast({
@@ -124,24 +124,19 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setStatus("Analyzing URL...");
 
     try {
-      // Detect content type
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        setContentType('youtube');
+      if (activeTab === "youtube" && (url.includes('youtube.com') || url.includes('youtu.be'))) {
         setStatus("Processing YouTube video...");
         setProgress(30);
 
         const result = await TranscriptionService.transcribeWithFallback(url);
         setProgress(70);
 
-        // Always treat result as success since we now provide fallback content
         if (result.success && result.text) {
           setTranscript(result.text);
           
-          // Check if this is a warning result
           const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
           setHasWarning(isWarning);
           
-          // Get metadata with fallback
           const videoId = TranscriptionService.extractVideoId(url);
           let videoMetadata = null;
           
@@ -170,9 +165,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           throw new Error(result.error || 'Failed to process video');
         }
       } else {
-        // Handle other URL types (articles, podcasts, etc.)
-        setContentType('article');
-        setStatus("Processing article/content...");
+        setStatus("Processing content...");
         setProgress(50);
         
         const result = await TranscriptionService.transcribeWithFallback(url);
@@ -183,7 +176,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           setHasWarning(isWarning);
           
           setMetadata({
-            title: "Article Content",
+            title: "Content from URL",
             author: "Web Content",
             description: "Content extracted from provided URL"
           });
@@ -217,7 +210,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     if (!metadata || !transcript) {
       toast({
         title: "No Content",
-        description: "Please process a URL first to import content.",
+        description: "Please process content first to import.",
         variant: "destructive"
       });
       return;
@@ -225,96 +218,125 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
     let noteContent = '';
     
-    if (contentType === 'youtube') {
+    if (activeTab === 'youtube') {
       noteContent = `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Transcript unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Transcript'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
-    } else if (contentType === 'voice') {
+    } else if (activeTab === 'audio') {
       noteContent = `# 🎤 ${metadata.title}\n\n**Type:** Voice Recording\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
-    } else if (contentType === 'file') {
+    } else if (activeTab === 'file') {
       noteContent = `# 📄 ${metadata.title}\n\n**Type:** File Upload\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Content\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else {
-      noteContent = `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Article/Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+      noteContent = `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     }
 
     onImport({
       title: metadata.title,
       content: noteContent,
-      source_url: contentType === 'youtube' || contentType === 'article' ? url : undefined,
+      source_url: (activeTab === 'youtube' || activeTab === 'url') ? url : undefined,
       thumbnail: metadata.thumbnail,
-      is_transcription: (contentType === 'youtube' && !hasWarning) || contentType === 'voice'
+      is_transcription: (activeTab === 'youtube' && !hasWarning) || activeTab === 'audio'
     });
 
     handleClose();
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Enhanced Content Import
-            <Badge variant="secondary" className="text-xs">Focus: Transcripts</Badge>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          {/* URL Input */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium">Import from URL</h3>
-            <UrlInput 
-              url={url}
-              onChange={handleUrlChange}
-              onFetchPreview={processUrl}
-              isLoading={isProcessing}
-              disabled={false}
-              buttonText="Extract"
-            />
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "youtube":
+        return (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-3">YouTube URL</label>
+              <Input
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="mb-4"
+              />
+              <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                <h4 className="font-medium text-blue-900 mb-2">What we'll extract:</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• Video transcript with timestamps</li>
+                  <li>• AI-generated summary and key points</li>
+                  <li>• Automatic tags and categorization</li>
+                  <li>• Video metadata and thumbnail</li>
+                </ul>
+              </div>
+              <Button
+                onClick={processUrl}
+                disabled={isProcessing || !url.trim()}
+                className="w-full bg-red-500 hover:bg-red-600 text-white"
+              >
+                {isProcessing ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Video className="h-4 w-4 mr-2" />
+                    Extract from YouTube
+                  </>
+                )}
+              </Button>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or upload files
-              </span>
+          </div>
+        );
+
+      case "url":
+        return (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-3">Website URL</label>
+              <Input
+                placeholder="https://example.com/article..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="mb-4"
+              />
+              <Button
+                onClick={processUrl}
+                disabled={isProcessing || !url.trim()}
+                className="w-full"
+              >
+                {isProcessing ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Link className="h-4 w-4 mr-2" />
+                    Extract from URL
+                  </>
+                )}
+              </Button>
             </div>
           </div>
+        );
 
-          {/* File Upload Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium">Upload Files</h3>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+      case "file":
+        return (
+          <div className="space-y-6">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">Drop files here or click to upload</p>
-                <p className="text-xs text-gray-500">Supports PDF, DOCX, TXT, audio, and video files</p>
+                <p className="text-xs text-gray-500">Supports PDF, DOCX, TXT files</p>
               </div>
               <input
                 type="file"
                 onChange={handleFileUpload}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf,.docx,.txt,.mp3,.mp4,.wav,.m4a"
+                accept=".pdf,.docx,.txt"
               />
             </div>
           </div>
+        );
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or record voice
-              </span>
-            </div>
-          </div>
-
-          {/* Voice Recording Section */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium">Voice Recording</h3>
-            <div className="text-center">
+      case "audio":
+        return (
+          <div className="space-y-6">
+            <div className="text-center space-y-4">
               <Button
                 onClick={handleVoiceRecording}
                 variant={isRecording ? "destructive" : "outline"}
@@ -326,11 +348,81 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                 {isRecording ? "Stop Recording" : "Start Voice Recording"}
               </Button>
               {isRecording && (
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground">
                   🎤 Recording in progress... Click "Stop Recording" when done
                 </p>
               )}
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Or upload audio files</p>
+                  <p className="text-xs text-gray-500">Supports MP3, WAV, M4A files</p>
+                </div>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept=".mp3,.wav,.m4a,.mp4"
+                />
+              </div>
             </div>
+          </div>
+        );
+
+      case "text":
+        return (
+          <div className="space-y-6">
+            <div className="text-center py-8">
+              <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-sm text-gray-600">Manual text input coming soon</p>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Import Content
+            <Badge variant="secondary" className="text-xs">AI-Powered</Badge>
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Choose your content source and let AI create intelligent notes
+          </p>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Tabs */}
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
+                    activeTab === tab.id
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab Content */}
+          <div className="min-h-[200px]">
+            {renderTabContent()}
           </div>
 
           {/* Processing Status */}
@@ -361,7 +453,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             <SimplifiedPreviewSection
               metadata={metadata}
               transcript={transcript}
-              contentType={contentType}
+              contentType={activeTab}
             />
           )}
 
