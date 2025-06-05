@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +21,8 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const [processingStep, setProcessingStep] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
   const [lastError, setLastError] = useState<string>('');
+  const [failureReason, setFailureReason] = useState<string>('');
+  const [nextRetryMethod, setNextRetryMethod] = useState<string>('');
   const { toast } = useToast();
 
   const isYouTubeUrl = (url: string): boolean => {
@@ -41,69 +42,189 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const handleRetry = async () => {
     setRetryCount(prev => prev + 1);
     setLastError('');
+    setFailureReason('');
     await handleYouTubeTranscription();
+  };
+
+  const handleSpecificRetry = async (method: string) => {
+    setRetryCount(prev => prev + 1);
+    setLastError('');
+    setFailureReason('');
+    setProcessingStep(`🔄 Retrying with ${method}...`);
+    
+    try {
+      let result;
+      if (method === 'captions') {
+        result = await YouTubeTranscriptService.extractTranscript(url);
+      } else if (method === 'audio-transcription') {
+        result = await YouTubeTranscriptService.extractTranscript(url);
+      } else {
+        result = await YouTubeTranscriptService.processVideoWithRetry(url, 1);
+      }
+      
+      await processYouTubeResult(result);
+    } catch (error) {
+      handleYouTubeError(error);
+    }
   };
 
   const handleYouTubeTranscription = async () => {
     setIsLoading(true);
     setYoutubeResult(null);
     setLastError('');
-    const currentRetry = retryCount;
+    setFailureReason('');
+    setNextRetryMethod('');
     
     try {
-      console.log(`🎯 Starting YouTube transcript extraction for: ${url} (Attempt ${currentRetry + 1})`);
+      console.log(`🎯 Starting comprehensive YouTube processing for: ${url} (Attempt ${retryCount + 1})`);
       
-      // Enhanced status updates
       setProcessingStep('🔍 Analyzing YouTube video...');
-      await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      setProcessingStep('📝 Attempting to extract captions...');
+      setProcessingStep('📝 Checking for captions...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 2);
+      setProcessingStep('🎵 Attempting audio extraction if needed...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      if (result.success && result.transcript) {
-        setYoutubeResult(result);
-        setProcessingStep('');
-        setRetryCount(0); // Reset retry count on success
-        
-        const sourceMethod = result.source === 'captions' ? 'captions' : 'audio transcription';
-        console.log(`✅ YouTube transcript extraction successful via ${sourceMethod}`);
-        
-        toast({
-          title: "✅ YouTube transcript extracted!",
-          description: `Successfully extracted ${result.transcript.length} characters via ${sourceMethod}`,
-        });
-      } else {
-        const errorMsg = result.error || "Unable to extract transcript from this video. This video may not have captions available or may be restricted.";
-        setLastError(errorMsg);
-        setProcessingStep('');
-        
-        console.error('Transcript extraction failed:', errorMsg);
-        
-        // Show retry option for certain errors
-        const canRetry = currentRetry < 2 && !errorMsg.includes('restricted') && !errorMsg.includes('private');
-        
-        toast({
-          title: "❌ Transcript extraction failed",
-          description: canRetry ? `${errorMsg} Click retry to try again.` : errorMsg,
-          variant: "destructive"
-        });
-      }
+      setProcessingStep('🌐 Trying external services if needed...');
+      
+      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 3);
+      await processYouTubeResult(result);
+      
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Failed to process YouTube video";
-      setLastError(errorMsg);
-      setProcessingStep('');
-      
-      console.error('YouTube transcription error:', error);
-      
-      toast({
-        title: "YouTube processing error", 
-        description: `${errorMsg}${currentRetry < 2 ? ' Click retry to try again.' : ''}`,
-        variant: "destructive"
-      });
+      handleYouTubeError(error);
     } finally {
       setIsLoading(false);
+      setProcessingStep('');
     }
+  };
+
+  const processYouTubeResult = async (result: any) => {
+    if (result.success && result.transcript) {
+      setYoutubeResult(result);
+      setRetryCount(0);
+      
+      const sourceMethod = getSourceMethodLabel(result.source, result.method);
+      console.log(`✅ YouTube processing successful via ${sourceMethod}`);
+      
+      toast({
+        title: "✅ YouTube content processed!",
+        description: `Successfully extracted ${result.transcript.length} characters via ${sourceMethod}`,
+      });
+    } else {
+      await handleExtractionFailure(result);
+    }
+  };
+
+  const handleExtractionFailure = async (result: any) => {
+    const errorMsg = result.error || "Unable to extract transcript from this video.";
+    const reason = getFailureReason(result.source, result.method);
+    
+    setLastError(errorMsg);
+    setFailureReason(reason);
+    setNextRetryMethod(result.nextMethod || '');
+    
+    console.error('Transcript extraction failed:', errorMsg, 'Reason:', reason);
+    
+    // Create fallback note with metadata
+    if (result.metadata) {
+      const fallbackContent = createFallbackNote(result.metadata, url, reason);
+      setYoutubeResult({
+        success: true,
+        transcript: fallbackContent,
+        metadata: result.metadata,
+        source: 'fallback',
+        isFallback: true
+      });
+      
+      toast({
+        title: "📋 Fallback note created",
+        description: "We couldn't get the transcript, but saved the video info for you to add notes manually.",
+        variant: "default"
+      });
+    } else {
+      const canRetry = retryCount < 2 && result.retryable !== false;
+      
+      toast({
+        title: "❌ Transcript extraction failed",
+        description: canRetry ? `${errorMsg} You can try again.` : errorMsg,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleYouTubeError = (error: any) => {
+    const errorMsg = error instanceof Error ? error.message : "Failed to process YouTube video";
+    setLastError(errorMsg);
+    setProcessingStep('');
+    
+    console.error('YouTube processing error:', error);
+    
+    toast({
+      title: "YouTube processing error", 
+      description: `${errorMsg}${retryCount < 2 ? ' You can try again.' : ''}`,
+      variant: "destructive"
+    });
+  };
+
+  const createFallbackNote = (metadata: any, sourceUrl: string, reason: string): string => {
+    const timestamp = new Date().toISOString();
+    
+    return `# 🎥 ${metadata.title || 'YouTube Video'}
+
+**Channel:** ${metadata.channel || 'Unknown'}
+**Duration:** ${metadata.duration || 'Unknown'}
+**Import Date:** ${new Date(timestamp).toLocaleDateString()}
+**Source:** ${sourceUrl}
+
+---
+
+## ⚠️ Transcript Not Available
+
+**Status:** ${reason}
+
+We couldn't fetch the transcript for this video. This could be due to:
+- Video is private or restricted
+- Captions are disabled
+- Audio quality is too poor for transcription
+- Video contains primarily music or non-speech content
+
+## 📝 Manual Notes
+
+You can add your own notes about this video here:
+
+*Click to start adding your notes...*
+
+---
+
+**Note:** You can try importing this video again later, or check if the video is publicly available.`;
+  };
+
+  const getSourceMethodLabel = (source: string, method?: string): string => {
+    if (method) {
+      switch (method) {
+        case 'captions': return 'captions';
+        case 'audio-transcription': return 'audio transcription';
+        case 'podsqueeze': return 'PodSqueeze';
+        case 'whisper': return 'Whisper';
+        case 'riverside': return 'Riverside.fm';
+        default: return method;
+      }
+    }
+    
+    switch (source) {
+      case 'captions': return 'captions';
+      case 'audio-transcription': return 'audio transcription';
+      case 'external': return 'external service';
+      default: return source;
+    }
+  };
+
+  const getFailureReason = (source: string, method?: string): string => {
+    if (method === 'fallback') return 'All transcription methods failed';
+    if (source === 'fallback') return 'Audio extraction failed';
+    return 'Transcript extraction failed';
   };
 
   const handleWebScraping = async () => {
@@ -148,9 +269,17 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
       content += `**Channel:** ${youtubeResult.metadata?.channel || 'Unknown'}\n`;
       content += `**Duration:** ${youtubeResult.metadata?.duration || 'Unknown'}\n`;
       content += `**Source:** ${url}\n`;
-      content += `**Extraction Method:** ${youtubeResult.source === 'captions' ? 'Captions' : 'Audio Transcription'}\n\n`;
-      content += `---\n\n`;
-      content += `## 📝 Transcript\n\n`;
+      
+      if (!youtubeResult.isFallback) {
+        const sourceMethod = getSourceMethodLabel(youtubeResult.source, youtubeResult.method);
+        content += `**Extraction Method:** ${sourceMethod}\n\n`;
+        content += `---\n\n`;
+        content += `## 📝 Transcript\n\n`;
+      } else {
+        content += `**Status:** Fallback note\n\n`;
+        content += `---\n\n`;
+      }
+      
       content += youtubeResult.transcript;
 
       onContentImported({
@@ -164,6 +293,7 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
       setUrl('');
       setRetryCount(0);
       setLastError('');
+      setFailureReason('');
     }
   };
 
@@ -220,16 +350,27 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
               )}
             </Button>
             
-            {/* Retry button for YouTube failures */}
-            {isYouTubeUrl(url) && lastError && !isLoading && retryCount < 2 && (
-              <Button 
-                onClick={handleRetry}
-                variant="outline"
-                size="sm"
-              >
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Retry
-              </Button>
+            {/* Enhanced retry button with specific method retry */}
+            {isYouTubeUrl(url) && lastError && !isLoading && retryCount < 3 && (
+              <div className="flex gap-1">
+                <Button 
+                  onClick={handleRetry}
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Retry
+                </Button>
+                {nextRetryMethod && (
+                  <Button 
+                    onClick={() => handleSpecificRetry(nextRetryMethod)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Try {nextRetryMethod}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
@@ -240,16 +381,21 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
             </div>
           )}
 
-          {/* Error display */}
+          {/* Enhanced error display with specific reasons */}
           {lastError && !isLoading && (
             <div className="flex items-start gap-2 text-sm text-destructive bg-red-50 p-3 rounded-md">
               <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-medium">Extraction Failed</p>
                 <p className="text-xs mt-1">{lastError}</p>
-                {retryCount < 2 && (
+                {failureReason && (
+                  <p className="text-xs mt-1 text-orange-600">
+                    <strong>Reason:</strong> {failureReason}
+                  </p>
+                )}
+                {retryCount < 3 && (
                   <p className="text-xs mt-1 text-muted-foreground">
-                    You can try again with the retry button above.
+                    We couldn't fetch the transcript right now. Please check if the video is public and try again later.
                   </p>
                 )}
               </div>
@@ -258,7 +404,7 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
 
           {isYouTubeUrl(url) && !processingStep && !lastError && (
             <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
-              🎥 <strong>YouTube detected:</strong> Will extract captions first, then fallback to audio transcription if needed
+              🎥 <strong>YouTube detected:</strong> Will try captions → audio transcription → external services → fallback note
             </div>
           )}
 
@@ -274,17 +420,21 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
             </div>
           )}
 
-          {/* YouTube Results */}
+          {/* YouTube Results with enhanced status display */}
           {youtubeResult && (
-            <Card className="border-green-200 bg-green-50">
+            <Card className={youtubeResult.isFallback ? "border-orange-200 bg-orange-50" : "border-green-200 bg-green-50"}>
               <CardContent className="pt-4">
                 <div className="flex items-start gap-3">
-                  <Check className="h-5 w-5 text-green-600 mt-0.5" />
+                  {youtubeResult.isFallback ? (
+                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
+                  ) : (
+                    <Check className="h-5 w-5 text-green-600 mt-0.5" />
+                  )}
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium text-sm">{youtubeResult.metadata?.title || 'YouTube Video'}</h4>
-                      <Badge variant={getSourceBadgeVariant(youtubeResult.source)} className="text-xs">
-                        {youtubeResult.source === 'captions' ? 'Captions' : 'Audio Transcription'}
+                      <Badge variant={youtubeResult.isFallback ? "destructive" : getSourceBadgeVariant(youtubeResult.source)} className="text-xs">
+                        {youtubeResult.isFallback ? 'Fallback Note' : getSourceMethodLabel(youtubeResult.source, youtubeResult.method)}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -292,12 +442,17 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
                       Duration: {youtubeResult.metadata?.duration || 'Unknown'} • 
                       {youtubeResult.transcript?.length || 0} characters
                     </p>
+                    {youtubeResult.isFallback && (
+                      <p className="text-xs text-orange-600">
+                        💡 This is a fallback note where you can add manual notes about the video.
+                      </p>
+                    )}
                     <div className="flex items-center justify-between">
                       <Badge variant="secondary" className="text-xs">
-                        YouTube Transcript
+                        YouTube {youtubeResult.isFallback ? 'Fallback' : 'Transcript'}
                       </Badge>
                       <Button size="sm" onClick={handleImportYouTube}>
-                        Import Transcript
+                        Import {youtubeResult.isFallback ? 'Note' : 'Transcript'}
                       </Button>
                     </div>
                   </div>

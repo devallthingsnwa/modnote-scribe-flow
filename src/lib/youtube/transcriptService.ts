@@ -9,7 +9,6 @@ export class YouTubeTranscriptService {
     try {
       console.log(`📊 Fetching metadata for video: ${videoId}`);
       
-      // Try to get metadata from YouTube oEmbed API first
       const oembedResponse = await fetch(
         `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
       );
@@ -26,7 +25,6 @@ export class YouTubeTranscriptService {
         };
       }
 
-      // Fallback metadata
       return {
         videoId,
         title: `YouTube Video ${videoId}`,
@@ -46,7 +44,7 @@ export class YouTubeTranscriptService {
     }
   }
 
-  static async extractTranscript(videoUrl: string): Promise<TranscriptResult> {
+  static async extractTranscriptWithFallback(videoUrl: string): Promise<TranscriptResult> {
     const videoId = VideoUtils.extractVideoId(videoUrl);
     if (!videoId) {
       return {
@@ -56,77 +54,80 @@ export class YouTubeTranscriptService {
       };
     }
 
-    console.log(`🚀 Starting smart transcript extraction for video: ${videoId}`);
+    console.log(`🚀 Starting comprehensive transcript extraction for video: ${videoId}`);
 
     try {
-      // Step 1: Fetch video metadata
-      const metadata = await this.fetchVideoMetadata(videoId);
-
-      // Step 2: Try to get transcript from captions first (fastest method)
-      console.log(`📝 Attempting caption-based transcript extraction...`);
-      const captionResult = await SupadataService.fetchTranscript(videoId);
+      // Use the new fallback chain that handles everything
+      const result = await SupadataService.processWithFallbackChain(videoId);
       
-      if (captionResult.success && captionResult.transcript) {
-        console.log(`✅ Caption-based transcript successful`);
+      // Fetch metadata separately if not included
+      let metadata = result.metadata;
+      if (!metadata) {
+        metadata = await this.fetchVideoMetadata(videoId);
+      }
+
+      if (result.success && result.transcript) {
+        const source = this.mapMethodToSource(result.method || 'unknown');
+        console.log(`✅ Transcript extraction successful via ${source}`);
+        
         return {
           success: true,
-          transcript: captionResult.transcript,
-          segments: captionResult.segments,
+          transcript: result.transcript,
+          segments: result.segments,
           metadata,
-          source: 'captions'
+          source,
+          method: result.method
         };
       }
 
-      // Step 3: Fallback to audio transcription if captions not available
-      console.log(`⚠️ Captions not available, falling back to audio transcription...`);
-      const audioResult = await SupadataService.transcribeAudio(videoId);
-      
-      if (audioResult.success && audioResult.transcript) {
-        console.log(`✅ Audio transcription successful`);
-        return {
-          success: true,
-          transcript: audioResult.transcript,
-          metadata,
-          source: 'audio-transcription'
-        };
-      }
-
-      // Step 4: Final fallback - return error with metadata
-      console.error(`❌ All transcript extraction methods failed`);
+      // Even if extraction failed, we should have a fallback note
+      console.log(`⚠️ Transcript extraction completed with fallback`);
       return {
         success: false,
-        error: 'Unable to extract transcript or transcribe audio for this video',
+        error: result.error || 'All transcription methods failed',
         metadata,
-        source: 'fallback'
+        source: 'fallback',
+        retryable: result.retryable
       };
 
     } catch (error) {
       console.error('❌ Transcript extraction failed:', error);
+      
+      // Create a basic fallback note even on complete failure
+      const metadata = await this.fetchVideoMetadata(videoId);
       return {
         success: false,
         error: error.message || 'Failed to extract transcript',
-        source: 'fallback'
+        metadata,
+        source: 'fallback',
+        retryable: true
       };
     }
   }
 
-  static async processVideoWithRetry(videoUrl: string, maxRetries: number = 2): Promise<TranscriptResult> {
+  static async extractTranscript(videoUrl: string): Promise<TranscriptResult> {
+    // Use the new fallback system by default
+    return this.extractTranscriptWithFallback(videoUrl);
+  }
+
+  static async processVideoWithRetry(videoUrl: string, maxRetries: number = 3): Promise<TranscriptResult> {
     let lastResult: TranscriptResult | null = null;
     
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`🔄 Transcript extraction attempt ${attempt}/${maxRetries}`);
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      console.log(`🔄 Transcript extraction attempt ${attempt + 1}/${maxRetries}`);
       
-      const result = await this.extractTranscript(videoUrl);
+      const result = await this.extractTranscriptWithFallback(videoUrl);
       
-      if (result.success) {
+      if (result.success || !result.retryable) {
         return result;
       }
       
       lastResult = result;
       
-      if (attempt < maxRetries) {
-        const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff
-        console.log(`⏳ Attempt ${attempt} failed, retrying in ${delay}ms...`);
+      if (attempt < maxRetries - 1) {
+        // Progressive backoff: 5s, 10s, 15s
+        const delay = (attempt + 1) * 5000;
+        console.log(`⏳ Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -134,7 +135,19 @@ export class YouTubeTranscriptService {
     return lastResult || {
       success: false,
       error: 'All extraction attempts failed',
-      source: 'fallback'
+      source: 'fallback',
+      retryable: false
     };
+  }
+
+  private static mapMethodToSource(method: string): 'captions' | 'audio-transcription' | 'external' | 'fallback' {
+    switch (method) {
+      case 'captions': return 'captions';
+      case 'audio-transcription': return 'audio-transcription';
+      case 'podsqueeze':
+      case 'whisper':
+      case 'riverside': return 'external';
+      default: return 'fallback';
+    }
   }
 }

@@ -12,6 +12,8 @@ export interface VideoMetadata {
   duration: string;
   thumbnail: string;
   description?: string;
+  method?: string;
+  reason?: string;
 }
 
 export interface TranscriptResult {
@@ -19,8 +21,11 @@ export interface TranscriptResult {
   transcript?: string;
   segments?: TranscriptSegment[];
   metadata?: VideoMetadata;
-  source: 'captions' | 'audio-transcription' | 'fallback';
+  source: 'captions' | 'audio-transcription' | 'external' | 'fallback';
   error?: string;
+  retryable?: boolean;
+  nextMethod?: string;
+  method?: string;
 }
 
 export interface SupadataResponse {
@@ -29,4 +34,8 @@ export interface SupadataResponse {
   segments?: TranscriptSegment[];
   error?: string;
   processingTime?: number;
+  retryable?: boolean;
+  nextMethod?: string;
+  method?: string;
+  metadata?: VideoMetadata;
 }

@@ -3,6 +3,52 @@ import { supabase } from "@/integrations/supabase/client";
 import { SupadataResponse } from "./types";
 
 export class SupadataService {
+  static async processWithFallbackChain(videoId: string, retryAttempt: number = 0): Promise<SupadataResponse> {
+    try {
+      console.log(`🔗 Starting fallback chain for video: ${videoId} (attempt ${retryAttempt + 1})`);
+      
+      const { data, error } = await supabase.functions.invoke('supadata-transcript', {
+        body: { 
+          videoId,
+          method: 'fallback-chain',
+          retryAttempt,
+          options: {
+            includeTimestamps: true,
+            language: 'auto'
+          }
+        }
+      });
+
+      if (error) {
+        console.error("Fallback chain error:", error);
+        throw new Error(error.message || 'Fallback chain service error');
+      }
+
+      if (data?.success) {
+        console.log(`✅ Fallback chain successful via ${data.method}:`, data.transcript?.length || 0, "characters");
+        return {
+          success: true,
+          transcript: data.transcript,
+          segments: data.segments,
+          processingTime: data.processingTime,
+          method: data.method,
+          metadata: data.metadata
+        };
+      }
+
+      console.log("⚠️ Fallback chain completed but no transcript available");
+      throw new Error(data?.error || 'All transcription methods failed');
+      
+    } catch (error) {
+      console.error("❌ Fallback chain failed:", error);
+      return {
+        success: false,
+        error: error.message || 'Fallback chain processing failed',
+        retryable: error.retryable !== false
+      };
+    }
+  }
+
   static async fetchTranscript(videoId: string): Promise<SupadataResponse> {
     try {
       console.log(`🎯 Fetching transcript via Supadata for video: ${videoId}`);
@@ -33,15 +79,20 @@ export class SupadataService {
         };
       }
 
-      // If we get here, the API call succeeded but no transcript was available
       console.log("⚠️ Supadata transcript API succeeded but no transcript available");
-      throw new Error('No transcript available from Supadata - video may not have captions');
+      return {
+        success: false,
+        error: data?.error || 'Captions unavailable',
+        retryable: data?.retryable !== false,
+        nextMethod: data?.nextMethod
+      };
       
     } catch (error) {
       console.error("❌ Supadata transcript failed:", error);
       return {
         success: false,
-        error: error.message || 'Supadata transcript extraction failed'
+        error: error.message || 'Supadata transcript extraction failed',
+        retryable: true
       };
     }
   }
@@ -75,15 +126,20 @@ export class SupadataService {
         };
       }
 
-      // If we get here, the API call succeeded but transcription failed
       console.log("⚠️ Supadata audio transcription API succeeded but no transcript available");
-      throw new Error('Audio transcription failed via Supadata - video may not be accessible');
+      return {
+        success: false,
+        error: data?.error || 'Audio download failed',
+        retryable: data?.retryable !== false,
+        nextMethod: data?.nextMethod
+      };
       
     } catch (error) {
       console.error("❌ Supadata audio transcription failed:", error);
       return {
         success: false,
-        error: error.message || 'Supadata audio transcription failed'
+        error: error.message || 'Supadata audio transcription failed',
+        retryable: true
       };
     }
   }
