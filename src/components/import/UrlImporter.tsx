@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -404,7 +405,7 @@ You can add your own notes about this video here:
 
           {isYouTubeUrl(url) && !processingStep && !lastError && (
             <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
-              🎥 <strong>YouTube detected:</strong> Will try captions → audio transcription → external services → fallback note
+              🎥 <strong>YouTube detected:</strong> The system will automatically attempt transcript extraction using multiple times until it gets the transcribed spoken words from the YouTube video, creating a clean, formatted note with the transcript and full video metadata.
             </div>
           )}
 
