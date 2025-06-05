@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
 const corsHeaders = {
@@ -96,18 +95,16 @@ serve(async (req) => {
 });
 
 async function processWithFallbackChain(videoId: string, options: any, retryAttempt: number): Promise<TranscriptResponse> {
-  console.log('🔗 Starting enhanced fallback chain processing...');
+  console.log('🔗 Starting transcript extraction...');
   
-  // Enhanced caption extraction with multiple methods
-  console.log('📝 Step 1: Enhanced caption extraction...');
+  // Enhanced caption extraction
+  console.log('📝 Step 1: Caption extraction...');
   const captionResult = await extractYouTubeCaptionsEnhanced(videoId, options);
   
   if (captionResult.success && captionResult.transcript) {
-    console.log('✅ Enhanced caption extraction successful');
-    const cleanTranscript = cleanRawTranscript(captionResult.transcript);
+    console.log('✅ Caption extraction successful');
     return {
       ...captionResult,
-      transcript: cleanTranscript,
       method: 'captions',
       metadata: { ...captionResult.metadata, method: 'captions' }
     };
@@ -115,16 +112,14 @@ async function processWithFallbackChain(videoId: string, options: any, retryAtte
   
   console.log('⚠️ Caption extraction failed, trying page scraping...');
   
-  // Enhanced page scraping with multiple approaches
-  console.log('🌐 Step 2: Enhanced page scraping...');
+  // Enhanced page scraping
+  console.log('🌐 Step 2: Page scraping...');
   const scrapingResult = await scrapeYouTubePageEnhanced(videoId, options);
   
   if (scrapingResult.success && scrapingResult.transcript) {
-    console.log('✅ Enhanced page scraping successful');
-    const cleanTranscript = cleanRawTranscript(scrapingResult.transcript);
+    console.log('✅ Page scraping successful');
     return {
       ...scrapingResult,
-      transcript: cleanTranscript,
       method: 'page-scraping',
       metadata: { ...scrapingResult.metadata, method: 'page-scraping' }
     };
@@ -132,32 +127,28 @@ async function processWithFallbackChain(videoId: string, options: any, retryAtte
   
   console.log('⚠️ Page scraping failed, trying alternative methods...');
   
-  // Multiple alternative extraction approaches
-  console.log('🔄 Step 3: Alternative extraction methods...');
+  // Alternative extraction approaches
+  console.log('🔄 Step 3: Alternative methods...');
   const altResult = await tryMultipleExtractionMethods(videoId, options);
   
   if (altResult.success && altResult.transcript) {
     console.log('✅ Alternative extraction successful');
-    const cleanTranscript = cleanRawTranscript(altResult.transcript);
-    return {
-      ...altResult,
-      transcript: cleanTranscript
-    };
+    return altResult;
   }
   
-  // Step 4: Create fallback note with metadata
-  console.log('📋 Step 4: Creating fallback note with metadata...');
+  // Return failure with metadata
+  console.log('❌ All extraction methods failed');
   const metadata = await fetchVideoMetadata(videoId);
   
   return {
-    success: true,
-    transcript: generateFallbackContent(videoId, metadata),
+    success: false,
+    error: 'All transcription methods failed',
     metadata: {
       ...metadata,
-      method: 'fallback',
+      method: 'failed',
       reason: 'All transcription methods failed'
     },
-    method: 'fallback'
+    method: 'failed'
   };
 }
 
@@ -165,22 +156,19 @@ async function extractYouTubeCaptionsEnhanced(videoId: string, options: any): Pr
   console.log('📝 Enhanced YouTube caption extraction...');
   
   try {
-    // Multiple caption API endpoints with different languages and formats
     const captionUrls = [
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=srv3`,
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=tl&fmt=srv3`, // Filipino
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=fil&fmt=srv3`, // Filipino
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=tl&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=fil&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=srv3`,
       `https://www.youtube.com/api/timedtext?v=${videoId}&fmt=vtt`,
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=ttml`,
-      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=auto&fmt=ttml`,
     ];
 
     for (const url of captionUrls) {
       try {
-        console.log(`Trying enhanced caption URL: ${url}`);
+        console.log(`Trying caption URL: ${url}`);
         
         const response = await fetch(url, {
           headers: {
@@ -198,8 +186,9 @@ async function extractYouTubeCaptionsEnhanced(videoId: string, options: any): Pr
             const segments = parseXMLCaptionsEnhanced(content);
             
             if (segments.length > 0) {
+              // Return only raw spoken words
               const transcript = segments.map(s => s.text).join(' ');
-              console.log(`Enhanced caption extraction successful: ${transcript.length} characters`);
+              console.log(`Caption extraction successful: ${transcript.length} characters`);
               
               return {
                 success: true,
@@ -211,20 +200,20 @@ async function extractYouTubeCaptionsEnhanced(videoId: string, options: any): Pr
           }
         }
       } catch (error) {
-        console.log(`Enhanced caption URL failed: ${url}`, error.message);
+        console.log(`Caption URL failed: ${url}`, error.message);
       }
     }
 
     return {
       success: false,
-      error: 'No captions available via enhanced API',
+      error: 'No captions available',
       retryable: true
     };
   } catch (error) {
-    console.error('Enhanced caption extraction error:', error);
+    console.error('Caption extraction error:', error);
     return {
       success: false,
-      error: 'Enhanced caption extraction failed',
+      error: 'Caption extraction failed',
       retryable: true
     };
   }
@@ -252,7 +241,6 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
 
     const html = await response.text();
     
-    // Multiple extraction patterns for different page structures
     const extractionPatterns = [
       /"playerResponse":\s*({.+?})\s*[,}]/,
       /"PLAYER_VARS":\s*({.+?})\s*[,}]/,
@@ -267,21 +255,19 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
       if (match) {
         try {
           playerResponse = JSON.parse(match[1]);
-          console.log('Found player response with pattern');
+          console.log('Found player response');
           break;
         } catch (e) {
-          console.log('Failed to parse player response, trying next pattern');
           continue;
         }
       }
     }
 
     if (!playerResponse) {
-      console.log("No player response found with any pattern");
+      console.log("No player response found");
       return { success: false, error: 'No player response found' };
     }
 
-    // Enhanced caption track extraction
     const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
     
     if (!captionTracks || captionTracks.length === 0) {
@@ -289,7 +275,6 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
       return { success: false, error: 'No caption tracks found' };
     }
 
-    // Enhanced language priority including Filipino
     const trackPriority = ['en', 'auto', 'tl', 'fil', 'en-US', 'en-GB'];
     let selectedTrack = null;
     
@@ -311,7 +296,6 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
       return { success: false, error: 'No suitable caption track found' };
     }
 
-    // Download caption content with enhanced format handling
     const captionUrl = selectedTrack.baseUrl.includes('&fmt=') ? selectedTrack.baseUrl : `${selectedTrack.baseUrl}&fmt=srv3`;
     
     const captionResponse = await fetch(captionUrl, {
@@ -329,12 +313,13 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
     const segments = parseXMLCaptionsEnhanced(captionXml);
     
     if (segments.length === 0) {
-      console.log("No segments extracted from captions");
+      console.log("No segments extracted");
       return { success: false, error: 'No segments extracted' };
     }
 
+    // Return only raw spoken words
     const transcript = segments.map(s => s.text).join(' ');
-    console.log(`Enhanced page scraping successful: ${segments.length} segments, ${transcript.length} characters`);
+    console.log(`Page scraping successful: ${segments.length} segments, ${transcript.length} characters`);
 
     return {
       success: true,
@@ -344,15 +329,14 @@ async function scrapeYouTubePageEnhanced(videoId: string, options: any): Promise
     };
 
   } catch (error) {
-    console.error("Enhanced page scraping failed:", error);
-    return { success: false, error: 'Enhanced page scraping failed' };
+    console.error("Page scraping failed:", error);
+    return { success: false, error: 'Page scraping failed' };
   }
 }
 
 async function tryMultipleExtractionMethods(videoId: string, options: any): Promise<TranscriptResponse> {
-  console.log('🔄 Trying multiple extraction methods...');
+  console.log('🔄 Trying alternative methods...');
   
-  // Try different approaches for stubborn videos
   const methods = [
     () => extractViaEmbedPageEnhanced(videoId),
     () => extractViaAlternativeAPIs(videoId),
@@ -389,7 +373,6 @@ async function extractViaEmbedPageEnhanced(videoId: string): Promise<TranscriptR
     
     if (response.ok) {
       const html = await response.text();
-      // Enhanced caption data extraction from embed
       const captionPatterns = [
         /"captionTracks":\s*(\[.*?\])/,
         /"captions":\s*{[^}]*"playerCaptionsTracklistRenderer":\s*{[^}]*"captionTracks":\s*(\[.*?\])/,
@@ -430,7 +413,6 @@ async function extractViaAlternativeAPIs(videoId: string): Promise<TranscriptRes
   console.log('🎯 Alternative API extraction...');
   
   try {
-    // Try different API endpoints that might have captions
     const apiEndpoints = [
       `https://www.youtube.com/youtubei/v1/get_transcript?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8`,
       `https://youtubetranscript.com/?v=${videoId}`,
@@ -466,7 +448,6 @@ async function extractViaAlternativeAPIs(videoId: string): Promise<TranscriptRes
         
         if (response.ok) {
           const data = await response.json();
-          // Process different response formats
           if (data.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.body?.transcriptBodyRenderer?.cueGroups) {
             const cueGroups = data.actions[0].updateEngagementPanelAction.content.transcriptRenderer.body.transcriptBodyRenderer.cueGroups;
             const transcript = cueGroups.map((group: any) => 
@@ -497,7 +478,6 @@ async function extractViaDirectTranscriptAPI(videoId: string): Promise<Transcrip
   console.log('📜 Direct transcript API extraction...');
   
   try {
-    // Try direct transcript APIs
     const transcriptAPIs = [
       `https://video.google.com/timedtext?lang=en&v=${videoId}`,
       `https://video.google.com/timedtext?lang=auto&v=${videoId}`,
@@ -540,7 +520,6 @@ function parseXMLCaptionsEnhanced(xmlContent: string): Array<{start: number, dur
   const segments: Array<{start: number, duration: number, text: string}> = [];
   
   try {
-    // Enhanced parsing for different XML formats
     const patterns = [
       /<text start="([^"]*)"(?:\s+dur="([^"]*)")?>([^<]*)<\/text>/g,
       /<p t="([^"]*)"(?:\s+d="([^"]*)")?>([^<]*)<\/p>/g,
@@ -549,7 +528,7 @@ function parseXMLCaptionsEnhanced(xmlContent: string): Array<{start: number, dur
     
     for (const pattern of patterns) {
       let match;
-      pattern.lastIndex = 0; // Reset regex
+      pattern.lastIndex = 0;
       
       while ((match = pattern.exec(xmlContent)) !== null) {
         const start = parseFloat(match[1] || '0');
@@ -565,10 +544,10 @@ function parseXMLCaptionsEnhanced(xmlContent: string): Array<{start: number, dur
         }
       }
       
-      if (segments.length > 0) break; // Use first successful pattern
+      if (segments.length > 0) break;
     }
   } catch (error) {
-    console.error("Enhanced XML parsing error:", error);
+    console.error("XML parsing error:", error);
   }
   
   return segments;
@@ -605,8 +584,6 @@ async function fetchTranscriptFromCaptions(videoId: string, options: any): Promi
 }
 
 async function transcribeVideoAudio(videoId: string, options: any): Promise<TranscriptResponse> {
-  // Audio transcription would require downloading and processing audio
-  // For now, return failure as this requires external services
   return {
     success: false,
     error: 'Audio transcription not implemented',

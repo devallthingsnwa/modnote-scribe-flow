@@ -54,13 +54,11 @@ export class YouTubeTranscriptService {
       };
     }
 
-    console.log(`🚀 Starting enhanced transcript extraction for video: ${videoId}`);
+    console.log(`🚀 Starting transcript extraction for video: ${videoId}`);
 
     try {
-      // Use enhanced fallback chain with raw transcript output
       const result = await SupadataService.processWithFallbackChain(videoId);
       
-      // Fetch metadata separately if not included
       let metadata = result.metadata;
       if (!metadata) {
         metadata = await this.fetchVideoMetadata(videoId);
@@ -68,14 +66,12 @@ export class YouTubeTranscriptService {
 
       if (result.success && result.transcript) {
         const source = this.mapMethodToSource(result.method || 'unknown');
-        console.log(`✅ Enhanced transcript extraction successful via ${source}`);
+        console.log(`✅ Transcript extraction successful via ${source}`);
         
-        // Clean transcript to return only raw spoken words
-        const cleanTranscript = this.cleanToRawSpokenWords(result.transcript);
-        
+        // Return raw transcript as-is
         return {
           success: true,
-          transcript: cleanTranscript,
+          transcript: result.transcript,
           segments: result.segments,
           metadata,
           source,
@@ -83,8 +79,7 @@ export class YouTubeTranscriptService {
         };
       }
 
-      // Even if extraction failed, we should have a fallback note
-      console.log(`⚠️ Enhanced transcript extraction completed with fallback`);
+      console.log(`⚠️ Transcript extraction failed`);
       return {
         success: false,
         error: result.error || 'All transcription methods failed',
@@ -94,9 +89,8 @@ export class YouTubeTranscriptService {
       };
 
     } catch (error) {
-      console.error('❌ Enhanced transcript extraction failed:', error);
+      console.error('❌ Transcript extraction failed:', error);
       
-      // Create a basic fallback note even on complete failure
       const metadata = await this.fetchVideoMetadata(videoId);
       return {
         success: false,
@@ -108,22 +102,7 @@ export class YouTubeTranscriptService {
     }
   }
 
-  static cleanToRawSpokenWords(transcript: string): string {
-    // Return only raw spoken words, preserving original sequence
-    return transcript
-      .replace(/^\s*#.*$/gm, '') // Remove headings
-      .replace(/^\s*\*\*.*?\*\*.*$/gm, '') // Remove bold metadata
-      .replace(/^\s*---.*$/gm, '') // Remove separators
-      .replace(/^\s*## .*/gm, '') // Remove section headers
-      .replace(/^\s*\*.*$/gm, '') // Remove bullet points
-      .replace(/\[(\d{2}:\d{2}.*?)\]/g, '') // Remove timestamps
-      .replace(/\n+/g, ' ') // Replace line breaks with spaces
-      .replace(/\s+/g, ' ') // Normalize multiple spaces
-      .trim();
-  }
-
   static async extractTranscript(videoUrl: string): Promise<TranscriptResult> {
-    // Use the enhanced fallback system by default
     return this.extractTranscriptWithFallback(videoUrl);
   }
 
@@ -131,7 +110,7 @@ export class YouTubeTranscriptService {
     let lastResult: TranscriptResult | null = null;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      console.log(`🔄 Enhanced transcript extraction attempt ${attempt + 1}/${maxRetries}`);
+      console.log(`🔄 Transcript extraction attempt ${attempt + 1}/${maxRetries}`);
       
       const result = await this.extractTranscriptWithFallback(videoUrl);
       
@@ -142,7 +121,6 @@ export class YouTubeTranscriptService {
       lastResult = result;
       
       if (attempt < maxRetries - 1) {
-        // Progressive backoff: 5s, 10s, 15s
         const delay = (attempt + 1) * 5000;
         console.log(`⏳ Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
