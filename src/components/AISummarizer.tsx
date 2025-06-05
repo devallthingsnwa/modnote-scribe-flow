@@ -3,17 +3,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, Loader2, Video, ExternalLink, Mic } from "lucide-react";
+import { Brain, Loader2, Video, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { VideoNoteProcessor } from "@/lib/videoNoteProcessor";
 import { useCreateNote } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
 export function AISummarizer() {
   const [url, setUrl] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStage, setProcessingStage] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
   const createNoteMutation = useCreateNote();
@@ -32,73 +30,23 @@ export function AISummarizer() {
     if (!url.trim()) {
       toast({
         title: "URL required",
-        description: "Please enter a YouTube URL to summarize.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const videoId = VideoNoteProcessor.extractVideoId(url);
-    if (!videoId) {
-      toast({
-        title: "Invalid URL",
-        description: "Please enter a valid YouTube URL.",
+        description: "Please enter a URL to summarize.",
         variant: "destructive"
       });
       return;
     }
 
     setIsProcessing(true);
-    setProcessingStage("Initializing...");
 
     try {
-      console.log("Starting AI summarization for video:", videoId);
+      // For now, create a basic note structure since transcript functionality is removed
+      const noteContent = `# 📝 Content Summary\n\n**Source:** ${url}\n**Type:** Manual Summary\n**Created:** ${new Date().toLocaleString()}\n\n---\n\n## 📋 Summary Notes\n\nAdd your summary and notes about this content here...\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
 
-      setProcessingStage("Extracting transcript...");
-      
-      // Process the video with transcript, metadata, and AI summary
-      const result = await VideoNoteProcessor.processVideo(videoId, {
-        fetchMetadata: true,
-        fetchTranscript: true,
-        generateSummary: true,
-        summaryType: 'full',
-        transcriptOptions: {
-          includeTimestamps: true,
-          language: 'en'
-        }
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to process video');
-      }
-
-      setProcessingStage("Generating AI summary...");
-
-      // Create the enhanced note content
-      let noteContent = `# 🎥 ${result.metadata?.title || 'YouTube Video'}\n\n`;
-      noteContent += `**Source:** ${url}\n`;
-      noteContent += `**Author:** ${result.metadata?.author || 'Unknown'}\n`;
-      noteContent += `**Duration:** ${result.metadata?.duration || 'Unknown'}\n`;
-      noteContent += `**Type:** AI Video Summary\n`;
-      noteContent += `**Created:** ${new Date().toLocaleString()}\n\n`;
-      
-      if (result.summary) {
-        noteContent += `---\n\n## 🤖 AI Summary\n\n${result.summary}\n\n`;
-      }
-      
-      noteContent += `---\n\n## 📝 Full Transcript\n\n`;
-      noteContent += result.transcript || 'Transcript not available';
-      noteContent += `\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...\n`;
-
-      setProcessingStage("Saving note...");
-
-      // Create the note
       const noteData = {
-        title: result.metadata?.title || `YouTube Summary ${videoId}`,
+        title: `Summary: ${url}`,
         content: noteContent,
         source_url: url,
-        thumbnail: result.metadata?.thumbnail,
-        is_transcription: true
+        is_transcription: false
       };
 
       createNoteMutation.mutate(
@@ -106,11 +54,10 @@ export function AISummarizer() {
         {
           onSuccess: (data) => {
             toast({
-              title: "Summary created!",
-              description: `AI summary has been generated and saved as a new note.`
+              title: "Note created!",
+              description: "A summary template has been created for manual input."
             });
             
-            // Navigate to the new note
             if (data?.id) {
               navigate(`/note/${data.id}`);
             } else {
@@ -118,10 +65,10 @@ export function AISummarizer() {
             }
           },
           onError: (error) => {
-            console.error('Error creating summary note:', error);
+            console.error('Error creating note:', error);
             toast({
-              title: "Error creating summary",
-              description: "Failed to save the AI summary. Please try again.",
+              title: "Error creating note",
+              description: "Failed to create the summary note. Please try again.",
               variant: "destructive"
             });
           }
@@ -129,15 +76,14 @@ export function AISummarizer() {
       );
 
     } catch (error) {
-      console.error('AI summarization error:', error);
+      console.error('Summarization error:', error);
       toast({
-        title: "Summarization failed",
-        description: error.message || "Failed to generate AI summary. Please try again.",
+        title: "Error",
+        description: "Failed to create summary note. Please try again.",
         variant: "destructive"
       });
     } finally {
       setIsProcessing(false);
-      setProcessingStage("");
     }
   };
 
@@ -149,20 +95,20 @@ export function AISummarizer() {
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-full">
               <Brain className="h-8 w-8 text-white" />
             </div>
-            AI Video Summarizer
+            Content Summarizer
           </CardTitle>
           <p className="text-muted-foreground">
-            Generate intelligent summaries from YouTube videos with AI-powered transcription
+            Create structured notes for content you want to summarize
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3">
-            <label className="text-sm font-medium">YouTube URL</label>
+            <label className="text-sm font-medium">Content URL</label>
             <div className="flex gap-3">
               <Input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
+                placeholder="https://example.com/content..."
                 className="flex-1"
                 disabled={isProcessing}
               />
@@ -174,57 +120,28 @@ export function AISummarizer() {
                 {isProcessing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
+                    Creating...
                   </>
                 ) : (
                   <>
                     <Brain className="h-4 w-4 mr-2" />
-                    Summarize
+                    Create Note
                   </>
                 )}
               </Button>
             </div>
           </div>
 
-          {isProcessing && (
-            <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border-blue-200 dark:border-blue-800">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="h-6 w-6 border-2 border-blue-200 dark:border-blue-800 rounded-full" />
-                    <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin absolute top-0" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      {processingStage || "Processing..."}
-                    </p>
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                      {processingStage.includes("transcript") ? 
-                        "Using AI transcription if captions aren't available" : 
-                        "This may take a few moments for longer videos"
-                      }
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
             <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
               <Video className="h-4 w-4" />
-              Advanced AI Features:
+              Note Creation Features:
             </h4>
             <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1 ml-6">
-              <li className="list-disc">Works with videos that have captions</li>
-              <li className="list-disc flex items-center gap-1">
-                <Mic className="h-3 w-3" />
-                AI transcription for videos without captions
-              </li>
-              <li className="list-disc">Complete AI-generated summary with insights</li>
-              <li className="list-disc">Full transcript with clickable timestamps</li>
-              <li className="list-disc">Narrative summary button for deeper analysis</li>
+              <li className="list-disc">Creates structured note templates</li>
               <li className="list-disc">Automatically saved as a searchable note</li>
+              <li className="list-disc">Ready for manual content input</li>
+              <li className="list-disc">Organized sections for easy editing</li>
             </ul>
           </div>
         </CardContent>
