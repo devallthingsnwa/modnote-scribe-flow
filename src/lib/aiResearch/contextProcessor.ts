@@ -1,7 +1,4 @@
 
-import { MetadataValidator } from './metadataValidator';
-import { QueryIntentAnalyzer } from './queryIntentAnalyzer';
-
 export interface SourceData {
   id: string;
   title: string;
@@ -22,14 +19,13 @@ export interface ProcessedContext {
   totalTokens: number;
   contextSummary: string;
   queryFingerprint: string;
-  isolationLevel: 'strict' | 'normal';
 }
 
 export class ContextProcessor {
-  private static readonly MAX_CONTEXT_LENGTH = 3500; // Reduced for better focus
-  private static readonly ULTRA_STRICT_RELEVANCE_THRESHOLD = 0.8; // Increased threshold
-  private static readonly CHUNK_SIZE = 350;
-  private static readonly MAX_SOURCES = 2;
+  private static readonly MAX_CONTEXT_LENGTH = 6000; // Reduced for better focus
+  private static readonly MIN_RELEVANCE_THRESHOLD = 0.4; // Higher threshold for accuracy
+  private static readonly CHUNK_SIZE = 600; // Smaller chunks for precision
+  private static readonly MAX_SOURCES = 3; // Limit sources for clarity
 
   static processNotesForContext(notes: any[], query: string): ProcessedContext {
     if (!notes || notes.length === 0) {
@@ -38,79 +34,40 @@ export class ContextProcessor {
         sources: [],
         totalTokens: 0,
         contextSummary: "No relevant notes found.",
-        queryFingerprint: this.createQueryFingerprint(query, []),
-        isolationLevel: 'strict'
+        queryFingerprint: this.createQueryFingerprint(query, [])
       };
     }
 
-    console.log(`🔒 ENHANCED CONTEXT PROCESSING: ${notes.length} notes with metadata validation for: "${query}"`);
+    console.log(`🔍 STRICT CONTEXT: Processing ${notes.length} notes for: "${query}"`);
 
-    // Analyze query intent for better filtering
-    const queryIntent = QueryIntentAnalyzer.analyzeQuery(query);
-    console.log(`📊 Query Intent Analysis:`, queryIntent);
-
-    // Enhanced relevance scoring with metadata validation
+    // Enhanced relevance scoring with stricter criteria
     const scoredNotes = notes
       .map(note => {
-        // Basic relevance calculation
-        const basicRelevance = this.calculateBasicRelevance(note, query);
-        
-        // Metadata validation
-        const metadataValidation = MetadataValidator.validateContentRelevance(
-          { title: note.title, metadata: note },
-          query,
-          true // strict mode
-        );
-        
-        // Intent validation
-        const intentValidation = QueryIntentAnalyzer.validateContentAgainstIntent(
-          queryIntent,
-          { title: note.title, metadata: note }
-        );
-        
-        // Combined scoring
-        const finalScore = basicRelevance * metadataValidation.confidence * intentValidation.score;
-        
+        const relevanceScore = this.calculateStrictRelevance(note, query);
         return {
           ...note,
-          relevanceScore: finalScore,
-          metadataValidation,
-          intentValidation,
+          relevanceScore,
           sourceIdentifier: `${note.title}_${note.id}`,
           contentHash: this.createContentHash(note.content || '')
         };
       })
-      .filter(note => {
-        const passesThreshold = note.relevanceScore >= this.ULTRA_STRICT_RELEVANCE_THRESHOLD;
-        const passesMetadata = note.metadataValidation.isValid;
-        const passesIntent = note.intentValidation.matches;
-        
-        if (!passesThreshold || !passesMetadata || !passesIntent) {
-          console.log(`❌ CONTEXT FILTERED: "${note.title}"`);
-          console.log(`   Score: ${note.relevanceScore.toFixed(3)} (threshold: ${this.ULTRA_STRICT_RELEVANCE_THRESHOLD})`);
-          console.log(`   Metadata: ${passesMetadata} (${note.metadataValidation.reason})`);
-          console.log(`   Intent: ${passesIntent} (${note.intentValidation.reasons.join(', ')})`);
-        }
-        
-        return passesThreshold && passesMetadata && passesIntent;
-      })
+      .filter(note => note.relevanceScore >= this.MIN_RELEVANCE_THRESHOLD)
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, this.MAX_SOURCES);
+      .slice(0, this.MAX_SOURCES); // Strict limit
 
-    console.log(`🎯 ULTRA-VALIDATED: ${scoredNotes.length} sources passed all validation layers`);
+    console.log(`🎯 FILTERED: ${scoredNotes.length} sources above threshold (${this.MIN_RELEVANCE_THRESHOLD})`);
 
     if (scoredNotes.length === 0) {
       return {
         relevantChunks: [],
         sources: [],
         totalTokens: 0,
-        contextSummary: `STRICT VALIDATION: No sources meet ultra-high validation criteria for query: "${query}"`,
-        queryFingerprint: this.createQueryFingerprint(query, []),
-        isolationLevel: 'strict'
+        contextSummary: `No sources found relevant enough for query: "${query}"`,
+        queryFingerprint: this.createQueryFingerprint(query, [])
       };
     }
 
-    // Process with MAXIMUM source isolation
+    // Process with strict source attribution
     const processedSources: SourceData[] = [];
     const contextChunks: string[] = [];
     let totalTokens = 0;
@@ -132,8 +89,8 @@ export class ContextProcessor {
         }
       };
 
-      // Create ultra-isolated content chunks with strict barriers
-      const chunks = this.createUltraIsolatedChunks(note, query);
+      // Create clearly attributed content chunks with validation
+      const chunks = this.createValidatedChunks(note, query);
       for (const chunk of chunks) {
         if (totalTokens + chunk.length <= this.MAX_CONTEXT_LENGTH) {
           contextChunks.push(chunk);
@@ -144,109 +101,118 @@ export class ContextProcessor {
       }
 
       processedSources.push(sourceData);
-      console.log(`🔒 ISOLATED: "${note.title}" (ID: ${note.id}, relevance: ${note.relevanceScore.toFixed(3)})`);
+      console.log(`📄 PROCESSED: "${note.title}" (ID: ${note.id}, relevance: ${note.relevanceScore.toFixed(3)})`);
     }
 
-    const contextSummary = this.createUltraStrictContextSummary(processedSources, query);
+    // Create strict context summary
+    const contextSummary = this.createStrictContextSummary(processedSources, query);
     const queryFingerprint = this.createQueryFingerprint(query, processedSources);
 
-    console.log(`✅ STRICT CONTEXT READY: ${processedSources.length} isolated sources, ${totalTokens} tokens`);
+    console.log(`✅ CONTEXT READY: ${processedSources.length} sources, ${totalTokens} tokens`);
 
     return {
       relevantChunks: contextChunks,
       sources: processedSources,
       totalTokens,
       contextSummary,
-      queryFingerprint,
-      isolationLevel: 'strict'
+      queryFingerprint
     };
   }
 
-  private static calculateBasicRelevance(note: any, query: string): number {
+  private static calculateStrictRelevance(note: any, query: string): number {
     const queryLower = query.toLowerCase().trim();
     const titleLower = (note.title || '').toLowerCase();
     const contentLower = (note.content || '').toLowerCase();
 
-    let relevanceScore = 0;
-    const queryTerms = queryLower.split(/\s+/).filter(term => term.length > 3);
+    // Extract meaningful terms (filter out common words more aggressively)
+    const stopWords = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use', 'may', 'say', 'each', 'which', 'their', 'time', 'will', 'about', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'some', 'her', 'would', 'make', 'like', 'into', 'him', 'has', 'more', 'go', 'no', 'do', 'does', 'did', 'what', 'where', 'when', 'why', 'how']);
+    
+    const queryTerms = queryLower
+      .split(/\s+/)
+      .filter(term => term.length > 2 && !stopWords.has(term))
+      .slice(0, 5); // Limit to most important terms
 
-    // Title matching (highest weight)
+    if (queryTerms.length === 0) return 0;
+
+    let relevanceScore = 0;
+    const maxScore = queryTerms.length * 4; // Maximum possible score
+
+    // Title matching (highest priority)
     for (const term of queryTerms) {
       if (titleLower.includes(term)) {
-        relevanceScore += 0.5;
+        relevanceScore += 4; // Very high weight for title
       }
     }
 
-    // Content matching (lower weight)
+    // Content term frequency with position weighting
     for (const term of queryTerms) {
-      const matches = (contentLower.match(new RegExp(this.escapeRegex(term), 'gi')) || []).length;
-      if (matches > 0) {
-        relevanceScore += Math.min(matches * 0.1, 0.3);
+      const regex = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'gi');
+      const matches = contentLower.match(regex) || [];
+      
+      // Weight early mentions more heavily
+      let termScore = 0;
+      for (const match of matches) {
+        const position = contentLower.indexOf(match);
+        const positionWeight = position < 500 ? 1.5 : position < 2000 ? 1.0 : 0.5;
+        termScore += positionWeight;
       }
+      
+      relevanceScore += Math.min(termScore, 3); // Cap per term
     }
 
-    // Channel name boost
-    if (note.channel_name) {
-      const channelLower = note.channel_name.toLowerCase();
-      if (queryLower.includes(channelLower)) {
-        relevanceScore += 0.4;
-      }
+    // Exact phrase matching (significant bonus)
+    if (titleLower.includes(queryLower)) {
+      relevanceScore += 5;
+    } else if (contentLower.includes(queryLower)) {
+      relevanceScore += 3;
     }
 
-    return Math.min(relevanceScore, 1.0);
+    // Normalize to 0-1 range with stricter curve
+    const normalizedScore = Math.min(relevanceScore / maxScore, 1);
+    return Math.pow(normalizedScore, 1.5); // Apply power curve for stricter filtering
   }
 
-  private static createUltraIsolatedChunks(note: any, query: string): string[] {
+  private static createValidatedChunks(note: any, query: string): string[] {
     const chunks: string[] = [];
     const content = note.content || '';
     
-    // Create MAXIMUM isolation header with strict source barriers
-    const isolationHeader = `════════════════════════════════════════\n` +
-      `🔒 ISOLATED SOURCE BOUNDARY - DO NOT MIX WITH OTHER SOURCES\n` +
-      `SOURCE_TITLE: ${note.title}\n` +
-      `UNIQUE_SOURCE_ID: ${note.id}\n` +
-      `SOURCE_TYPE: ${note.is_transcription ? 'VIDEO_TRANSCRIPT' : 'TEXT_NOTE'}\n` +
-      `QUERY_RELEVANCE: ${this.calculateBasicRelevance(note, query).toFixed(4)}\n` +
+    // Create enhanced header with strict source attribution
+    const sourceHeader = `**VERIFIED SOURCE: ${note.title}**\n` +
+      `UNIQUE_ID: ${note.id}\n` +
+      `TYPE: ${note.is_transcription ? 'VIDEO_TRANSCRIPT' : 'TEXT_NOTE'}\n` +
       `SOURCE_URL: ${note.source_url || 'NONE'}\n` +
       `CREATED: ${note.created_at ? new Date(note.created_at).toISOString() : 'UNKNOWN'}\n` +
-      `CONTENT_HASH: ${this.createContentHash(content)}\n` +
-      `⚠️  CRITICAL: This content is EXCLUSIVELY from the above source. DO NOT combine with other sources.\n` +
-      `════════════════════════════════════════\n` +
-      `VERIFIED_CONTENT_START:\n`;
+      `QUERY_RELEVANCE: ${this.calculateStrictRelevance(note, query).toFixed(3)}\n` +
+      `CONTENT_VERIFICATION: This content is exclusively from the above source.\n` +
+      `---CONTENT_START---\n`;
 
-    const isolationFooter = `\nVERIFIED_CONTENT_END\n` +
-      `════════════════════════════════════════\n` +
-      `🔒 END OF ISOLATED SOURCE: "${note.title}" (ID: ${note.id})\n` +
-      `⚠️  ATTRIBUTION REQUIRED: All information above is strictly from this single source.\n` +
-      `════════════════════════════════════════\n`;
+    const footer = `\n---CONTENT_END---\n` +
+      `ATTRIBUTION: All above content is strictly from "${note.title}" (ID: ${note.id})\n`;
 
-    const availableSpace = this.CHUNK_SIZE - isolationHeader.length - isolationFooter.length;
-
-    if (content.length <= availableSpace) {
-      chunks.push(isolationHeader + content + isolationFooter);
+    if (content.length <= this.CHUNK_SIZE - sourceHeader.length - footer.length) {
+      chunks.push(sourceHeader + content + footer);
     } else {
-      // Split with isolation barriers between chunks
-      const contentChunks = this.splitContentIntelligently(content, availableSpace);
+      // Split content with clear attribution
+      const availableSpace = this.CHUNK_SIZE - sourceHeader.length - footer.length;
+      const contentChunks = this.splitIntoMeaningfulChunks(content, availableSpace);
       
       contentChunks.forEach((chunk, index) => {
-        const chunkHeader = index === 0 ? isolationHeader : 
-          `════════════════════════════════════════\n` +
-          `🔒 CONTINUED FROM: ${note.title} (Part ${index + 1})\n` +
-          `SOURCE_ID: ${note.id} | CHUNK: ${index + 1}/${contentChunks.length}\n` +
-          `⚠️  SAME SOURCE CONTINUATION - DO NOT MIX\n` +
-          `════════════════════════════════════════\n`;
+        const chunkHeader = index === 0 ? sourceHeader : 
+          `**CONTINUED: ${note.title} (Part ${index + 1})**\n` +
+          `SOURCE_ID: ${note.id}\n` +
+          `---CONTENT_CONTINUATION---\n`;
         
-        chunks.push(chunkHeader + chunk + isolationFooter);
+        chunks.push(chunkHeader + chunk + footer);
       });
     }
 
     return chunks;
   }
 
-  private static splitContentIntelligently(text: string, chunkSize: number): string[] {
+  private static splitIntoMeaningfulChunks(text: string, chunkSize: number): string[] {
     const chunks: string[] = [];
     
-    // Split by paragraphs first for better context preservation
+    // Split by paragraphs first, then sentences
     const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
     
     let currentChunk = '';
@@ -256,22 +222,21 @@ export class ContextProcessor {
       } else {
         if (currentChunk) chunks.push(currentChunk.trim());
         
-        // Handle oversized paragraphs by sentence splitting
+        // Handle oversized paragraphs
         if (paragraph.length > chunkSize) {
           const sentences = paragraph.split(/[.!?]+/).filter(s => s.trim());
           let sentenceChunk = '';
           
           for (const sentence of sentences) {
-            const sentenceWithPunctuation = sentence.trim() + '. ';
-            if ((sentenceChunk + sentenceWithPunctuation).length <= chunkSize) {
-              sentenceChunk += sentenceWithPunctuation;
+            if ((sentenceChunk + sentence).length <= chunkSize) {
+              sentenceChunk += sentence + '. ';
             } else {
               if (sentenceChunk) chunks.push(sentenceChunk.trim());
-              sentenceChunk = sentenceWithPunctuation;
+              sentenceChunk = sentence + '. ';
             }
           }
           
-          currentChunk = sentenceChunk.trim();
+          if (sentenceChunk) currentChunk = sentenceChunk.trim();
         } else {
           currentChunk = paragraph;
         }
@@ -279,35 +244,33 @@ export class ContextProcessor {
     }
     
     if (currentChunk) chunks.push(currentChunk.trim());
-    return chunks.filter(chunk => chunk.length > 0);
+    return chunks;
   }
 
-  private static createUltraStrictContextSummary(sources: SourceData[], query: string): string {
+  private static createStrictContextSummary(sources: SourceData[], query: string): string {
     const sourcesList = sources
-      .map(source => `- "${source.title}" (ID: ${source.id}, Ultra-Score: ${source.relevance.toFixed(4)}, Type: ${source.metadata?.is_transcription ? 'Video' : 'Note'})`)
+      .map(source => `- "${source.title}" (ID: ${source.id}, Score: ${source.relevance.toFixed(3)}, Type: ${source.metadata?.is_transcription ? 'Video' : 'Note'})`)
       .join('\n');
 
-    return `🔒 ULTRA-STRICT CONTEXT VALIDATION\n` +
-      `QUERY: "${query}"\n` +
-      `VERIFIED_SOURCES: ${sources.length} (Max: ${this.MAX_SOURCES})\n` +
-      `RELEVANCE_THRESHOLD: ${this.ULTRA_STRICT_RELEVANCE_THRESHOLD} (Ultra-High)\n` +
-      `ISOLATION_LEVEL: MAXIMUM\n` +
-      `VALIDATED_SOURCES:\n${sourcesList}\n` +
-      `⚠️  CRITICAL INSTRUCTION: AI must reference ONLY these verified sources. NO external knowledge. NO source mixing.`;
+    return `QUERY: "${query}"\n` +
+      `VERIFIED_SOURCES: ${sources.length}\n` +
+      `RELEVANCE_THRESHOLD: ${this.MIN_RELEVANCE_THRESHOLD}\n` +
+      `SOURCES:\n${sourcesList}\n` +
+      `STRICT_ATTRIBUTION: AI must reference only these verified sources.`;
   }
 
   private static createQueryFingerprint(query: string, sources: SourceData[]): string {
     const sourceIds = sources.map(s => s.id).sort().join(',');
-    const timestamp = Date.now();
-    return `strict_${query.toLowerCase().replace(/\s+/g, '_')}_${sourceIds}_${timestamp}`;
+    return `${query.toLowerCase().replace(/\s+/g, '_')}_${sourceIds}_${Date.now()}`;
   }
 
   private static createContentHash(content: string): string {
+    // Simple hash for content verification
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+      hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
   }
@@ -317,6 +280,6 @@ export class ContextProcessor {
   }
 
   static clearCache(): void {
-    console.log('🧹 Enhanced context processor cache cleared');
+    console.log('🧹 Context processor cache cleared');
   }
 }

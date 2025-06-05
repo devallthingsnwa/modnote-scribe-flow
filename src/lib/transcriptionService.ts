@@ -14,124 +14,127 @@ import {
 export type { TranscriptionConfig, TranscriptionResult, YouTubeMetadata, MediaType };
 
 export class TranscriptionService {
-  // Transcription API priority: Podsqueeze (default) → Whisper (OSS) → Riverside.fm (fallback)
-  private static readonly PROVIDER_PRIORITY = ['podsqueeze', 'whisper', 'riverside'] as const;
-
   static async transcribeWithFallback(url: string): Promise<TranscriptionResult> {
     const mediaType = MediaTypeDetector.detectMediaType(url);
     
-    console.log(`🎯 Starting transcription for ${mediaType} content: ${url}`);
-    
     // For YouTube videos, use enhanced extraction with multiple fallbacks
     if (mediaType === 'youtube') {
-      return await this.handleYouTubeTranscription(url);
-    }
-    
-    // For other media types (podcasts, audio files), use external providers
-    return await this.handleGeneralMediaTranscription(url);
-  }
-
-  private static async handleYouTubeTranscription(url: string): Promise<TranscriptionResult> {
-    console.log('🎥 Processing YouTube video with enhanced extraction...');
-    
-    // Step 1: Try YouTube transcript extraction (fastest)
-    const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
-    
-    if (youtubeResult.success) {
-      console.log('✅ YouTube transcript extraction successful');
-      return youtubeResult;
-    }
-    
-    console.warn('⚠️ YouTube transcript failed, trying audio extraction...');
-    
-    // Step 2: Try audio extraction with Supadata
-    const videoId = YouTubeService.extractVideoId(url);
-    if (videoId) {
-      const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
+      console.log('Starting enhanced YouTube transcript extraction with audio fallback...');
       
-      if (audioResult.success) {
-        console.log('✅ Audio transcription successful with Supadata');
-        return audioResult;
-      }
-    }
-    
-    console.warn('⚠️ Audio extraction failed, trying external providers...');
-    
-    // Step 3: Try external transcription providers with priority
-    return await this.tryExternalProvidersWithPriority(url);
-  }
-
-  private static async handleGeneralMediaTranscription(url: string): Promise<TranscriptionResult> {
-    console.log('🎵 Processing general media content...');
-    
-    // For non-YouTube content, go straight to external providers
-    return await this.tryExternalProvidersWithPriority(url);
-  }
-
-  private static async tryExternalProvidersWithPriority(url: string): Promise<TranscriptionResult> {
-    for (const provider of this.PROVIDER_PRIORITY) {
-      console.log(`🔄 Attempting transcription with ${provider}...`);
+      // Extract video ID once at the beginning
+      const videoId = YouTubeService.extractVideoId(url);
       
-      try {
-        const result = await ExternalProviderService.callTranscriptionAPI(provider, url, {
-          include_metadata: true,
-          include_timestamps: true,
-          language: 'auto'
-        });
+      // Step 1: Try standard transcript extraction
+      const youtubeResult = await YouTubeService.fetchYouTubeTranscript(url);
+      
+      if (youtubeResult.success) {
+        const extractionMethod = youtubeResult.metadata?.extractionMethod || youtubeResult.provider;
+        console.log('YouTube transcript extraction successful via:', extractionMethod);
         
-        if (result.success && result.text && result.text.length > 50) {
-          console.log(`✅ Transcription successful with ${provider}`);
-          
-          toast({
-            title: "✅ Transcription Complete",
-            description: `Successfully transcribed using ${provider.charAt(0).toUpperCase() + provider.slice(1)}`
-          });
-          
-          return result;
+        let successMessage = `Successfully extracted transcript`;
+        if (extractionMethod === 'supadata-api') {
+          successMessage += ' using Supadata API';
+        } else if (extractionMethod === 'youtube-audio-supadata') {
+          successMessage += ' using Supadata audio extraction and transcription';
+        } else {
+          successMessage += ` using ${extractionMethod}`;
         }
         
-        console.warn(`⚠️ ${provider} returned empty/short transcription, trying next...`);
+        toast({
+          title: "✅ Transcript Extracted Successfully!",
+          description: successMessage
+        });
         
-      } catch (error) {
-        console.error(`❌ ${provider} failed:`, error);
-        continue;
+        return youtubeResult;
       }
+      
+      console.warn('Standard transcript extraction failed, trying audio extraction...');
+      
+      // Step 2: Try audio extraction and transcription with Supadata
+      if (videoId) {
+        const audioResult = await YouTubeAudioService.extractAudioAndTranscribe(videoId);
+        
+        if (audioResult.success) {
+          toast({
+            title: "✅ Audio Transcription Successful!",
+            description: "Successfully extracted and transcribed audio using Supadata AI"
+          });
+          
+          return audioResult;
+        }
+        
+        console.warn('Audio extraction also failed, trying external providers...');
+      }
+      
+      // Step 3: Try external transcription providers
+      const externalResult = await ExternalProviderService.tryExternalProviders(url);
+      
+      if (externalResult.success) {
+        toast({
+          title: "✅ Transcript Extracted Successfully!",
+          description: `Successfully extracted transcript using ${externalResult.provider}`
+        });
+        
+        return externalResult;
+      }
+
+      // Step 4: If all methods fail, return a "success" result with warning content
+      console.warn('All transcription methods failed, but we will still save the note with a warning');
+      
+      const warningMessage = "⚠️ **Transcript Not Available**\n\nAll transcription methods failed for this video. This could be due to:\n- Video has no captions or auto-generated captions disabled\n- Video is private, restricted, or region-locked\n- Audio quality issues preventing transcription\n- API rate limits or temporary service issues\n\nYou can still use this note to add your own observations about the video.";
+      
+      toast({
+        title: "⚠️ Transcript Unavailable",
+        description: "Note saved with warning - transcript could not be extracted",
+        variant: "default"
+      });
+
+      return {
+        success: true, // Return success so the note gets saved
+        text: warningMessage,
+        metadata: {
+          videoId: videoId || 'unknown',
+          extractionMethod: 'failed-with-warning',
+          isWarning: true
+        },
+        provider: 'warning-fallback'
+      };
+    }
+    
+    // Handle other media types similarly
+    const externalResult = await ExternalProviderService.tryExternalProviders(url);
+    
+    if (externalResult.success) {
+      toast({
+        title: "✅ Content Extracted Successfully!",
+        description: `Successfully extracted content using ${externalResult.provider}`
+      });
+      
+      return externalResult;
     }
 
-    // If all providers fail, return a fallback result that still allows note creation
-    console.warn('❌ All transcription providers failed');
-    
-    const fallbackMessage = `⚠️ **Transcription Unavailable**\n\nAll transcription services failed for this content. This could be due to:\n- Content restrictions or privacy settings\n- Audio quality issues\n- Temporary service unavailability\n- Unsupported media format\n\nYou can still use this note to add your own observations about the content.`;
+    // For non-YouTube content that fails, also provide a warning fallback
+    const warningMessage = "⚠️ **Content Not Available**\n\nUnable to extract content from this URL. You can still use this note to add your own thoughts and observations about the content.";
     
     toast({
-      title: "⚠️ Transcription Failed",
-      description: "Note saved with warning - transcription could not be completed",
+      title: "⚠️ Content Unavailable",
+      description: "Note saved with warning - content could not be extracted",
       variant: "default"
     });
 
     return {
-      success: true, // Return success so note gets saved
-      text: fallbackMessage,
+      success: true,
+      text: warningMessage,
       metadata: {
-        extractionMethod: 'fallback-warning',
-        isWarning: true,
-        providersAttempted: this.PROVIDER_PRIORITY.join(', ')
+        extractionMethod: 'failed-with-warning',
+        isWarning: true
       },
-      provider: 'fallback-system'
+      provider: 'warning-fallback'
     };
   }
 
   static async getYouTubeMetadata(videoId: string): Promise<YouTubeMetadata> {
-    try {
-      return await YouTubeService.getYouTubeMetadata(videoId);
-    } catch (error) {
-      console.error('Failed to fetch YouTube metadata:', error);
-      return {
-        title: `YouTube Video ${videoId}`,
-        author: 'Unknown',
-        duration: 'Unknown'
-      };
-    }
+    return YouTubeService.getYouTubeMetadata(videoId);
   }
 
   static extractVideoId(url: string): string | null {
@@ -140,14 +143,5 @@ export class TranscriptionService {
 
   static detectMediaType(url: string): MediaType {
     return MediaTypeDetector.detectMediaType(url);
-  }
-
-  // Configuration management for transcription providers
-  static getProviderConfig(): TranscriptionConfig[] {
-    return this.PROVIDER_PRIORITY.map((provider, index) => ({
-      provider: provider as any,
-      enabled: true,
-      priority: index + 1
-    }));
   }
 }

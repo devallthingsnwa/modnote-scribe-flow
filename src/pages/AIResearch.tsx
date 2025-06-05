@@ -1,8 +1,10 @@
-import React, { useState, useCallback, useMemo, useRef } from "react";
+
+import React, { useState, useCallback, useMemo } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { EnhancedSearchEngine } from "@/lib/search/enhancedSearchEngine";
+import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
+import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
 import { Sidebar } from "@/components/Sidebar";
 import { AIResearchHeader } from "@/components/ai-research/AIResearchHeader";
 import { AIResearchContent } from "@/components/ai-research/AIResearchContent";
@@ -23,7 +25,6 @@ interface ChatMessage {
   sources?: SearchResult[];
   isStreaming?: boolean;
   contextFingerprint?: string;
-  isolationLevel?: string;
 }
 
 export default function AIResearch() {
@@ -33,11 +34,10 @@ export default function AIResearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [isChatMode, setIsChatMode] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Enhanced search with improved accuracy
+  // Enhanced search with strict validation
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
@@ -48,16 +48,15 @@ export default function AIResearch() {
           return;
         }
         
-        console.log(`🔍 ENHANCED SEARCH: "${query}" across ${notes.length} notes`);
+        console.log(`🔍 SEARCH INITIATED: "${query}" across ${notes.length} notes`);
         const searchStart = performance.now();
         
-        // Use the enhanced search engine with strict relevance matching
-        const results = EnhancedSearchEngine.searchNotes(notes, query);
+        const results = OptimizedSearchService.searchNotes(notes, query);
         const searchTime = performance.now() - searchStart;
         
-        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} relevant results`);
+        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} results`);
         setSearchResults(results);
-      }, 100); // Faster debounce for better UX
+      }, 150);
     };
   }, [notes]);
 
@@ -68,14 +67,6 @@ export default function AIResearch() {
 
   const handleChatSubmit = async () => {
     if (!chatInput.trim() || isLoading) return;
-
-    // Cancel any existing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
 
     const userMessage: ChatMessage = {
       id: `user_${Date.now()}`,
@@ -102,20 +93,21 @@ export default function AIResearch() {
     try {
       const startTime = performance.now();
       
-      console.log(`🧠 ENHANCED CONTEXT PROCESSING: Starting for query "${currentInput}"`);
+      console.log(`🧠 CONTEXT PROCESSING: Starting for query "${currentInput}"`);
       
-      // Enhanced search for context
-      const contextResults = EnhancedSearchEngine.searchNotes(notes || [], currentInput);
+      // STRICT context processing with enhanced validation
+      const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
       
-      if (contextResults.length === 0) {
-        console.log('❌ NO SOURCES FOUND');
+      if (contextData.sources.length === 0) {
+        console.log('❌ NO RELEVANT SOURCES FOUND');
         setChatMessages(prev => prev.filter(m => !m.isStreaming));
         
         const noContextMessage: ChatMessage = {
           id: `no_context_${Date.now()}`,
           type: 'assistant',
-          content: `🔒 ENHANCED VALIDATION: No sources in your notes meet the relevance threshold for: "${currentInput}"\n\nTry:\n• More specific search terms\n• Exact names or titles\n• Key phrases from your content\n\nOr add more relevant notes to your collection.`,
-          timestamp: new Date()
+          content: `I couldn't find any relevant notes for your query: "${currentInput}". This ensures I only provide information from your actual notes and don't mix sources. Please try different search terms or add relevant notes first.`,
+          timestamp: new Date(),
+          contextFingerprint: contextData.queryFingerprint
         };
         
         setChatMessages(prev => [...prev, noContextMessage]);
@@ -123,34 +115,46 @@ export default function AIResearch() {
         return;
       }
 
-      // Create context with source isolation
-      const contextContent = contextResults.map(result => 
-        `Title: ${result.title}\nContent: ${result.snippet}\nSource: ${result.sourceType}`
-      ).join('\n\n---\n\n');
+      // Create ULTRA-STRICT context with source isolation
+      const strictContext = `SYSTEM INSTRUCTIONS: 
+You are answering based EXCLUSIVELY on the provided context sources. DO NOT use any external knowledge or mix information between sources.
 
-      const enhancedContext = `CONTEXT FROM USER'S NOTES:
-${contextContent}
+QUERY FINGERPRINT: ${contextData.queryFingerprint}
+SOURCE VERIFICATION: ${contextData.sources.length} verified sources found
+RELEVANCE THRESHOLD: Applied strict filtering (min 0.4)
+
+CONTEXT SUMMARY:
+${contextData.contextSummary}
+
+VERIFIED CONTENT WITH SOURCE ATTRIBUTION:
+${contextData.relevantChunks.join('\n\n===NEXT_VERIFIED_SOURCE===\n\n')}
 
 USER QUERY: "${currentInput}"
 
-Please provide a helpful response based on the context above. Cite sources when possible.`;
+CRITICAL INSTRUCTIONS:
+1. Answer ONLY using information from the verified sources above
+2. ALWAYS cite specific source titles when referencing information
+3. If sources contain conflicting information, acknowledge the conflict and cite each source
+4. If the query cannot be fully answered from these sources, say so explicitly
+5. DO NOT combine information from different sources unless explicitly relevant
+6. Each piece of information MUST be traceable to a specific source by title and ID
 
-      console.log(`📊 CONTEXT: ${contextContent.length} chars from ${contextResults.length} sources`);
+RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In the video transcript '[Title]'..."`;
+
+      console.log(`📊 CONTEXT STATS: ${contextData.totalTokens} tokens from ${contextData.sources.length} verified sources`);
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
-          content: enhancedContext,
+          content: strictContext,
           type: 'chat',
           options: { 
             rag: true, 
             strict_context: true,
-            max_tokens: 2500,
-            temperature: 0.1
+            max_tokens: 2000,
+            temperature: 0.1 // Lower temperature for more factual responses
           }
         }
       });
-
-      if (controller.signal.aborted) return;
 
       if (error) {
         console.error('🚨 AI API ERROR:', error);
@@ -165,36 +169,36 @@ Please provide a helpful response based on the context above. Cite sources when 
       const assistantMessage: ChatMessage = {
         id: `response_${Date.now()}`,
         type: 'assistant',
-        content: data.processedContent || "I couldn't generate a response based on your notes.",
+        content: data.processedContent || "I couldn't generate a response based on the available context. Please try rephrasing your question.",
         timestamp: new Date(),
-        sources: contextResults.slice(0, 3).map(source => ({
+        contextFingerprint: contextData.queryFingerprint,
+        sources: contextData.sources.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Source: ${source.sourceType} | Relevance: ${source.relevance.toFixed(2)}`
+          snippet: `Verified Source | Relevance: ${source.relevance.toFixed(3)} | Type: ${source.metadata?.is_transcription ? 'Video Transcript' : 'Text Note'}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
-      console.log(`✅ RESPONSE: ${responseTime.toFixed(0)}ms using ${contextResults.length} sources`);
+      console.log(`✅ RESPONSE GENERATED: ${responseTime.toFixed(0)}ms using ${contextData.sources.length} verified sources`);
+      console.log(`📈 QUALITY METRICS: Context tokens: ${contextData.totalTokens}, Sources: ${contextData.sources.length}`);
 
       if (data.usage) {
         console.log('💰 Token usage:', data.usage);
       }
 
-      toast({
-        title: "Response Generated",
-        description: `Using ${contextResults.length} relevant sources in ${responseTime.toFixed(0)}ms`,
-      });
+      // Success notification for high-quality responses
+      if (contextData.sources.length > 0 && responseTime < 5000) {
+        toast({
+          title: "High-Quality Response",
+          description: `Generated from ${contextData.sources.length} verified sources in ${responseTime.toFixed(0)}ms`,
+        });
+      }
 
     } catch (error: any) {
-      if (error.name === 'AbortError' || controller.signal.aborted) {
-        console.log('Request cancelled by user');
-        return;
-      }
-      
       console.error('🚨 CHAT ERROR:', error);
       
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
@@ -202,7 +206,7 @@ Please provide a helpful response based on the context above. Cite sources when 
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         type: 'assistant',
-        content: "Processing error occurred. Please try rephrasing your question.",
+        content: "I encountered an error while processing your request. This helps ensure data integrity. Please try again or rephrase your question.",
         timestamp: new Date()
       };
       
@@ -210,12 +214,11 @@ Please provide a helpful response based on the context above. Cite sources when 
       
       toast({
         title: "Processing Error",
-        description: "Failed to generate response. Please try again.",
+        description: "Failed to generate response. Data integrity maintained.",
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
     }
   };
 
@@ -227,20 +230,23 @@ Please provide a helpful response based on the context above. Cite sources when 
       // Switching to chat mode
       setSearchResults([]);
       setSearchQuery("");
-      console.log('🔄 SWITCHED TO CHAT MODE: AI-powered conversations');
+      console.log('🔄 SWITCHED TO CHAT MODE: Enhanced AI responses with strict source attribution');
     } else {
       // Switching to search mode
       setChatMessages([]);
-      console.log('🔄 SWITCHED TO SEARCH MODE: Fast search with enhanced precision');
+      console.log('🔄 SWITCHED TO SEARCH MODE: Fast local search across all notes');
     }
+    
+    // Clear caches for fresh start
+    OptimizedSearchService.clearCache();
+    ContextProcessor.clearCache();
   }, [isChatMode]);
 
-  // Enhanced cleanup
+  // Performance cleanup
   React.useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      OptimizedSearchService.clearCache();
+      ContextProcessor.clearCache();
     };
   }, []);
 
