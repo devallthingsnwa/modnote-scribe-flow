@@ -23,6 +23,7 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
   const [lastError, setLastError] = useState<string>('');
   const [failureReason, setFailureReason] = useState<string>('');
   const [nextRetryMethod, setNextRetryMethod] = useState<string>('');
+  const [enhancedMode, setEnhancedMode] = useState(true);
   const { toast } = useToast();
 
   const isYouTubeUrl = (url: string): boolean => {
@@ -76,20 +77,37 @@ export function UrlImporter({ onContentImported }: UrlImporterProps) {
     setNextRetryMethod('');
     
     try {
-      console.log(`🎯 Starting comprehensive YouTube processing for: ${url} (Attempt ${retryCount + 1})`);
+      console.log(`🎯 Starting ${enhancedMode ? 'enhanced' : 'standard'} YouTube processing for: ${url} (Attempt ${retryCount + 1})`);
       
       setProcessingStep('🔍 Analyzing YouTube video...');
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      setProcessingStep('📝 Checking for captions...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (enhancedMode) {
+        setProcessingStep('🚀 Enhanced mode: Trying multiple caption sources...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStep('🎵 Enhanced mode: Audio extraction with multiple quality settings...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStep('🌐 Enhanced mode: Multiple external services with retries...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStep('🔄 Enhanced mode: Alternative extraction methods...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        setProcessingStep('📝 Checking for captions...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStep('🎵 Attempting audio extraction if needed...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStep('🌐 Trying external services if needed...');
+      }
       
-      setProcessingStep('🎵 Attempting audio extraction if needed...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setProcessingStep('🌐 Trying external services if needed...');
-      
-      const result = await YouTubeTranscriptService.processVideoWithRetry(url, 3);
+      const result = enhancedMode 
+        ? await YouTubeTranscriptService.extractTranscriptWithEnhancedRetry(url)
+        : await YouTubeTranscriptService.processVideoWithRetry(url, 3);
+        
       await processYouTubeResult(result);
       
     } catch (error) {
@@ -350,8 +368,8 @@ You can add your own notes about this video here:
               )}
             </Button>
             
-            {/* Enhanced retry button with specific method retry */}
-            {isYouTubeUrl(url) && lastError && !isLoading && retryCount < 3 && (
+            {/* Enhanced retry button with mode selection */}
+            {isYouTubeUrl(url) && lastError && !isLoading && retryCount < 5 && (
               <div className="flex gap-1">
                 <Button 
                   onClick={handleRetry}
@@ -374,6 +392,22 @@ You can add your own notes about this video here:
             )}
           </div>
 
+          {/* Enhanced mode toggle for YouTube videos */}
+          {isYouTubeUrl(url) && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-md">
+              <input
+                type="checkbox"
+                id="enhanced-mode"
+                checked={enhancedMode}
+                onChange={(e) => setEnhancedMode(e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="enhanced-mode" className="text-sm font-medium cursor-pointer">
+                🚀 Enhanced extraction mode (5 comprehensive attempts with multiple methods)
+              </label>
+            </div>
+          )}
+
           {processingStep && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 p-3 rounded-md">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -381,21 +415,24 @@ You can add your own notes about this video here:
             </div>
           )}
 
-          {/* Enhanced error display with specific reasons */}
+          {/* Enhanced error display with attempt counter */}
           {lastError && !isLoading && (
             <div className="flex items-start gap-2 text-sm text-destructive bg-red-50 p-3 rounded-md">
               <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-medium">Extraction Failed</p>
+                <p className="font-medium">Extraction Failed (Attempt {retryCount + 1}/5)</p>
                 <p className="text-xs mt-1">{lastError}</p>
                 {failureReason && (
                   <p className="text-xs mt-1 text-orange-600">
                     <strong>Reason:</strong> {failureReason}
                   </p>
                 )}
-                {retryCount < 3 && (
+                {retryCount < 5 && (
                   <p className="text-xs mt-1 text-muted-foreground">
-                    We couldn't fetch the transcript right now. Please check if the video is public and try again later.
+                    {enhancedMode 
+                      ? "Enhanced mode will try multiple comprehensive extraction methods." 
+                      : "Try enabling enhanced mode for more extraction attempts."
+                    }
                   </p>
                 )}
               </div>
@@ -404,7 +441,10 @@ You can add your own notes about this video here:
 
           {isYouTubeUrl(url) && !processingStep && !lastError && (
             <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
-              🎥 <strong>YouTube detected:</strong> Will try captions → audio transcription → external services → fallback note
+              🎥 <strong>YouTube detected:</strong> {enhancedMode 
+                ? "Enhanced mode: Multiple attempts with captions → audio (multiple qualities) → external services → alternative methods → fallback note"
+                : "Standard mode: Captions → audio transcription → external services → fallback note"
+              }
             </div>
           )}
 

@@ -1,31 +1,33 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { SupadataResponse } from "./types";
 
 export class SupadataService {
-  static async processWithFallbackChain(videoId: string, retryAttempt: number = 0): Promise<SupadataResponse> {
+  static async processWithEnhancedFallbackChain(videoId: string, retryAttempt: number = 0): Promise<SupadataResponse> {
     try {
-      console.log(`🔗 Starting fallback chain for video: ${videoId} (attempt ${retryAttempt + 1})`);
+      console.log(`🔗 Starting enhanced fallback chain for video: ${videoId} (attempt ${retryAttempt + 1})`);
       
       const { data, error } = await supabase.functions.invoke('supadata-transcript', {
         body: { 
           videoId,
-          method: 'fallback-chain',
+          method: 'enhanced-fallback-chain',
           retryAttempt,
           options: {
             includeTimestamps: true,
-            language: 'auto'
+            language: 'auto',
+            maxRetries: 3,
+            aggressiveMode: true,
+            fallbackServices: ['podsqueeze', 'whisper', 'riverside']
           }
         }
       });
 
       if (error) {
-        console.error("Fallback chain error:", error);
-        throw new Error(error.message || 'Fallback chain service error');
+        console.error("Enhanced fallback chain error:", error);
+        throw new Error(error.message || 'Enhanced fallback chain service error');
       }
 
       if (data?.success) {
-        console.log(`✅ Fallback chain successful via ${data.method}:`, data.transcript?.length || 0, "characters");
+        console.log(`✅ Enhanced fallback chain successful via ${data.method}:`, data.transcript?.length || 0, "characters");
         return {
           success: true,
           transcript: data.transcript,
@@ -36,17 +38,21 @@ export class SupadataService {
         };
       }
 
-      console.log("⚠️ Fallback chain completed but no transcript available");
-      throw new Error(data?.error || 'All transcription methods failed');
+      console.log("⚠️ Enhanced fallback chain completed but no transcript available");
+      throw new Error(data?.error || 'All enhanced transcription methods failed');
       
     } catch (error) {
-      console.error("❌ Fallback chain failed:", error);
+      console.error("❌ Enhanced fallback chain failed:", error);
       return {
         success: false,
-        error: error.message || 'Fallback chain processing failed',
+        error: error.message || 'Enhanced fallback chain processing failed',
         retryable: error.retryable !== false
       };
     }
+  }
+
+  static async processWithFallbackChain(videoId: string, retryAttempt: number = 0): Promise<SupadataResponse> {
+    return this.processWithEnhancedFallbackChain(videoId, retryAttempt);
   }
 
   static async fetchTranscript(videoId: string): Promise<SupadataResponse> {
