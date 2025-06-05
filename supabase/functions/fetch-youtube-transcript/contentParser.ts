@@ -1,7 +1,7 @@
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, extractVideoId, validateVideoId } from './utils.ts';
+import { CaptionTracksStrategy } from './strategies/CaptionTracksStrategy.ts';
+import { VideoPageStrategy } from './strategies/VideoPageStrategy.ts';
+import { WhisperStrategy } from './strategies/WhisperStrategy.ts';
 
 interface TranscriptSegment {
   start: number;
@@ -9,21 +9,73 @@ interface TranscriptSegment {
   text: string;
 }
 
-interface VideoMetadata {
-  videoId?: string;
-  title?: string;
-  author?: string;
-  url?: string;
-  language?: string;
-  extractionMethod?: string;
+interface ProcessedTranscript {
+  success: boolean;
+  transcript: string;
+  metadata: {
+    segments: number;
+    duration: number;
+    hasTimestamps: boolean;
+    source: string;
+    language: string;
+    videoId: string;
+    extractionMethod: string;
+  };
+  error?: string;
 }
 
 export class ContentParser {
-  async processTranscriptContent(
-    content: string, 
-    source: string, 
-    metadata?: VideoMetadata
-  ): Promise<Response | null> {
+  private strategies: any[];
+
+  constructor() {
+    this.strategies = [
+      new CaptionTracksStrategy(),
+      new VideoPageStrategy(),
+      // WhisperStrategy only used for audio files, not YouTube videos
+    ];
+  }
+
+  async fetchTranscript(videoUrl: string): Promise<ProcessedTranscript> {
+    const videoId = extractVideoId(videoUrl);
+    
+    if (!videoId || !validateVideoId(videoId)) {
+      return this.createErrorResponse('Invalid YouTube video URL or ID', videoId || 'unknown');
+    }
+
+    console.log(`🎯 Starting transcript extraction for: ${videoId}`);
+    console.log(`🔗 Video URL: ${videoUrl}`);
+
+    // Try each strategy in order
+    for (const strategy of this.strategies) {
+      try {
+        console.log(`🔍 Trying strategy: ${strategy.name}`);
+        
+        const rawContent = await this.retryWithBackoff(
+          () => strategy.fetchTranscript(videoId),
+          3
+        );
+
+        if (rawContent && rawContent.length > 50) {
+          console.log(`✅ Strategy ${strategy.name} successful`);
+          
+          // Process the raw content into the required format
+          const processedTranscript = this.processTranscriptContent(rawContent, strategy.name, videoId);
+          
+          if (processedTranscript && processedTranscript.transcript.length > 0) {
+            return processedTranscript;
+          }
+        }
+
+      } catch (error) {
+        console.log(`❌ Strategy ${strategy.name} failed: ${error.message}`);
+      }
+    }
+
+    // All strategies failed
+    return this.createErrorResponse('All transcript fetching strategies failed', videoId);
+  }
+
+  private processTranscriptContent(content: string, source: string, videoId: string): ProcessedTranscript {
     try {
       let transcript: TranscriptSegment[] = [];
       
@@ -37,52 +89,42 @@ export class ContentParser {
       
       if (transcript.length === 0) {
         console.log("No transcript segments extracted from content");
-        return null;
+        return this.createErrorResponse('No valid transcript content found', videoId);
       }
       
-      // Format as RAW text only - no markdown, no headers, just spoken words
+      // Format as RAW text - exactly like the example format
       const rawTranscript = this.formatAsRawText(transcript);
 
       console.log(`Successfully extracted ${transcript.length} transcript segments via ${source}`);
-      console.log(`Raw transcript preview: ${rawTranscript.substring(0, 200)}...`);
       
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          transcript: rawTranscript, // RAW TEXT ONLY
-          metadata: {
-            segments: transcript.length,
-            duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
-            hasTimestamps: false, // No timestamps in output
-            source: source,
-            videoId: metadata?.videoId || '',
-            title: metadata?.title || 'Unknown Video',
-            author: metadata?.author || 'Unknown Channel',
-            url: metadata?.url || '',
-            language: metadata?.language || 'en',
-            extractionMethod: source
-          }
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return {
+        success: true,
+        transcript: rawTranscript,
+        metadata: {
+          segments: transcript.length,
+          duration: transcript.length > 0 ? transcript[transcript.length - 1].end : 0,
+          hasTimestamps: false, // No timestamps in final output
+          source: source,
+          videoId: videoId,
+          language: 'auto-detected',
+          extractionMethod: source
         }
-      );
+      };
       
     } catch (error) {
       console.error("Error processing transcript content:", error);
-      return null;
+      return this.createErrorResponse(`Processing error: ${error.message}`, videoId);
     }
   }
 
   private formatAsRawText(segments: TranscriptSegment[]): string {
-    // Extract ONLY the spoken words, preserve music tags, no formatting
+    // Extract ONLY the spoken words, preserve music tags, NO formatting, NO timestamps
     let rawText = segments
       .map(segment => segment.text.trim())
       .filter(text => text.length > 0)
       .join(' ');
 
-    // Clean and standardize music/sound tags while preserving them
+    // Standardize music/sound tags while preserving them - keep existing format
     rawText = rawText
       .replace(/\[Music\]/gi, '[Musika]')
       .replace(/\[♪\]/gi, '[Musika]')
@@ -93,10 +135,10 @@ export class ContentParser {
       .replace(/\[Applause\]/gi, '[Palakpakan]')
       .replace(/\[Laughter\]/gi, '[Tawa]')
       .replace(/\[Inaudible\]/gi, '[Hindi marinig]')
-      .replace(/\s+/g, ' ') // Normalize spaces
+      .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
       .trim();
 
-    // Return ONLY the raw spoken text with preserved tags
+    // Return ONLY the raw spoken text with preserved tags - NO markdown, NO timestamps
     return rawText;
   }
 
@@ -198,6 +240,47 @@ export class ContentParser {
       .replace(/&nbsp;/g, ' ')
       .replace(/<[^>]*>/g, '') // Remove HTML tags
       .trim();
+  }
+
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries: number,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`⏳ Retry ${attempt + 1}/${maxRetries} in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  private createErrorResponse(message: string, videoId: string): ProcessedTranscript {
+    return {
+      success: false,
+      transcript: `Unable to fetch transcript: ${message}`,
+      metadata: {
+        segments: 0,
+        duration: 0,
+        hasTimestamps: false,
+        source: 'error',
+        language: 'unknown',
+        videoId: videoId,
+        extractionMethod: 'none'
+      },
+      error: message
+    };
   }
 }
 

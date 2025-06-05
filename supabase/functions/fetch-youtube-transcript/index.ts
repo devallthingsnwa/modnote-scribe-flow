@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { corsHeaders } from "./utils.ts";
-import { TranscriptFetcher } from "./strategies/index.ts";
+import { ContentParser } from "./contentParser.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -28,11 +28,11 @@ serve(async (req) => {
 
     console.log(`🎯 Processing transcript request for: ${videoId || videoUrl}`);
 
-    const fetcher = new TranscriptFetcher();
+    const contentParser = new ContentParser();
     const url = videoUrl || `https://www.youtube.com/watch?v=${videoId}`;
     
-    // Get transcript using strategy system
-    const result = await fetcher.getTranscript(url);
+    // Get transcript using streamlined strategy system
+    const result = await contentParser.fetchTranscript(url);
     
     // Return the processed result
     return new Response(
