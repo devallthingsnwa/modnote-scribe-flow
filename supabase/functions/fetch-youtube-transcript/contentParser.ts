@@ -1,3 +1,4 @@
+
 import { corsHeaders, formatCurrentDateTime } from "./utils.ts";
 
 interface TranscriptSegment {
@@ -38,7 +39,7 @@ export class ContentParser {
         return null;
       }
       
-      // Format as natural flowing text instead of timestamped segments
+      // Format as natural flowing text in markdown format
       const formattedTranscript = this.formatAsMarkdown(transcript, metadata);
 
       console.log(`Successfully extracted ${transcript.length} transcript segments via ${source}`);
@@ -73,38 +74,25 @@ export class ContentParser {
 
   private formatAsMarkdown(segments: TranscriptSegment[], metadata?: VideoMetadata): string {
     // Extract just the text and join naturally
-    const naturalText = segments
+    let naturalText = segments
       .map(segment => segment.text.trim())
+      .filter(text => text.length > 0)
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Split into sentences for better formatting
-    const sentences = naturalText.split(/([.!?]+)/).filter(s => s.trim());
-    let formattedText = '';
-    let currentLine = '';
+    // Clean up common transcript artifacts
+    naturalText = naturalText
+      .replace(/\[Music\]/gi, '(music)')
+      .replace(/\[Applause\]/gi, '(applause)')
+      .replace(/\[Laughter\]/gi, '(laughter)')
+      .replace(/\[Inaudible\]/gi, '(inaudible)')
+      .replace(/\[.*?\]/g, '') // Remove other bracketed content
+      .replace(/\s+/g, ' ')
+      .trim();
 
-    for (let i = 0; i < sentences.length; i += 2) {
-      const sentence = sentences[i]?.trim();
-      const punctuation = sentences[i + 1]?.trim() || '';
-      
-      if (sentence) {
-        const fullSentence = sentence + punctuation;
-        
-        if (currentLine.length + fullSentence.length > 80) {
-          if (currentLine) {
-            formattedText += currentLine.trim() + '\n';
-            currentLine = '';
-          }
-        }
-        
-        currentLine += (currentLine ? ' ' : '') + fullSentence;
-      }
-    }
-    
-    if (currentLine.trim()) {
-      formattedText += currentLine.trim();
-    }
+    // Add proper spacing and punctuation
+    naturalText = this.improveTextFlow(naturalText);
 
     // Create the full markdown document
     const title = metadata?.title || 'Unknown Video';
@@ -118,10 +106,49 @@ export class ContentParser {
 **Imported:** ${currentDateTime}
 ---
 ## 📝 Transcript
-${formattedText}
+${naturalText}
 ---
 ## 📝 My Notes
 Add your personal notes and thoughts here...`;
+  }
+
+  private improveTextFlow(text: string): string {
+    // Split into sentences and improve flow
+    let sentences = text.split(/([.!?]+)/).filter(s => s.trim());
+    let result = '';
+    let currentParagraph = '';
+    
+    for (let i = 0; i < sentences.length; i += 2) {
+      const sentence = sentences[i]?.trim();
+      const punctuation = sentences[i + 1]?.trim() || '';
+      
+      if (sentence) {
+        const fullSentence = sentence + punctuation;
+        
+        // Start new paragraph every 3-4 sentences or at natural breaks
+        if (currentParagraph.length > 300 || 
+            (currentParagraph.split('.').length > 3 && 
+             (sentence.toLowerCase().includes('so ') || 
+              sentence.toLowerCase().includes('now ') ||
+              sentence.toLowerCase().includes('but ') ||
+              sentence.toLowerCase().includes('and ')))) {
+          
+          if (currentParagraph.trim()) {
+            result += currentParagraph.trim() + '\n\n';
+            currentParagraph = '';
+          }
+        }
+        
+        currentParagraph += (currentParagraph ? ' ' : '') + fullSentence;
+      }
+    }
+    
+    // Add the last paragraph
+    if (currentParagraph.trim()) {
+      result += currentParagraph.trim();
+    }
+    
+    return result || text;
   }
 
   private parseWebVTT(content: string): TranscriptSegment[] {
