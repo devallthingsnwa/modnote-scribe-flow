@@ -1,4 +1,3 @@
-
 export class PDFTextExtractor {
   static async extractTextFromPDF(file: File): Promise<string> {
     console.log('Extracting text from PDF:', file.name);
@@ -34,7 +33,11 @@ export class PDFTextExtractor {
         const textContent = await page.getTextContent();
         
         // Filter and sort text items by position (top to bottom, left to right)
-        const textItems = textContent.items.filter((item: any) => item.str !== undefined) as any[];
+        // Only keep TextItem objects that have the properties we need
+        const textItems = textContent.items.filter((item: any): item is any => 
+          item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str !== undefined
+        );
+        
         const sortedItems = textItems.sort((a: any, b: any) => {
           // Sort by Y position first (top to bottom)
           const yDiff = b.transform[5] - a.transform[5];
@@ -44,8 +47,8 @@ export class PDFTextExtractor {
         });
         
         let pageText = '';
-        let lastY = null;
-        let lastX = null;
+        let lastY: number | null = null;
+        let lastX: number | null = null;
         
         for (const item of sortedItems) {
           if (!item.str.trim()) continue;
