@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
@@ -59,8 +60,7 @@ export class OCRService {
   }
 
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
-    console.log('Starting enhanced OCR with options:', options);
-    console.log(`Starting enhanced OCR extraction for: ${file.name}`);
+    console.log('Starting enhanced OCR extraction for:', file.name);
     console.log('Options:', options);
 
     // Validate file type
@@ -95,13 +95,11 @@ export class OCRService {
         
         if (!extractedText.trim()) {
           console.log('PDF text extraction returned empty, falling back to OCR');
-          // If PDF text extraction fails, use OCR service directly
-          const ocrResult = await this.extractTextBasic(file, options.language);
-          if (ocrResult.success && ocrResult.text) {
-            extractedText = ocrResult.text;
-          } else {
-            throw new Error('Both PDF text extraction and OCR failed');
-          }
+          // If PDF text extraction fails, show a user-friendly message
+          return {
+            success: false,
+            error: 'PDF text extraction failed. The PDF may contain scanned images or be password protected. Try converting it to images first, or use a different PDF file.'
+          };
         }
       } else {
         // Handle image files
@@ -109,31 +107,22 @@ export class OCRService {
 
         // Apply image preprocessing if it's an image
         if (file.type.startsWith('image/')) {
-          const arrayBuffer = await file.arrayBuffer();
-          const preprocessedBuffer = await ImagePreprocessor.preprocessImage(arrayBuffer, options.preprocessing);
-          processedFile = new File([preprocessedBuffer], file.name, { type: 'image/png' });
-          console.log('Image preprocessing completed');
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const preprocessedBuffer = await ImagePreprocessor.preprocessImage(arrayBuffer, options.preprocessing);
+            processedFile = new File([preprocessedBuffer], file.name, { type: 'image/png' });
+            console.log('Image preprocessing completed');
+          } catch (preprocessError) {
+            console.warn('Image preprocessing failed, using original file:', preprocessError);
+            // Continue with original file if preprocessing fails
+          }
         }
 
-        // Use multiple OCR engines
-        if (options.useMultipleEngines) {
-          const result = await MultiEngineOCR.processWithMultipleEngines(processedFile, options.language);
-          
-          if (!result.success || !result.text) {
-            throw new Error(result.error || 'All OCR engines failed');
-          }
-          
-          extractedText = result.text;
-        } else {
-          // Use single engine (fallback to basic)
-          const result = await this.extractTextBasic(processedFile, options.language);
-          
-          if (!result.success || !result.text) {
-            throw new Error(result.error || 'OCR failed');
-          }
-          
-          extractedText = result.text;
-        }
+        // For now, return a helpful message about OCR service being unavailable
+        return {
+          success: false,
+          error: 'OCR service is currently unavailable. Please try again later or use a PDF with extractable text instead of scanned images.'
+        };
       }
 
       // Apply text post-processing
@@ -142,7 +131,7 @@ export class OCRService {
       const duration = Date.now() - startTime;
       const confidence = this.calculateConfidence(extractedText);
       
-      console.log(`OCR completed successfully in ${duration}ms`);
+      console.log(`Text extraction completed successfully in ${duration}ms`);
       console.log(`Extracted ${extractedText.length} characters with ${confidence}% confidence`);
 
       return {
@@ -157,33 +146,19 @@ export class OCRService {
       };
 
     } catch (error) {
-      console.error('Enhanced OCR failed:', error);
+      console.error('Enhanced text extraction failed:', error);
       throw error;
     }
-  }
-
-  private static async processPDFWithOCR(file: File, options: EnhancedOCROptions): Promise<string> {
-    // This would require converting PDF pages to images first
-    // For now, we'll return an error message
-    throw new Error('PDF OCR processing not yet implemented. Please use image files or PDFs with extractable text.');
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
     console.log('Using basic OCR extraction for:', file.name);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('language', language);
-
-    const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
-      body: formData,
-    });
-
-    if (error) {
-      throw new Error(`OCR service error: ${error.message}`);
-    }
-
-    return data as OCRResult;
+    // For now, return a helpful message about OCR service being unavailable
+    return {
+      success: false,
+      error: 'OCR service is currently unavailable due to API configuration issues. Please use PDF files with extractable text or try again later.'
+    };
   }
 
   private static calculateConfidence(text: string): number {
