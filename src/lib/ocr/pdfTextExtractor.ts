@@ -33,8 +33,9 @@ export class PDFTextExtractor {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         
-        // Sort text items by position (top to bottom, left to right)
-        const sortedItems = textContent.items.sort((a: any, b: any) => {
+        // Filter and sort text items by position (top to bottom, left to right)
+        const textItems = textContent.items.filter((item: any) => item.str !== undefined) as any[];
+        const sortedItems = textItems.sort((a: any, b: any) => {
           // Sort by Y position first (top to bottom)
           const yDiff = b.transform[5] - a.transform[5];
           if (Math.abs(yDiff) > 5) return yDiff > 0 ? 1 : -1;
