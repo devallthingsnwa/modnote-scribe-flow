@@ -94,34 +94,18 @@ export class OCRService {
         extractedText = await PDFTextExtractor.extractTextFromPDF(file);
         
         if (!extractedText.trim()) {
-          console.log('PDF text extraction returned empty, falling back to OCR');
-          // If PDF text extraction fails, show a user-friendly message
+          console.log('PDF text extraction returned empty, this might be a scanned PDF');
           return {
             success: false,
-            error: 'PDF text extraction failed. The PDF may contain scanned images or be password protected. Try converting it to images first, or use a different PDF file.'
+            error: 'This PDF appears to contain scanned images or no extractable text. OCR service is currently unavailable. Please try a different PDF with selectable text, or check back later when OCR service is restored.'
           };
         }
       } else {
-        // Handle image files
-        let processedFile = file;
-
-        // Apply image preprocessing if it's an image
-        if (file.type.startsWith('image/')) {
-          try {
-            const arrayBuffer = await file.arrayBuffer();
-            const preprocessedBuffer = await ImagePreprocessor.preprocessImage(arrayBuffer, options.preprocessing);
-            processedFile = new File([preprocessedBuffer], file.name, { type: 'image/png' });
-            console.log('Image preprocessing completed');
-          } catch (preprocessError) {
-            console.warn('Image preprocessing failed, using original file:', preprocessError);
-            // Continue with original file if preprocessing fails
-          }
-        }
-
-        // For now, return a helpful message about OCR service being unavailable
+        // Handle image files - OCR service temporarily unavailable
+        console.log('Image file detected, but OCR service is currently unavailable');
         return {
           success: false,
-          error: 'OCR service is currently unavailable. Please try again later or use a PDF with extractable text instead of scanned images.'
+          error: 'OCR service for images is currently unavailable due to configuration issues. Please try again later or contact support if this persists.'
         };
       }
 
@@ -154,10 +138,31 @@ export class OCRService {
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
     console.log('Using basic OCR extraction for:', file.name);
 
+    // Check if it's a PDF first
+    if (PDFTextExtractor.isPDFFile(file)) {
+      try {
+        const text = await PDFTextExtractor.extractTextFromPDF(file);
+        if (text.trim()) {
+          return {
+            success: true,
+            text,
+            confidence: '95%',
+            fileInfo: {
+              name: file.name,
+              type: file.type,
+              size: file.size
+            }
+          };
+        }
+      } catch (error) {
+        console.error('PDF extraction failed in basic mode:', error);
+      }
+    }
+
     // For now, return a helpful message about OCR service being unavailable
     return {
       success: false,
-      error: 'OCR service is currently unavailable due to API configuration issues. Please use PDF files with extractable text or try again later.'
+      error: 'OCR service is currently unavailable due to API configuration issues. For PDFs, please use files with extractable text rather than scanned images.'
     };
   }
 

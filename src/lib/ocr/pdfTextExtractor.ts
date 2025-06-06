@@ -15,8 +15,8 @@ export class PDFTextExtractor {
         console.log(`PDF.js worker set to version ${version}`);
       } catch (workerError) {
         console.warn('Failed to set PDF.js worker, using legacy mode');
-        // Fallback: disable worker entirely and use legacy mode
-        pdfjsLib.GlobalWorkerOptions.workerSrc = false;
+        // Fallback: use a different CDN
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
       }
       
       const arrayBuffer = await file.arrayBuffer();
@@ -34,7 +34,7 @@ export class PDFTextExtractor {
         setTimeout(() => reject(new Error('PDF loading timeout')), 30000);
       });
       
-      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
+      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]) as any;
       
       let fullText = '';
       
@@ -108,12 +108,14 @@ export class PDFTextExtractor {
       console.error('PDF text extraction failed:', error);
       
       // Provide more specific error messages for different failure types
-      if (error.message?.includes('timeout')) {
-        console.log('PDF extraction timed out, will fall back to OCR processing');
-      } else if (error.message?.includes('worker')) {
-        console.log('PDF.js worker failed to load, will fall back to OCR processing');
-      } else {
-        console.log('PDF text extraction failed, will fall back to OCR processing');
+      if (error instanceof Error) {
+        if (error.message?.includes('timeout')) {
+          console.log('PDF extraction timed out, will fall back to OCR processing');
+        } else if (error.message?.includes('worker')) {
+          console.log('PDF.js worker failed to load, will fall back to OCR processing');
+        } else {
+          console.log('PDF text extraction failed, will fall back to OCR processing');
+        }
       }
       
       // Return empty string to trigger OCR fallback
