@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic, Video, Link, Fi
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
 import { SimplifiedPreviewSection } from "./SimplifiedPreviewSection";
+import { OCRUploader } from "../ocr/OCRUploader";
 
 interface EnhancedImportModalProps {
   isOpen: boolean;
