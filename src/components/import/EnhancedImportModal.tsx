@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ interface EnhancedImportModalProps {
   }) => void;
 }
 
-type ContentType = "youtube" | "url" | "file" | "audio" | "text";
+type ContentType = "youtube" | "url" | "file" | "audio";
 
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
   const [activeTab, setActiveTab] = useState<ContentType>("youtube");
@@ -59,7 +60,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     { id: "url" as ContentType, label: "URL", icon: Link },
     { id: "file" as ContentType, label: "File/OCR", icon: File },
     { id: "audio" as ContentType, label: "Audio", icon: Mic },
-    { id: "text" as ContentType, label: "Text", icon: FileText },
   ];
 
   // Handle Word document text extraction
@@ -418,23 +418,25 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       case "file":
         return (
           <div className="space-y-6">
-            {/* Word Documents & Text Files Section */}
+            {/* Combined File Upload Section */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-400" />
-                <h3 className="text-sm font-medium text-white">Documents (Word, Text)</h3>
+                <File className="h-5 w-5 text-blue-400" />
+                <h3 className="text-sm font-medium text-white">File Upload & OCR</h3>
               </div>
+              
+              {/* Documents Upload */}
               <div className="border-2 border-dashed border-[#333] rounded-lg p-6 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
                 <Upload className="mx-auto h-8 w-8 text-gray-500 mb-3" />
                 <div className="space-y-2">
-                  <p className="text-sm text-white">Upload Word or Text documents</p>
-                  <p className="text-xs text-gray-400">Supports: DOCX, DOC, TXT files</p>
+                  <p className="text-sm text-white">Upload documents or images</p>
+                  <p className="text-xs text-gray-400">Documents: DOCX, DOC, TXT • Images: JPG, PNG, PDF for OCR</p>
                 </div>
                 <input
                   type="file"
                   onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  accept=".docx,.doc,.txt"
+                  accept=".docx,.doc,.txt,.jpg,.jpeg,.png,.pdf"
                 />
               </div>
               
@@ -445,17 +447,11 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <Copy className="h-4 w-4 mr-2" />
-                  Copy Text to Clipboard (Edit in Word/Editor)
+                  Copy Text to Clipboard
                 </Button>
               )}
-            </div>
-
-            <div className="border-t border-[#333] pt-4">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="h-5 w-5 text-green-400" />
-                <h3 className="text-sm font-medium text-white">Photo & Image OCR</h3>
-              </div>
-              {/* OCR File Upload Component for Photos */}
+              
+              {/* OCR Component for additional processing */}
               <OCRUploader 
                 onTextExtracted={handleOCRTextExtracted}
                 className="bg-[#151515] border-[#333]"
@@ -497,16 +493,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   accept=".mp3,.wav,.m4a,.mp4"
                 />
               </div>
-            </div>
-          </div>
-        );
-
-      case "text":
-        return (
-          <div className="space-y-6">
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-gray-500 mb-4" />
-              <p className="text-sm text-white">Manual text input coming soon</p>
             </div>
           </div>
         );
