@@ -1,8 +1,10 @@
+
 import React, { useState, useCallback, useMemo } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
+import { EnhancedSearchService } from "@/lib/aiResearch/enhancedSearchService";
 import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
 import { Sidebar } from "@/components/Sidebar";
 import { AIResearchHeader } from "@/components/ai-research/AIResearchHeader";
