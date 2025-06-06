@@ -239,6 +239,26 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     handleClose();
   };
 
+  const handleOCRTextExtracted = (text: string, fileName: string) => {
+    console.log('OCR text extracted:', { fileName, textLength: text.length });
+    
+    setMetadata({
+      title: fileName.replace(/\.[^/.]+$/, ""), // Remove file extension
+      author: "OCR Extraction",
+      description: `Text extracted from ${fileName}`
+    });
+    
+    setTranscript(text);
+    setStatus("✅ Text extracted successfully from document!");
+    setProgress(100);
+    setIsProcessing(false);
+    
+    toast({
+      title: "✅ OCR Extraction Complete!",
+      description: `Successfully extracted ${text.length} characters from ${fileName}`
+    });
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "youtube":
@@ -310,19 +330,10 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       case "file":
         return (
           <div className="space-y-6">
-            <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
-              <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
-              <div className="space-y-2">
-                <p className="text-sm text-white">Drop files here or click to upload</p>
-                <p className="text-xs text-gray-400">Supports PDF, DOCX, TXT files</p>
-              </div>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf,.docx,.txt"
-              />
-            </div>
+            <OCRUploader 
+              onTextExtracted={handleOCRTextExtracted}
+              className="bg-transparent border-[#333]"
+            />
           </div>
         );
 

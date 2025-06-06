@@ -16,7 +16,7 @@ export interface OCRResult {
 export class OCRService {
   static async extractTextFromFile(file: File, language: string = 'eng'): Promise<OCRResult> {
     try {
-      console.log('Starting OCR extraction for:', file.name);
+      console.log('Starting OCR extraction for:', file.name, 'Type:', file.type, 'Size:', file.size);
 
       // Validate file type
       const supportedTypes = [
@@ -36,13 +36,19 @@ export class OCRService {
       // Check file size (OCR.space has a 1MB limit for free tier)
       const maxSize = 1024 * 1024; // 1MB
       if (file.size > maxSize) {
-        throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
+        throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB, your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      }
+
+      if (file.size === 0) {
+        throw new Error('File appears to be empty');
       }
 
       // Prepare form data
       const formData = new FormData();
       formData.append('file', file);
       formData.append('language', language);
+
+      console.log('Calling OCR edge function with language:', language);
 
       // Call the edge function
       const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
@@ -54,7 +60,22 @@ export class OCRService {
         throw new Error(`OCR service error: ${error.message}`);
       }
 
-      return data as OCRResult;
+      console.log('OCR edge function response:', data);
+
+      if (!data) {
+        throw new Error('No response from OCR service');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'OCR extraction failed');
+      }
+
+      return {
+        success: true,
+        text: data.text,
+        confidence: data.confidence,
+        fileInfo: data.fileInfo
+      };
 
     } catch (error) {
       console.error('OCR extraction failed:', error);
@@ -91,6 +112,18 @@ export class OCRService {
       { code: 'spa', name: 'Spanish' },
       { code: 'swe', name: 'Swedish' },
       { code: 'tur', name: 'Turkish' }
+    ];
+  }
+
+  static getSupportedFileTypes() {
+    return [
+      { extension: 'jpg', type: 'image/jpeg', description: 'JPEG Image' },
+      { extension: 'jpeg', type: 'image/jpeg', description: 'JPEG Image' },
+      { extension: 'png', type: 'image/png', description: 'PNG Image' },
+      { extension: 'gif', type: 'image/gif', description: 'GIF Image' },
+      { extension: 'bmp', type: 'image/bmp', description: 'BMP Image' },
+      { extension: 'tiff', type: 'image/tiff', description: 'TIFF Image' },
+      { extension: 'pdf', type: 'application/pdf', description: 'PDF Document' }
     ];
   }
 }
