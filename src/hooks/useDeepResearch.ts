@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNotes } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
-import { OptimizedSearchService } from "@/lib/aiResearch/searchService";
+import { EnhancedSearchService } from "@/lib/aiResearch/enhancedSearchService";
 import { ContextProcessor } from "@/lib/aiResearch/contextProcessor";
 
 interface SearchResult {
@@ -46,20 +46,52 @@ export function useDeepResearch() {
 
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
-    return (query: string) => {
+    return async (query: string) => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
         if (!notes || !query.trim()) {
           setSearchResults([]);
           return;
         }
         
         const searchStart = performance.now();
-        const results = OptimizedSearchService.searchNotes(notes, query);
-        const searchTime = performance.now() - searchStart;
-        
-        setSearchResults(results.slice(0, 6));
-        setMetrics(prev => ({ ...prev, searchTime } as PerformanceMetrics));
+        try {
+          const results = await EnhancedSearchService.hybridSearch(notes, query);
+          const searchTime = performance.now() - searchStart;
+          
+          setSearchResults(results.slice(0, 6));
+          setMetrics(prev => ({ ...prev, searchTime } as PerformanceMetrics));
+          
+          console.log(`🚀 Ultra-fast hybrid search: ${searchTime.toFixed(1)}ms | ${results.length} results`);
+        } catch (error) {
+          console.error('Hybrid search error:', error);
+          // Fallback to basic search
+          const fallbackResults = notes
+            .map(note => {
+              const titleMatch = note.title.toLowerCase().includes(query.toLowerCase());
+              const contentMatch = note.content?.toLowerCase().includes(query.toLowerCase()) || false;
+              
+              if (!titleMatch && !contentMatch) return null;
+
+              const relevance = (titleMatch ? 2 : 0) + (contentMatch ? 1 : 0);
+              const snippet = note.content ? note.content.substring(0, 100) + '...' : '';
+
+              return {
+                id: note.id,
+                title: note.title,
+                content: note.content,
+                relevance: relevance / 3,
+                snippet,
+                sourceType: note.is_transcription ? 'video' as const : 'note' as const,
+                searchType: 'keyword' as const
+              };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b!.relevance - a!.relevance)
+            .slice(0, 6);
+          
+          setSearchResults(fallbackResults as any[]);
+        }
       }, 150);
     };
   }, [notes]);
@@ -200,10 +232,10 @@ export function useDeepResearch() {
   const clearChat = useCallback(() => {
     setChatMessages([]);
     setMetrics(null);
-    OptimizedSearchService.clearCache();
+    EnhancedSearchService.clearCache();
     toast({
       title: "Chat Cleared",
-      description: "Conversation history and cache cleared.",
+      description: "Conversation history and enhanced search cache cleared.",
     });
   }, [toast]);
 

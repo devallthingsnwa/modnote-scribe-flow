@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo } from "react";
 import { useNotes } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -37,25 +36,37 @@ export default function AIResearch() {
   const { toast } = useToast();
   const { data: notes } = useNotes();
 
-  // Enhanced search with strict validation
+  // Enhanced search with hybrid functionality
   const debouncedSearch = useMemo(() => {
     let timeoutId: NodeJS.Timeout;
     return (query: string) => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
         if (!notes || !query.trim() || query.trim().length < 2) {
           setSearchResults([]);
           return;
         }
         
-        console.log(`🔍 SEARCH INITIATED: "${query}" across ${notes.length} notes`);
+        console.log(`🔍 HYBRID SEARCH INITIATED: "${query}" across ${notes.length} notes`);
         const searchStart = performance.now();
         
-        const results = OptimizedSearchService.searchNotes(notes, query);
-        const searchTime = performance.now() - searchStart;
-        
-        console.log(`⚡ SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} results`);
-        setSearchResults(results);
+        try {
+          const results = await EnhancedSearchService.hybridSearch(notes, query);
+          const searchTime = performance.now() - searchStart;
+          
+          console.log(`⚡ HYBRID SEARCH COMPLETED: ${searchTime.toFixed(1)}ms, ${results.length} results`);
+          console.log('Search breakdown:', results.reduce((acc, r) => {
+            acc[r.searchType] = (acc[r.searchType] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>));
+          
+          setSearchResults(results);
+        } catch (error) {
+          console.error('🚨 Hybrid search error:', error);
+          // Fallback to basic search if hybrid fails
+          const fallbackResults = OptimizedSearchService.searchNotes(notes, query);
+          setSearchResults(fallbackResults);
+        }
       }, 150);
     };
   }, [notes]);
@@ -93,21 +104,20 @@ export default function AIResearch() {
     try {
       const startTime = performance.now();
       
-      console.log(`🧠 CONTEXT PROCESSING: Starting for query "${currentInput}"`);
+      console.log(`🧠 ENHANCED CONTEXT PROCESSING: Starting RAG pipeline for "${currentInput}"`);
       
-      // STRICT context processing with enhanced validation
-      const contextData = ContextProcessor.processNotesForContext(notes || [], currentInput);
+      // Use hybrid search to find the most relevant context
+      const searchResults = await EnhancedSearchService.hybridSearch(notes || [], currentInput);
       
-      if (contextData.sources.length === 0) {
-        console.log('❌ NO RELEVANT SOURCES FOUND');
+      if (searchResults.length === 0) {
+        console.log('❌ NO RELEVANT SOURCES FOUND WITH HYBRID SEARCH');
         setChatMessages(prev => prev.filter(m => !m.isStreaming));
         
         const noContextMessage: ChatMessage = {
           id: `no_context_${Date.now()}`,
           type: 'assistant',
-          content: `I couldn't find any relevant notes for your query: "${currentInput}". This ensures I only provide information from your actual notes and don't mix sources. Please try different search terms or add relevant notes first.`,
-          timestamp: new Date(),
-          contextFingerprint: contextData.queryFingerprint
+          content: `I couldn't find any relevant content for your query: "${currentInput}". This could mean your notes don't contain information about this topic, or you might want to try different keywords. The search used both keyword matching and semantic understanding to find relevant content.`,
+          timestamp: new Date()
         };
         
         setChatMessages(prev => [...prev, noContextMessage]);
@@ -115,33 +125,56 @@ export default function AIResearch() {
         return;
       }
 
-      // Create ULTRA-STRICT context with source isolation
+      // Create enhanced context with vector search results
+      const contextSources = searchResults.map(result => ({
+        id: result.id,
+        title: result.title,
+        content: result.content || '',
+        relevance: result.relevance,
+        searchType: result.searchType,
+        similarity: result.similarity,
+        metadata: result.metadata
+      }));
+
       const strictContext = `SYSTEM INSTRUCTIONS: 
-You are answering based EXCLUSIVELY on the provided context sources. DO NOT use any external knowledge or mix information between sources.
+You are answering based EXCLUSIVELY on the provided context sources found through advanced semantic search. DO NOT use any external knowledge.
 
-QUERY FINGERPRINT: ${contextData.queryFingerprint}
-SOURCE VERIFICATION: ${contextData.sources.length} verified sources found
-RELEVANCE THRESHOLD: Applied strict filtering (min 0.4)
+SEARCH METHOD: Hybrid (Keyword + Vector Embeddings)
+SOURCES_FOUND: ${contextSources.length}
+SEARCH_TYPES: ${contextSources.map(s => s.searchType).join(', ')}
 
-CONTEXT SUMMARY:
-${contextData.contextSummary}
+ENHANCED CONTEXT WITH SEARCH SCORES:
+${contextSources.map((source, index) => `
+**SOURCE ${index + 1}: ${source.title}**
+UNIQUE_ID: ${source.id}
+SEARCH_TYPE: ${source.searchType}
+RELEVANCE_SCORE: ${source.relevance.toFixed(3)}
+${source.similarity ? `SEMANTIC_SIMILARITY: ${source.similarity.toFixed(3)}` : ''}
+TYPE: ${source.metadata?.is_transcription ? 'VIDEO_TRANSCRIPT' : 'TEXT_NOTE'}
 
-VERIFIED CONTENT WITH SOURCE ATTRIBUTION:
-${contextData.relevantChunks.join('\n\n===NEXT_VERIFIED_SOURCE===\n\n')}
+CONTENT:
+${source.content}
+
+---NEXT_SOURCE---
+`).join('\n')}
 
 USER QUERY: "${currentInput}"
 
 CRITICAL INSTRUCTIONS:
 1. Answer ONLY using information from the verified sources above
 2. ALWAYS cite specific source titles when referencing information
-3. If sources contain conflicting information, acknowledge the conflict and cite each source
-4. If the query cannot be fully answered from these sources, say so explicitly
-5. DO NOT combine information from different sources unless explicitly relevant
-6. Each piece of information MUST be traceable to a specific source by title and ID
+3. Reference the search type used to find each source (keyword, semantic, or hybrid)
+4. If sources contain conflicting information, acknowledge it and cite each source
+5. Leverage the high semantic similarity scores to find the most relevant information
+6. If the query cannot be fully answered from these sources, say so explicitly
 
-RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In the video transcript '[Title]'..."`;
+RESPONSE FORMAT: Reference sources like: "According to [Source Title] (found via semantic search)..." or "Based on keyword matching in '[Title]'..."`;
 
-      console.log(`📊 CONTEXT STATS: ${contextData.totalTokens} tokens from ${contextData.sources.length} verified sources`);
+      console.log(`📊 ENHANCED RAG STATS: ${contextSources.length} sources via hybrid search`);
+      console.log('Search breakdown:', contextSources.reduce((acc, s) => {
+        acc[s.searchType] = (acc[s.searchType] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>));
 
       const { data, error } = await supabase.functions.invoke('process-content-with-deepseek', {
         body: {
@@ -151,7 +184,8 @@ RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In
             rag: true, 
             strict_context: true,
             max_tokens: 2000,
-            temperature: 0.1 // Lower temperature for more factual responses
+            temperature: 0.1,
+            hybrid_search: true
           }
         }
       });
@@ -171,50 +205,42 @@ RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In
         type: 'assistant',
         content: data.processedContent || "I couldn't generate a response based on the available context. Please try rephrasing your question.",
         timestamp: new Date(),
-        contextFingerprint: contextData.queryFingerprint,
-        sources: contextData.sources.slice(0, 3).map(source => ({
+        sources: contextSources.slice(0, 3).map(source => ({
           id: source.id,
           title: source.title,
           content: null,
           relevance: source.relevance,
-          snippet: `Verified Source | Relevance: ${source.relevance.toFixed(3)} | Type: ${source.metadata?.is_transcription ? 'Video Transcript' : 'Text Note'}`
+          snippet: `${source.searchType.toUpperCase()} | Score: ${source.relevance.toFixed(3)}${source.similarity ? ` | Similarity: ${source.similarity.toFixed(3)}` : ''}`
         }))
       };
 
       setChatMessages(prev => [...prev, assistantMessage]);
 
-      console.log(`✅ RESPONSE GENERATED: ${responseTime.toFixed(0)}ms using ${contextData.sources.length} verified sources`);
-      console.log(`📈 QUALITY METRICS: Context tokens: ${contextData.totalTokens}, Sources: ${contextData.sources.length}`);
+      console.log(`✅ ENHANCED RAG RESPONSE: ${responseTime.toFixed(0)}ms using hybrid search with ${contextSources.length} sources`);
 
-      if (data.usage) {
-        console.log('💰 Token usage:', data.usage);
-      }
-
-      // Success notification for high-quality responses
-      if (contextData.sources.length > 0 && responseTime < 5000) {
-        toast({
-          title: "High-Quality Response",
-          description: `Generated from ${contextData.sources.length} verified sources in ${responseTime.toFixed(0)}ms`,
-        });
-      }
+      // Enhanced success notification
+      toast({
+        title: "Enhanced AI Response",
+        description: `Generated using hybrid search (${contextSources.length} sources) in ${responseTime.toFixed(0)}ms`,
+      });
 
     } catch (error: any) {
-      console.error('🚨 CHAT ERROR:', error);
+      console.error('🚨 ENHANCED RAG ERROR:', error);
       
       setChatMessages(prev => prev.filter(m => !m.isStreaming));
       
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         type: 'assistant',
-        content: "I encountered an error while processing your request. This helps ensure data integrity. Please try again or rephrase your question.",
+        content: "I encountered an error while processing your request with the enhanced RAG system. Please try again or rephrase your question.",
         timestamp: new Date()
       };
       
       setChatMessages(prev => [...prev, errorMessage]);
       
       toast({
-        title: "Processing Error",
-        description: "Failed to generate response. Data integrity maintained.",
+        title: "Enhanced RAG Error",
+        description: "Failed to generate response using hybrid search. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -230,23 +256,21 @@ RESPONSE FORMAT: Reference sources like: "According to [Source Title]..." or "In
       // Switching to chat mode
       setSearchResults([]);
       setSearchQuery("");
-      console.log('🔄 SWITCHED TO CHAT MODE: Enhanced AI responses with strict source attribution');
+      console.log('🔄 SWITCHED TO ENHANCED CHAT MODE: AI responses with hybrid search (keyword + semantic)');
     } else {
       // Switching to search mode
       setChatMessages([]);
-      console.log('🔄 SWITCHED TO SEARCH MODE: Fast local search across all notes');
+      console.log('🔄 SWITCHED TO HYBRID SEARCH MODE: Keyword + semantic search across all notes');
     }
     
     // Clear caches for fresh start
-    OptimizedSearchService.clearCache();
-    ContextProcessor.clearCache();
+    EnhancedSearchService.clearCache();
   }, [isChatMode]);
 
   // Performance cleanup
   React.useEffect(() => {
     return () => {
-      OptimizedSearchService.clearCache();
-      ContextProcessor.clearCache();
+      EnhancedSearchService.clearCache();
     };
   }, []);
 
