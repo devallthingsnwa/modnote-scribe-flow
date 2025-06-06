@@ -81,11 +81,11 @@ export class MultiEngineOCR {
   }
 
   private static async processWithTesseract(file: File, language: string): Promise<OCRResult> {
-    // Import Tesseract dynamically to avoid bundle size issues
-    const Tesseract = await import('tesseract.js');
-    
     try {
-      const { data: { text, confidence } } = await Tesseract.recognize(file, language, {
+      // Import Tesseract dynamically to avoid bundle size issues
+      const { recognize } = await import('tesseract.js');
+      
+      const { data: { text, confidence } } = await recognize(file, language, {
         logger: m => {
           if (m.status === 'recognizing text') {
             console.log(`Tesseract progress: ${Math.round(m.progress * 100)}%`);
