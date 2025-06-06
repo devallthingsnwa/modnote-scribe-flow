@@ -59,7 +59,8 @@ export class OCRService {
   }
 
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
-    console.log('Starting enhanced OCR extraction for:', file.name);
+    console.log('Starting enhanced OCR with options:', options);
+    console.log(`Starting enhanced OCR extraction for: ${file.name}`);
     console.log('Options:', options);
 
     // Validate file type
@@ -93,19 +94,46 @@ export class OCRService {
         extractedText = await PDFTextExtractor.extractTextFromPDF(file);
         
         if (!extractedText.trim()) {
-          console.log('PDF text extraction returned empty - this might be a scanned PDF or image-based PDF');
-          return {
-            success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. The document may be image-based. Please try a PDF with selectable text, or use an OCR service to convert scanned documents.'
-          };
+          console.log('PDF text extraction returned empty, falling back to OCR');
+          // If PDF text extraction fails, use OCR service directly
+          const ocrResult = await this.extractTextBasic(file, options.language);
+          if (ocrResult.success && ocrResult.text) {
+            extractedText = ocrResult.text;
+          } else {
+            throw new Error('Both PDF text extraction and OCR failed');
+          }
         }
       } else {
-        // Handle image files - OCR service requires configuration
-        console.log('Image file detected - OCR service requires API configuration');
-        return {
-          success: false,
-          error: 'OCR service for images requires API configuration. Please contact administrator to enable OCR functionality for image files.'
-        };
+        // Handle image files
+        let processedFile = file;
+
+        // Apply image preprocessing if it's an image
+        if (file.type.startsWith('image/')) {
+          const arrayBuffer = await file.arrayBuffer();
+          const preprocessedBuffer = await ImagePreprocessor.preprocessImage(arrayBuffer, options.preprocessing);
+          processedFile = new File([preprocessedBuffer], file.name, { type: 'image/png' });
+          console.log('Image preprocessing completed');
+        }
+
+        // Use multiple OCR engines
+        if (options.useMultipleEngines) {
+          const result = await MultiEngineOCR.processWithMultipleEngines(processedFile, options.language);
+          
+          if (!result.success || !result.text) {
+            throw new Error(result.error || 'All OCR engines failed');
+          }
+          
+          extractedText = result.text;
+        } else {
+          // Use single engine (fallback to basic)
+          const result = await this.extractTextBasic(processedFile, options.language);
+          
+          if (!result.success || !result.text) {
+            throw new Error(result.error || 'OCR failed');
+          }
+          
+          extractedText = result.text;
+        }
       }
 
       // Apply text post-processing
@@ -114,7 +142,7 @@ export class OCRService {
       const duration = Date.now() - startTime;
       const confidence = this.calculateConfidence(extractedText);
       
-      console.log(`Text extraction completed successfully in ${duration}ms`);
+      console.log(`OCR completed successfully in ${duration}ms`);
       console.log(`Extracted ${extractedText.length} characters with ${confidence}% confidence`);
 
       return {
@@ -129,66 +157,55 @@ export class OCRService {
       };
 
     } catch (error) {
-      console.error('Enhanced text extraction failed:', error);
+      console.error('Enhanced OCR failed:', error);
       throw error;
     }
+  }
+
+  private static async processPDFWithOCR(file: File, options: EnhancedOCROptions): Promise<string> {
+    // This would require converting PDF pages to images first
+    // For now, we'll return an error message
+    throw new Error('PDF OCR processing not yet implemented. Please use image files or PDFs with extractable text.');
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
     console.log('Using basic OCR extraction for:', file.name);
 
-    // Check if it's a PDF first
-    if (PDFTextExtractor.isPDFFile(file)) {
-      try {
-        const text = await PDFTextExtractor.extractTextFromPDF(file);
-        if (text.trim()) {
-          return {
-            success: true,
-            text,
-            confidence: '85%',
-            fileInfo: {
-              name: file.name,
-              type: file.type,
-              size: file.size
-            }
-          };
-        } else {
-          return {
-            success: false,
-            error: 'This PDF contains no extractable text. It may be a scanned document or image-based PDF.'
-          };
-        }
-      } catch (error) {
-        console.error('PDF extraction failed in basic mode:', error);
-        return {
-          success: false,
-          error: 'PDF processing failed. The file may be corrupted or in an unsupported format.'
-        };
-      }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('language', language);
+
+    const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
+      body: formData,
+    });
+
+    if (error) {
+      throw new Error(`OCR service error: ${error.message}`);
     }
 
-    // For images, return appropriate message
-    return {
-      success: false,
-      error: 'Image OCR requires API configuration. Currently only PDFs with selectable text are supported.'
-    };
+    return data as OCRResult;
   }
 
   private static calculateConfidence(text: string): number {
+    // Simple confidence calculation based on text characteristics
     if (!text || text.length === 0) return 0;
     
     let score = 50; // Base score
     
+    // Length bonus
     if (text.length > 100) score += 20;
     else if (text.length > 50) score += 10;
     
+    // Word count bonus
     const words = text.split(/\s+/).filter(word => word.length > 0);
     if (words.length > 20) score += 15;
     else if (words.length > 10) score += 10;
     
+    // Character variety bonus
     const uniqueChars = new Set(text.toLowerCase()).size;
     if (uniqueChars > 20) score += 10;
     
+    // Penalize for too many special characters
     const specialChars = text.match(/[^a-zA-Z0-9\s.,!?;:()\-'"]/g);
     if (specialChars && specialChars.length > text.length * 0.1) {
       score -= 20;

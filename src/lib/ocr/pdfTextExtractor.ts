@@ -1,4 +1,3 @@
-
 export class PDFTextExtractor {
   static async extractTextFromPDF(file: File): Promise<string> {
     console.log('Extracting text from PDF:', file.name);
@@ -7,166 +6,109 @@ export class PDFTextExtractor {
       // Import PDF.js dynamically
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Configure worker with better fallback strategy
-      await this.configureWorker(pdfjsLib);
+      // Try to set worker source with fallback options
+      try {
+        // First try the standard CDN
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      } catch (error) {
+        console.warn('Failed to set primary worker source, trying fallback');
+        try {
+          // Fallback to unpkg CDN
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+        } catch (fallbackError) {
+          console.warn('Failed to set fallback worker source, using local worker');
+          // Use local worker as last resort
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+        }
+      }
       
       const arrayBuffer = await file.arrayBuffer();
-      
-      // Load PDF with enhanced configuration
-      const loadingTask = pdfjsLib.getDocument({ 
-        data: arrayBuffer,
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true,
-        disableFontFace: false,
-        verbosity: 0 // Reduce console noise
-      });
-      
-      // Set a timeout for PDF loading
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('PDF loading timeout after 15 seconds')), 15000);
-      });
-      
-      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
       let fullText = '';
       
-      // Extract text from each page with improved formatting
+      // Extract text from each page with formatting preservation
       for (let i = 1; i <= pdf.numPages; i++) {
-        try {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        // Filter and sort text items by position (top to bottom, left to right)
+        // Only keep TextItem objects that have the properties we need
+        const textItems = textContent.items.filter((item: any): item is any => 
+          item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str !== undefined
+        );
+        
+        const sortedItems = textItems.sort((a: any, b: any) => {
+          // Sort by Y position first (top to bottom)
+          const yDiff = b.transform[5] - a.transform[5];
+          if (Math.abs(yDiff) > 5) return yDiff > 0 ? 1 : -1;
+          // Then by X position (left to right)
+          return a.transform[4] - b.transform[4];
+        });
+        
+        let pageText = '';
+        let lastY: number | null = null;
+        let lastX: number | null = null;
+        
+        for (const item of sortedItems) {
+          if (!item.str.trim()) continue;
           
-          // Process text items with better positioning
-          const textItems = textContent.items.filter((item: any): item is any => 
-            item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str !== undefined
-          );
+          const currentY = item.transform[5];
+          const currentX = item.transform[4];
           
-          if (textItems.length === 0) {
-            console.log(`Page ${i} has no text content`);
-            continue;
-          }
-          
-          // Sort items by position (top to bottom, left to right)
-          const sortedItems = textItems.sort((a: any, b: any) => {
-            const yDiff = b.transform[5] - a.transform[5];
-            if (Math.abs(yDiff) > 3) return yDiff > 0 ? 1 : -1;
-            return a.transform[4] - b.transform[4];
-          });
-          
-          let pageText = '';
-          let lastY: number | null = null;
-          
-          for (const item of sortedItems) {
-            const text = item.str.trim();
-            if (!text) continue;
-            
-            const currentY = item.transform[5];
-            
-            // Add line breaks based on Y position changes
-            if (lastY !== null && Math.abs(currentY - lastY) > 3) {
+          // Check for line breaks based on Y position
+          if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+            pageText += '\n';
+            // Add extra line break for larger gaps (paragraphs)
+            if (Math.abs(currentY - lastY) > 15) {
               pageText += '\n';
-              // Add extra line break for larger gaps (paragraphs)
-              if (Math.abs(currentY - lastY) > 10) {
-                pageText += '\n';
-              }
-            } else if (pageText && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
-              pageText += ' ';
             }
-            
-            pageText += text;
-            lastY = currentY;
+          }
+          // Check for spacing based on X position
+          else if (lastX !== null && currentX - lastX > 20) {
+            pageText += '  '; // Add spacing for horizontal gaps
+          }
+          // Add single space if items are close but not overlapping
+          else if (lastX !== null && currentX > lastX && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
+            pageText += ' ';
           }
           
-          if (pageText.trim()) {
-            fullText += `${pageText.trim()}\n\n`;
-          }
-        } catch (pageError) {
-          console.warn(`Failed to extract text from page ${i}:`, pageError);
-          // Continue with other pages instead of failing completely
+          pageText += item.str;
+          lastY = currentY;
+          lastX = currentX + (item.width || 0);
+        }
+        
+        if (pageText.trim()) {
+          fullText += `\n--- Page ${i} ---\n${pageText.trim()}\n`;
         }
       }
       
-      // Clean up the extracted text
-      fullText = this.cleanupExtractedText(fullText.trim());
+      // Clean up the text while preserving intentional formatting
+      fullText = this.cleanupFormattedText(fullText.trim());
       
-      if (!fullText || fullText.length < 10) {
-        console.log('PDF appears to contain no extractable text or is image-based');
-        return '';
-      }
+      console.log(`PDF text extraction completed. Extracted ${fullText.length} characters from ${pdf.numPages} pages with formatting preserved`);
       
-      console.log(`PDF text extraction completed. Extracted ${fullText.length} characters from ${pdf.numPages} pages`);
       return fullText;
-      
     } catch (error) {
       console.error('PDF text extraction failed:', error);
-      
-      // Provide specific error feedback
-      if (error instanceof Error) {
-        if (error.message?.includes('timeout')) {
-          console.log('PDF extraction timed out');
-        } else if (error.message?.includes('worker') || error.message?.includes('fetch')) {
-          console.log('PDF.js worker configuration failed');
-        } else {
-          console.log('PDF processing error:', error.message);
-        }
-      }
-      
-      // Return empty string to trigger fallback or show appropriate message
+      // Instead of throwing an error, return empty string to trigger OCR fallback
+      console.log('PDF text extraction failed, will fall back to OCR processing');
       return '';
     }
   }
   
-  private static async configureWorker(pdfjsLib: any): Promise<void> {
-    try {
-      // Try multiple worker sources with version fallbacks
-      const workerSources = [
-        `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.0.379'}/build/pdf.worker.min.js`,
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js',
-        'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js'
-      ];
-      
-      for (const workerSrc of workerSources) {
-        try {
-          // Test if the worker URL is accessible
-          const response = await fetch(workerSrc, { method: 'HEAD' });
-          if (response.ok) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-            console.log(`PDF.js worker configured with: ${workerSrc}`);
-            return;
-          }
-        } catch (error) {
-          console.warn(`Failed to load worker from ${workerSrc}:`, error);
-        }
-      }
-      
-      // If all external workers fail, disable worker
-      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
-      console.warn('All PDF.js workers failed, running without worker (slower)');
-      
-    } catch (error) {
-      console.error('Worker configuration failed:', error);
-      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
-    }
-  }
-  
-  private static cleanupExtractedText(text: string): string {
+  private static cleanupFormattedText(text: string): string {
     return text
-      // Normalize line endings
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
       // Remove excessive line breaks but preserve paragraph structure
       .replace(/\n{4,}/g, '\n\n\n')
-      // Remove trailing spaces
+      // Remove trailing spaces but preserve intentional spacing
       .replace(/[ \t]+$/gm, '')
       // Normalize spacing around punctuation
       .replace(/\s*([.!?])\s*/g, '$1 ')
-      // Fix broken words at line ends (basic dehyphenation)
+      // Fix broken words at line ends
       .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2')
       // Preserve bullet points and lists
       .replace(/^\s*([•·-])\s*/gm, '$1 ')
-      // Remove extra spaces but preserve intentional formatting
-      .replace(/[ \t]{2,}/g, ' ')
       .trim();
   }
   
