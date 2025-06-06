@@ -7,6 +7,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to convert ArrayBuffer to base64 in chunks to avoid stack overflow
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192; // Process in 8KB chunks
+  let result = '';
+  
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    result += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  return btoa(result);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -116,12 +130,14 @@ serve(async (req) => {
     }
 
     try {
-      // Convert file to base64
+      // Convert file to base64 using our safe chunked method
       const arrayBuffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      console.log(`Converting file to base64: ${arrayBuffer.byteLength} bytes`);
+      
+      const base64 = arrayBufferToBase64(arrayBuffer);
       const base64String = `data:${file.type};base64,${base64}`;
 
-      console.log(`Converted file to base64, length: ${base64String.length}`);
+      console.log(`Converted file to base64 successfully, length: ${base64String.length}`);
 
       // Prepare OCR.space API request with enhanced parameters
       const ocrFormData = new FormData();
