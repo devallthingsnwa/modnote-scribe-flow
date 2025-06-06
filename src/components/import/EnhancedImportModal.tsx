@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -55,10 +56,22 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const tabs = [
     { id: "youtube" as ContentType, label: "YouTube", icon: Video },
     { id: "url" as ContentType, label: "URL", icon: Link },
-    { id: "file" as ContentType, label: "File", icon: File },
+    { id: "file" as ContentType, label: "File/OCR", icon: File },
     { id: "audio" as ContentType, label: "Audio", icon: Mic },
     { id: "text" as ContentType, label: "Text", icon: FileText },
   ];
+
+  // Handle OCR text extraction from file upload
+  const handleOCRTextExtracted = (text: string, fileName: string) => {
+    setMetadata({
+      title: fileName,
+      author: "OCR Extraction",
+      description: `Text extracted from ${fileName} using OCR`
+    });
+    setTranscript(text);
+    setStatus("✅ Text extracted successfully with OCR!");
+    setProgress(100);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -223,7 +236,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     } else if (activeTab === 'audio') {
       noteContent = `# 🎤 ${metadata.title}\n\n**Type:** Voice Recording\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else if (activeTab === 'file') {
-      noteContent = `# 📄 ${metadata.title}\n\n**Type:** File Upload\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Content\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+      noteContent = `# 📄 ${metadata.title}\n\n**Type:** ${metadata.author === 'OCR Extraction' ? 'OCR Text Extraction' : 'File Upload'}\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 ${metadata.author === 'OCR Extraction' ? 'Extracted Text' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else {
       noteContent = `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     }
@@ -233,7 +246,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       content: noteContent,
       source_url: (activeTab === 'youtube' || activeTab === 'url') ? url : undefined,
       thumbnail: metadata.thumbnail,
-      is_transcription: (activeTab === 'youtube' && !hasWarning) || activeTab === 'audio'
+      is_transcription: (activeTab === 'youtube' && !hasWarning) || activeTab === 'audio' || activeTab === 'file'
     });
 
     handleClose();
@@ -310,18 +323,28 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       case "file":
         return (
           <div className="space-y-6">
-            <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
-              <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
-              <div className="space-y-2">
-                <p className="text-sm text-white">Drop files here or click to upload</p>
-                <p className="text-xs text-gray-400">Supports PDF, DOCX, TXT files</p>
+            {/* OCR File Upload Component */}
+            <OCRUploader 
+              onTextExtracted={handleOCRTextExtracted}
+              className="bg-[#151515] border-[#333]"
+            />
+            
+            {/* Alternative basic file upload */}
+            <div className="border-t border-[#333] pt-4">
+              <p className="text-sm text-gray-400 mb-3">Or upload files without OCR:</p>
+              <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
+                <Upload className="mx-auto h-12 w-12 text-gray-500 mb-4" />
+                <div className="space-y-2">
+                  <p className="text-sm text-white">Drop files here or click to upload</p>
+                  <p className="text-xs text-gray-400">Supports PDF, DOCX, TXT files</p>
+                </div>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept=".pdf,.docx,.txt"
+                />
               </div>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf,.docx,.txt"
-              />
             </div>
           </div>
         );

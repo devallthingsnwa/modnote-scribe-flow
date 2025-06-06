@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -18,6 +19,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<OCRResult | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
+  const [useEnhancedOCR, setUseEnhancedOCR] = useState(true);
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
@@ -33,7 +35,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     try {
       setProgress(30);
       
-      const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage);
+      const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage, useEnhancedOCR);
       setProgress(90);
 
       if (ocrResult.success && ocrResult.text) {
@@ -42,7 +44,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         
         toast({
           title: "✅ Text Extracted Successfully!",
-          description: `Extracted ${ocrResult.text.length} characters from ${file.name}`
+          description: `Extracted ${ocrResult.text.length} characters from ${file.name}${useEnhancedOCR ? ' (Enhanced OCR)' : ''}`
         });
       } else {
         throw new Error(ocrResult.error || 'Failed to extract text');
@@ -91,6 +93,29 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   return (
     <Card className={className}>
       <CardContent className="space-y-4 pt-6">
+        {/* Enhanced OCR Toggle */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <label className="text-sm font-medium">OCR Mode</label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="enhanced-ocr"
+              checked={useEnhancedOCR}
+              onCheckedChange={setUseEnhancedOCR}
+            />
+            <label htmlFor="enhanced-ocr" className="text-sm">
+              Enhanced OCR {useEnhancedOCR ? '(Multiple engines, preprocessing)' : '(Basic OCR)'}
+            </label>
+          </div>
+          {useEnhancedOCR && (
+            <p className="text-xs text-muted-foreground">
+              Enhanced mode includes image preprocessing, multiple OCR engines, and text cleanup for better accuracy.
+            </p>
+          )}
+        </div>
+
         {/* Language Selection */}
         <div className="space-y-2">
           <label className="text-sm font-medium">Language</label>
@@ -114,7 +139,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="space-y-2">
             <p className="text-sm font-medium">Upload image or PDF for text extraction</p>
             <p className="text-xs text-muted-foreground">
-              Supports: JPG, PNG, GIF, BMP, TIFF, PDF (Max 1MB)
+              Supports: JPG, PNG, GIF, BMP, TIFF, PDF (Max 10MB)
             </p>
           </div>
           
@@ -130,7 +155,9 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
               <div className="text-center space-y-2">
                 <div className="h-4 w-4 mx-auto animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <p className="text-xs text-muted-foreground">Processing...</p>
+                <p className="text-xs text-muted-foreground">
+                  {useEnhancedOCR ? 'Enhanced processing...' : 'Processing...'}
+                </p>
               </div>
             </div>
           )}
@@ -141,7 +168,9 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span>Extracting text from image...</span>
+              <span>
+                {useEnhancedOCR ? 'Extracting text with enhanced OCR...' : 'Extracting text from image...'}
+              </span>
             </div>
             <Progress value={progress} className="w-full" />
           </div>
@@ -177,6 +206,12 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
                     <span>{result.text.length} characters</span>
                   </>
                 )}
+                {result.confidence && (
+                  <>
+                    <span>•</span>
+                    <span>{result.confidence} confidence</span>
+                  </>
+                )}
               </div>
             )}
 
@@ -201,17 +236,23 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           </div>
         )}
 
-        {/* Usage Tips */}
+        {/* Enhanced OCR Tips */}
         <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <div className="flex items-start gap-2">
             <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-blue-700 dark:text-blue-300">
-              <p className="font-medium mb-1">OCR Tips:</p>
+              <p className="font-medium mb-1">{useEnhancedOCR ? 'Enhanced OCR Tips:' : 'OCR Tips:'}</p>
               <ul className="space-y-1">
                 <li>• Use high-quality, clear images for better accuracy</li>
                 <li>• Ensure text is horizontal and not rotated</li>
-                <li>• PDF files will be processed page by page</li>
+                <li>• PDF files will be processed for direct text extraction first</li>
                 <li>• Select the correct language for optimal results</li>
+                {useEnhancedOCR && (
+                  <>
+                    <li>• Enhanced mode applies automatic image preprocessing</li>
+                    <li>• Multiple OCR engines are used for better reliability</li>
+                  </>
+                )}
               </ul>
             </div>
           </div>
