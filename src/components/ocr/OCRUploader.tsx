@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -241,18 +240,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="flex items-start gap-2">
             <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-blue-700 dark:text-blue-300">
-              <p className="font-medium mb-1">{useEnhancedOCR ? 'Enhanced OCR Tips:' : 'OCR Tips:'}</p>
+              <p className="font-medium mb-1">Enhanced OCR Tips:</p>
               <ul className="space-y-1">
                 <li>• Use high-quality, clear images for better accuracy</li>
                 <li>• Ensure text is horizontal and not rotated</li>
                 <li>• PDF files will be processed for direct text extraction first</li>
                 <li>• Select the correct language for optimal results</li>
-                {useEnhancedOCR && (
-                  <>
-                    <li>• Enhanced mode applies automatic image preprocessing</li>
-                    <li>• Multiple OCR engines are used for better reliability</li>
-                  </>
-                )}
+                <li>• Enhanced mode applies automatic image preprocessing</li>
+                <li>• Multiple OCR engines are used for better reliability</li>
               </ul>
             </div>
           </div>
