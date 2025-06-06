@@ -441,7 +441,6 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
               <OCRUploader 
                 onTextExtracted={handleOCRTextExtracted}
                 className="bg-transparent border-0 p-0"
-                showUploadArea={false}
               />
             </div>
             
