@@ -111,14 +111,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       <CardContent className="space-y-4 pt-6">
         {/* Language Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-white">Language for OCR</label>
+          <label className="text-sm font-medium text-foreground">Language for OCR</label>
           <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-            <SelectTrigger className="w-full bg-[#1c1c1c] border-[#333] text-white">
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select language" />
             </SelectTrigger>
-            <SelectContent className="bg-[#1c1c1c] border-[#333]">
+            <SelectContent>
               {languages.map((lang) => (
-                <SelectItem key={lang.code} value={lang.code} className="text-white hover:bg-[#2a2a2a]">
+                <SelectItem key={lang.code} value={lang.code}>
                   {lang.name}
                 </SelectItem>
               ))}
@@ -127,12 +127,12 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         </div>
 
         {/* File Upload Area */}
-        <div className="border-2 border-dashed border-[#333] rounded-lg p-8 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
-          <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors bg-muted/20 relative">
+          <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <div className="space-y-2">
-            <p className="text-sm font-medium text-white">Upload image or PDF for text extraction</p>
-            <p className="text-xs text-gray-400">
-              Supports: {supportedTypes.map(t => t.extension.toUpperCase()).join(', ')} (Max 1MB)
+            <p className="text-sm font-medium text-foreground">Upload image or PDF for text extraction</p>
+            <p className="text-xs text-muted-foreground">
+              Supports: {supportedTypes.map(t => t.extension.toUpperCase()).join(', ')} (Max 5MB)
             </p>
           </div>
           
@@ -145,10 +145,10 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           />
           
           {isProcessing && (
-            <div className="absolute inset-0 bg-[#0f0f0f]/80 flex items-center justify-center rounded-lg">
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
               <div className="text-center space-y-2">
-                <RefreshCw className="h-6 w-6 mx-auto animate-spin text-blue-400" />
-                <p className="text-sm text-white">Extracting text...</p>
+                <RefreshCw className="h-6 w-6 mx-auto animate-spin text-primary" />
+                <p className="text-sm text-foreground">Extracting text...</p>
               </div>
             </div>
           )}
@@ -157,11 +157,11 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         {/* Processing Progress */}
         {isProcessing && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-white">
-              <RefreshCw className="h-4 w-4 animate-spin text-blue-400" />
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin text-primary" />
               <span>Processing document with OCR...</span>
             </div>
-            <Progress value={progress} className="w-full bg-[#2a2a2a]" />
+            <Progress value={progress} className="w-full" />
           </div>
         )}
 
@@ -169,16 +169,16 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         {result && (
           <div className={`p-4 rounded-lg border ${
             result.success 
-              ? 'bg-green-900/20 border-green-500/30' 
-              : 'bg-red-900/20 border-red-500/30'
+              ? 'bg-green-500/10 border-green-500/30' 
+              : 'bg-destructive/10 border-destructive/30'
           }`}>
             <div className="flex items-center gap-2 mb-2">
               {result.success ? (
-                <CheckCircle className="h-5 w-5 text-green-400" />
+                <CheckCircle className="h-5 w-5 text-green-500" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-red-400" />
+                <AlertCircle className="h-5 w-5 text-destructive" />
               )}
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-foreground">
                 {result.success ? 'Text Extracted Successfully' : 'Extraction Failed'}
               </span>
               {result.success && (
@@ -186,7 +186,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
                   onClick={resetUploader}
                   size="sm"
                   variant="ghost"
-                  className="ml-auto text-xs text-gray-400 hover:text-white"
+                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
                 >
                   Upload Another
                 </Button>
@@ -194,7 +194,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             </div>
             
             {result.success && result.fileInfo && (
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 {getFileIcon(result.fileInfo.name)}
                 <span>{result.fileInfo.name}</span>
                 <span>•</span>
@@ -202,25 +202,25 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
                 {result.text && (
                   <>
                     <span>•</span>
-                    <span className="text-green-400">{result.text.length} characters extracted</span>
+                    <span className="text-green-500">{result.text.length} characters extracted</span>
                   </>
                 )}
               </div>
             )}
 
             {result.error && (
-              <p className="text-sm text-red-400 mb-2">
+              <p className="text-sm text-destructive mb-2">
                 {result.error}
               </p>
             )}
 
             {result.success && result.text && (
-              <div className="mt-3 max-h-40 overflow-y-auto p-3 bg-[#1c1c1c] rounded border border-[#333] text-sm font-mono text-gray-300">
+              <div className="mt-3 max-h-40 overflow-y-auto p-3 bg-muted rounded border text-sm font-mono text-muted-foreground">
                 {result.text.split('\n').slice(0, 10).map((line, index) => (
                   <div key={index} className="mb-1">{line || ' '}</div>
                 ))}
                 {result.text.split('\n').length > 10 && (
-                  <div className="text-gray-500 italic mt-2">
+                  <div className="text-muted-foreground italic mt-2">
                     ... and {result.text.split('\n').length - 10} more lines
                   </div>
                 )}
@@ -230,10 +230,10 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         )}
 
         {/* Usage Tips */}
-        <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+        <div className="p-3 bg-primary/10 rounded-lg border border-primary/30">
           <div className="flex items-start gap-2">
-            <FileText className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-blue-300">
+            <FileText className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-primary/80">
               <p className="font-medium mb-1">OCR Tips for Best Results:</p>
               <ul className="space-y-1">
                 <li>• Use high-quality, clear images with good contrast</li>

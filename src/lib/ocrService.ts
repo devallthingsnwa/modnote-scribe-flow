@@ -33,10 +33,10 @@ export class OCRService {
         throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`);
       }
 
-      // Check file size (OCR.space has a 1MB limit for free tier)
-      const maxSize = 1024 * 1024; // 1MB
+      // Check file size (5MB limit for OCR.space)
+      const maxSize = 5 * 1024 * 1024; // 5MB
       if (file.size > maxSize) {
-        throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB, your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        throw new Error(`File too large. Maximum size is 5MB, your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
       }
 
       if (file.size === 0) {
@@ -57,7 +57,7 @@ export class OCRService {
 
       if (error) {
         console.error('Edge function error:', error);
-        throw new Error(`OCR service error: ${error.message}`);
+        throw new Error(`OCR service error: ${error.message || 'Unknown error'}`);
       }
 
       console.log('OCR edge function response:', data);

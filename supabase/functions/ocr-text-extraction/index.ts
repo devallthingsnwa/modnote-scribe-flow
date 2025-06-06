@@ -13,9 +13,25 @@ serve(async (req) => {
   }
 
   try {
+    // Get OCR API key from environment
     const ocrApiKey = Deno.env.get('OCR_API_KEY');
+    console.log('Environment variables check:', {
+      hasOcrKey: !!ocrApiKey,
+      keyLength: ocrApiKey ? ocrApiKey.length : 0
+    });
+
     if (!ocrApiKey) {
-      throw new Error('OCR API key not configured');
+      console.error('OCR_API_KEY environment variable not found');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'OCR API key not configured. Please contact administrator.'
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     console.log('Processing OCR request...');
@@ -25,7 +41,17 @@ serve(async (req) => {
     const language = formData.get('language') as string || 'eng';
 
     if (!file) {
-      throw new Error('No file provided');
+      console.error('No file provided in request');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No file provided'
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     console.log(`Processing OCR for file: ${file.name}, type: ${file.type}, size: ${file.size}`);
@@ -42,7 +68,33 @@ serve(async (req) => {
     ];
 
     if (!supportedTypes.includes(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}`);
+      console.error(`Unsupported file type: ${file.type}`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Check file size (5MB limit for OCR.space free tier)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      console.error(`File too large: ${file.size} bytes`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `File too large. Maximum size is 5MB, your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Convert file to base64
@@ -62,7 +114,11 @@ serve(async (req) => {
     ocrFormData.append('OCREngine', '2');
     ocrFormData.append('filetype', file.type === 'application/pdf' ? 'PDF' : 'Auto');
 
-    console.log('Calling OCR.space API...');
+    console.log('Calling OCR.space API with parameters:', {
+      language,
+      fileType: file.type === 'application/pdf' ? 'PDF' : 'Auto',
+      ocrEngine: '2'
+    });
 
     // Call OCR.space API
     const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
@@ -73,8 +129,21 @@ serve(async (req) => {
       body: ocrFormData,
     });
 
+    console.log(`OCR API response status: ${ocrResponse.status} ${ocrResponse.statusText}`);
+
     if (!ocrResponse.ok) {
-      throw new Error(`OCR API HTTP error: ${ocrResponse.status} ${ocrResponse.statusText}`);
+      const errorText = await ocrResponse.text();
+      console.error(`OCR API HTTP error: ${ocrResponse.status} ${ocrResponse.statusText}`, errorText);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `OCR API error: ${ocrResponse.status} ${ocrResponse.statusText}`
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const ocrResult = await ocrResponse.json();
@@ -82,7 +151,17 @@ serve(async (req) => {
 
     if (ocrResult.IsErroredOnProcessing) {
       const errorMessage = ocrResult.ErrorMessage || ocrResult.ParsedResults?.[0]?.ErrorMessage || 'Processing failed';
-      throw new Error(`OCR processing error: ${errorMessage}`);
+      console.error(`OCR processing error: ${errorMessage}`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `OCR processing error: ${errorMessage}`
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Extract text from OCR result
@@ -102,9 +181,29 @@ serve(async (req) => {
         .join(', ');
       
       if (errorMessages) {
-        throw new Error(`OCR extraction failed: ${errorMessages}`);
+        console.error(`OCR extraction failed: ${errorMessages}`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `OCR extraction failed: ${errorMessages}`
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       } else {
-        throw new Error('No text could be extracted from the file. The image may be too blurry, have poor contrast, or contain no readable text.');
+        console.warn('No text extracted from file');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'No text could be extracted from the file. The image may be too blurry, have poor contrast, or contain no readable text.'
+          }),
+          {
+            status: 422,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
     }
 
