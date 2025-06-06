@@ -152,12 +152,14 @@ export class OCRService {
     console.log('Calling OCR edge function with language:', language);
 
     // Call the edge function with timeout
-    const { data, error } = await Promise.race([
+    const response = await Promise.race([
       supabase.functions.invoke('ocr-text-extraction', {
         body: formData,
       }),
-      this.timeoutPromise(30000) // 30 second timeout
+      this.timeoutPromise<any>(30000) // 30 second timeout
     ]);
+
+    const { data, error } = response;
 
     if (error) {
       console.error('Edge function error:', error);

@@ -21,6 +21,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [retryCount, setRetryCount] = useState(0);
   const [currentAttempt, setCurrentAttempt] = useState(0);
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
+  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
@@ -46,10 +47,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     }
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const processFile = async (file: File) => {
     console.log('File selected:', {
       name: file.name,
       type: file.type,
@@ -61,6 +59,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setResult(null);
     setRetryCount(0);
     setCurrentAttempt(0);
+    setLastUploadedFile(file);
 
     try {
       setProgress(20);
@@ -122,20 +121,36 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     } finally {
       setIsProcessing(false);
       setCurrentAttempt(0);
-      // Reset file input
-      event.target.value = '';
     }
   };
 
-  const handleRetryManually = async () => {
-    if (!result?.fileInfo) return;
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await processFile(file);
     
-    // Create a new file input click to retry with the same file
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = supportedTypes.map(t => `.${t.extension},${t.type}`).join(',');
-    input.onchange = handleFileSelect;
-    input.click();
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const handleRetryManually = async () => {
+    if (lastUploadedFile) {
+      await processFile(lastUploadedFile);
+    } else {
+      // Create a new file input click to retry with a new file
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = supportedTypes.map(t => `.${t.extension},${t.type}`).join(',');
+      input.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (file) {
+          await processFile(file);
+        }
+      });
+      input.click();
+    }
   };
 
   const getFileIcon = (fileName: string) => {
@@ -162,6 +177,21 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setIsProcessing(false);
     setRetryCount(0);
     setCurrentAttempt(0);
+    setLastUploadedFile(null);
+  };
+
+  const testWithDifferentFile = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = supportedTypes.map(t => `.${t.extension},${t.type}`).join(',');
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        await processFile(file);
+      }
+    });
+    input.click();
   };
 
   return (
@@ -289,15 +319,26 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
               </span>
               <div className="ml-auto flex gap-2">
                 {!result.success && (
-                  <Button
-                    onClick={handleRetryManually}
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry
-                  </Button>
+                  <>
+                    <Button
+                      onClick={handleRetryManually}
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Retry Same File
+                    </Button>
+                    <Button
+                      onClick={testWithDifferentFile}
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      Try Different File
+                    </Button>
+                  </>
                 )}
                 {result.success && (
                   <Button
@@ -337,9 +378,11 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
                     <p className="font-medium mb-1">Troubleshooting suggestions:</p>
                     <ul className="list-disc list-inside space-y-1">
                       <li>Check if the image is clear and high-quality</li>
-                      <li>Ensure the file format is supported</li>
+                      <li>Ensure the file format is supported (JPG, PNG, PDF, etc.)</li>
+                      <li>Verify file size is under 5MB</li>
                       <li>Try a different file to test the service</li>
-                      <li>Wait a few minutes and try again</li>
+                      <li>Check service status and wait a few minutes before retrying</li>
+                      <li>Ensure good contrast between text and background</li>
                     </ul>
                   </div>
                 )}
