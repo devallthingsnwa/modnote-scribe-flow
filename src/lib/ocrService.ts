@@ -60,7 +60,7 @@ export class OCRService {
         throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
       }
 
-      let processedFile = file;
+      let processedFile: File | Blob = file;
 
       // Handle PDF files separately
       if (file.type === 'application/pdf') {
@@ -106,7 +106,12 @@ export class OCRService {
         };
         
         try {
-          processedFile = await ImagePreprocessor.preprocessImage(file, preprocessingOptions);
+          const preprocessedBlob = await ImagePreprocessor.preprocessImage(file, preprocessingOptions);
+          // Convert Blob to File to maintain file properties
+          processedFile = new File([preprocessedBlob], file.name, {
+            type: preprocessedBlob.type,
+            lastModified: file.lastModified
+          });
           console.log('Image preprocessing completed');
         } catch (preprocessError) {
           console.warn('Image preprocessing failed, using original file:', preprocessError);
@@ -120,13 +125,13 @@ export class OCRService {
       if (options.useMultipleEngines !== false) {
         console.log('Using multi-engine OCR approach');
         result = await MultiEngineOCR.processWithMultipleEngines(
-          processedFile,
+          processedFile as File,
           options.language || 'eng',
           options.maxAttempts || 2
         );
       } else {
         console.log('Using single OCR engine');
-        result = await this.extractWithSingleEngine(processedFile, options.language || 'eng');
+        result = await this.extractWithSingleEngine(processedFile as File, options.language || 'eng');
       }
 
       if (!result.success || !result.text) {

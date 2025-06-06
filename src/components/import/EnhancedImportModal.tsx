@@ -1,10 +1,11 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic, Video, Link, File } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, FileText, Upload, Mic, Video, Link, File, FileImage } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
 import { SimplifiedPreviewSection } from "./SimplifiedPreviewSection";
@@ -22,7 +23,7 @@ interface EnhancedImportModalProps {
   }) => void;
 }
 
-type ContentType = "youtube" | "url" | "file" | "audio" | "text";
+type ContentType = "youtube" | "url" | "file" | "audio" | "text" | "ocr";
 
 export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImportModalProps) {
   const [activeTab, setActiveTab] = useState<ContentType>("youtube");
@@ -57,8 +58,21 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     { id: "url" as ContentType, label: "URL", icon: Link },
     { id: "file" as ContentType, label: "File", icon: File },
     { id: "audio" as ContentType, label: "Audio", icon: Mic },
+    { id: "ocr" as ContentType, label: "OCR", icon: FileImage },
     { id: "text" as ContentType, label: "Text", icon: FileText },
   ];
+
+  const handleOCRTextExtracted = (text: string, fileName: string) => {
+    setMetadata({
+      title: fileName.replace(/\.[^/.]+$/, ""), // Remove file extension
+      author: "OCR Extraction",
+      description: `Text extracted from ${fileName} using enhanced OCR`
+    });
+    setTranscript(text);
+    setStatus("✅ Text extracted successfully with OCR!");
+    setProgress(100);
+    setIsProcessing(false);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -222,6 +236,8 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       noteContent = `# 🎥 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Video Transcript\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Transcript unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Transcript'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else if (activeTab === 'audio') {
       noteContent = `# 🎤 ${metadata.title}\n\n**Type:** Voice Recording\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+    } else if (activeTab === 'ocr') {
+      noteContent = `# 📄 ${metadata.title}\n\n**Type:** OCR Text Extraction\n**Imported:** ${new Date().toLocaleString()}\n**Description:** ${metadata.description}\n---\n\n## 📝 Extracted Text\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else if (activeTab === 'file') {
       noteContent = `# 📄 ${metadata.title}\n\n**Type:** File Upload\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Content\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else {
@@ -233,7 +249,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       content: noteContent,
       source_url: (activeTab === 'youtube' || activeTab === 'url') ? url : undefined,
       thumbnail: metadata.thumbnail,
-      is_transcription: (activeTab === 'youtube' && !hasWarning) || activeTab === 'audio'
+      is_transcription: (activeTab === 'youtube' && !hasWarning) || activeTab === 'audio' || activeTab === 'ocr'
     });
 
     handleClose();
@@ -363,6 +379,22 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           </div>
         );
 
+      case "ocr":
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold text-white mb-2">Enhanced OCR Text Extraction</h3>
+              <p className="text-sm text-gray-300">
+                Extract text from images and PDFs with advanced preprocessing and multiple OCR engines
+              </p>
+            </div>
+            <OCRUploader 
+              onTextExtracted={handleOCRTextExtracted}
+              className="bg-[#1a1a1a] border-[#2a2a2a]"
+            />
+          </div>
+        );
+
       case "text":
         return (
           <div className="space-y-6">
@@ -393,14 +425,14 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
         <div className="space-y-6">
           {/* Tabs */}
-          <div className="flex space-x-1 bg-[#1a1a1a] p-1 rounded-lg border border-[#2a2a2a]">
+          <div className="flex space-x-1 bg-[#1a1a1a] p-1 rounded-lg border border-[#2a2a2a] overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 ${
                     activeTab === tab.id
                       ? 'bg-[#2a2a2a] text-white shadow-sm border border-[#444]'
                       : 'text-white hover:text-white hover:bg-[#1f1f1f]'
@@ -419,7 +451,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           </div>
 
           {/* Processing Status */}
-          {isProcessing && (
+          {isProcessing && activeTab !== 'ocr' && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-white">
                 <Clock className="h-4 w-4 animate-spin" />
@@ -430,7 +462,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           )}
 
           {/* Success Status */}
-          {!isProcessing && transcript && (
+          {!isProcessing && transcript && activeTab !== 'ocr' && (
             <div className={`flex items-center gap-2 text-sm ${hasWarning ? 'text-orange-400' : 'text-green-400'}`}>
               {hasWarning ? (
                 <AlertCircle className="h-4 w-4" />
@@ -442,7 +474,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           )}
 
           {/* Content Preview */}
-          {metadata && transcript && (
+          {metadata && transcript && activeTab !== 'ocr' && (
             <SimplifiedPreviewSection
               metadata={metadata}
               transcript={transcript}

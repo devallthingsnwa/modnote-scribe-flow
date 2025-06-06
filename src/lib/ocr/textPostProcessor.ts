@@ -1,4 +1,3 @@
-
 export interface PostProcessingOptions {
   removeExtraSpaces?: boolean;
   standardizeFormat?: boolean;
@@ -48,7 +47,7 @@ export class TextPostProcessor {
   }
 
   private static fixCommonOCRErrors(text: string): string {
-    const corrections = [
+    const corrections: Array<[RegExp, string]> = [
       // Common character misrecognitions
       [/\b0(?=\w)/g, 'O'],  // 0 -> O at word boundaries
       [/\bl(?=\d)/g, '1'],  // l -> 1 before digits
