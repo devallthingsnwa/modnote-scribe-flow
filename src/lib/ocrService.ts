@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
@@ -96,8 +95,13 @@ export class OCRService {
         
         if (!extractedText.trim()) {
           console.log('PDF text extraction returned empty, falling back to OCR');
-          // If PDF text extraction fails, convert to image and use OCR
-          extractedText = await this.processPDFWithOCR(file, options);
+          // If PDF text extraction fails, use OCR service directly
+          const ocrResult = await this.extractTextBasic(file, options.language);
+          if (ocrResult.success && ocrResult.text) {
+            extractedText = ocrResult.text;
+          } else {
+            throw new Error('Both PDF text extraction and OCR failed');
+          }
         }
       } else {
         // Handle image files

@@ -7,8 +7,21 @@ export class PDFTextExtractor {
       // Import PDF.js dynamically
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Set worker source
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      // Try to set worker source with fallback options
+      try {
+        // First try the standard CDN
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      } catch (error) {
+        console.warn('Failed to set primary worker source, trying fallback');
+        try {
+          // Fallback to unpkg CDN
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+        } catch (fallbackError) {
+          console.warn('Failed to set fallback worker source, using local worker');
+          // Use local worker as last resort
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+        }
+      }
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -35,7 +48,9 @@ export class PDFTextExtractor {
       return fullText.trim();
     } catch (error) {
       console.error('PDF text extraction failed:', error);
-      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Instead of throwing an error, return empty string to trigger OCR fallback
+      console.log('PDF text extraction failed, will fall back to OCR processing');
+      return '';
     }
   }
   
