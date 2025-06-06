@@ -1,9 +1,9 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { TranscriptionService } from "@/lib/transcriptionService";
-import { PDFTextExtractor } from "@/lib/ocr/pdfTextExtractor";
 import { SimplifiedPreviewSection } from "./SimplifiedPreviewSection";
 import { ImportTabs, ContentType } from "./ImportTabs";
 import { YouTubeTab } from "./YouTubeTab";
@@ -96,30 +96,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
       const fileExtension = fileName.split('.').pop()?.toLowerCase();
 
       // Handle different file types
-      if (fileExtension === 'pdf') {
-        setStatus("Extracting text from PDF...");
-        setProgress(50);
-        extractedContent = await PDFTextExtractor.extractTextFromPDF(file);
-        
-        if (!extractedContent.trim()) {
-          throw new Error('PDF contains no extractable text. Try using an image of the PDF with OCR instead.');
-        }
-        
-        setMetadata({
-          title: fileName,
-          author: "PDF Document",
-          description: `Text extracted from ${fileName} with original formatting preserved`
-        });
-        setTranscript(extractedContent);
-        setExtractedText(extractedContent); // Store raw text with original formatting
-        setStatus("✅ PDF text extracted successfully with original formatting!");
-        setProgress(100);
-        
-        toast({
-          title: "✅ PDF Text Extracted",
-          description: `Extracted ${extractedContent.length} characters from ${fileName} with original formatting preserved`,
-        });
-      } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+      if (fileExtension === 'docx' || fileExtension === 'doc') {
         setStatus("Extracting text from Word document...");
         setProgress(50);
         extractedContent = await extractWordText(file);
@@ -127,16 +104,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setMetadata({
           title: fileName,
           author: "Word Document",
-          description: `Text extracted from ${fileName} with original formatting`
+          description: `Text extracted from ${fileName}`
         });
         setTranscript(extractedContent);
-        setExtractedText(extractedContent); // Store raw text with original formatting
-        setStatus("✅ Word document text extracted successfully with original formatting!");
+        setExtractedText(extractedContent);
+        setStatus("✅ Word document text extracted successfully!");
         setProgress(100);
         
         toast({
           title: "✅ Word Document Processed",
-          description: `Extracted ${extractedContent.length} characters from ${fileName} with original formatting`,
+          description: `Extracted ${extractedContent.length} characters from ${fileName}`,
         });
       } else if (fileExtension === 'txt') {
         setStatus("Reading text file...");
@@ -146,16 +123,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setMetadata({
           title: fileName,
           author: "Text File",
-          description: `Content from ${fileName} with original formatting`
+          description: `Content from ${fileName}`
         });
         setTranscript(extractedContent);
-        setExtractedText(extractedContent); // Store raw text with original formatting
-        setStatus("✅ Text file loaded successfully with original formatting!");
+        setExtractedText(extractedContent);
+        setStatus("✅ Text file loaded successfully!");
         setProgress(100);
         
         toast({
           title: "✅ Text File Loaded",
-          description: `Loaded ${extractedContent.length} characters from ${fileName} with original formatting`,
+          description: `Loaded ${extractedContent.length} characters from ${fileName}`,
         });
       } else {
         // For other file types, just create a placeholder
@@ -330,7 +307,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     } else if (activeTab === 'audio') {
       noteContent = `# 🎤 ${metadata.title}\n\n**Type:** Voice Recording\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 Transcript\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else if (activeTab === 'file') {
-      noteContent = `# 📄 ${metadata.title}\n\n**Type:** ${metadata.author === 'OCR Extraction' ? 'OCR Text Extraction' : metadata.author === 'Word Document' ? 'Word Document' : metadata.author === 'PDF Document' ? 'PDF Document' : 'File Upload'}\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 ${metadata.author === 'OCR Extraction' ? 'Extracted Text' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
+      noteContent = `# 📄 ${metadata.title}\n\n**Type:** ${metadata.author === 'OCR Extraction' ? 'OCR Text Extraction' : metadata.author === 'Word Document' ? 'Word Document' : 'File Upload'}\n**Imported:** ${new Date().toLocaleString()}\n---\n\n## 📝 ${metadata.author === 'OCR Extraction' ? 'Extracted Text' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     } else {
       noteContent = `# 📄 ${metadata.title}\n\n**Source:** ${url}\n**Type:** Content\n**Imported:** ${new Date().toLocaleString()}\n${hasWarning ? '**Status:** ⚠️ Content unavailable - manual notes only\n' : ''}\n---\n\n## 📝 ${hasWarning ? 'Notes' : 'Content'}\n\n${transcript}\n\n---\n\n## 📝 My Notes\n\nAdd your personal notes and thoughts here...`;
     }
