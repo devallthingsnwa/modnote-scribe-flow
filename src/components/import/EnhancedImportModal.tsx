@@ -453,7 +453,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             <div className="border-t border-[#333] pt-4">
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="h-5 w-5 text-green-400" />
-                <h3 className="text-sm font-medium text-white">Photo & Image OCR</h3>
+                <h3 className="text-sm font-medium text-white">File and Image</h3>
               </div>
               {/* OCR File Upload Component for Photos */}
               <OCRUploader 
