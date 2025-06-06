@@ -422,40 +422,34 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <File className="h-5 w-5 text-blue-400" />
-                <h3 className="text-sm font-medium text-white">Document and Txt file</h3>
+                <h3 className="text-sm font-medium text-white">File Upload & OCR</h3>
               </div>
               
-              <div className="flex gap-4">
-                {/* Copy to Clipboard Button - Left Side */}
-                {extractedText && (
-                  <div className="flex-shrink-0">
-                    <Button
-                      onClick={copyToClipboard}
-                      className="bg-blue-600 hover:bg-blue-700 text-white h-20 px-4"
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Text to Clipboard
-                    </Button>
-                  </div>
-                )}
-                
-                {/* Documents Upload - Smaller Square Shape */}
-                <div className="flex-1 max-w-xs">
-                  <div className="border-2 border-dashed border-[#333] rounded-lg aspect-square flex flex-col items-center justify-center hover:border-[#444] transition-colors bg-[#151515]/50 relative h-32">
-                    <Upload className="h-6 w-6 text-gray-500 mb-2" />
-                    <div className="space-y-1 text-center px-2">
-                      <p className="text-xs text-white">Upload Document and Txt file</p>
-                      <p className="text-xs text-gray-400">DOCX, DOC, TXT</p>
-                    </div>
-                    <input
-                      type="file"
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      accept=".docx,.doc,.txt"
-                    />
-                  </div>
+              {/* Documents Upload */}
+              <div className="border-2 border-dashed border-[#333] rounded-lg p-6 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
+                <Upload className="mx-auto h-8 w-8 text-gray-500 mb-3" />
+                <div className="space-y-2">
+                  <p className="text-sm text-white">Upload documents or images</p>
+                  <p className="text-xs text-gray-400">Documents: DOCX, DOC, TXT • Images: JPG, PNG, PDF for OCR</p>
                 </div>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept=".docx,.doc,.txt,.jpg,.jpeg,.png,.pdf"
+                />
               </div>
+              
+              {/* Copy to Clipboard Button */}
+              {extractedText && (
+                <Button
+                  onClick={copyToClipboard}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Text to Clipboard
+                </Button>
+              )}
               
               {/* OCR Component for additional processing */}
               <OCRUploader 
