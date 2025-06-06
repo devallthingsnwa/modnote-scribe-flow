@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, RefreshCw, AlertTriangle, Info, TestTube } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -18,10 +18,33 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<OCRResult | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentAttempt, setCurrentAttempt] = useState(0);
+  const [serviceStatus, setServiceStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
   const supportedTypes = OCRService.getSupportedFileTypes();
+  const qualityTips = OCRService.getImageQualityTips();
+
+  const checkServiceStatus = async () => {
+    setServiceStatus('unknown');
+    const status = await OCRService.testOCRService();
+    setServiceStatus(status.available ? 'available' : 'unavailable');
+    
+    if (!status.available) {
+      toast({
+        title: "⚠️ OCR Service Status",
+        description: `Service appears to be unavailable: ${status.error}`,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "✅ OCR Service Status",
+        description: "Service is available and responding",
+      });
+    }
+  };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -36,23 +59,43 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setIsProcessing(true);
     setProgress(10);
     setResult(null);
+    setRetryCount(0);
+    setCurrentAttempt(0);
 
     try {
-      setProgress(30);
+      setProgress(20);
       
-      console.log('Starting OCR extraction...');
-      const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage);
-      setProgress(90);
+      console.log('Starting OCR extraction with retry mechanism...');
+      
+      const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage, {
+        maxRetries: 3,
+        retryDelay: 2000,
+        onRetry: (attempt, error) => {
+          setCurrentAttempt(attempt);
+          setRetryCount(attempt);
+          setProgress(30 + (attempt * 20));
+          
+          toast({
+            title: `🔄 Retry Attempt ${attempt}`,
+            description: `Previous attempt failed: ${error}. Retrying...`,
+          });
+        }
+      });
 
+      setProgress(90);
       console.log('OCR result:', ocrResult);
 
       if (ocrResult.success && ocrResult.text) {
         setResult(ocrResult);
         onTextExtracted(ocrResult.text, file.name);
         
+        const attemptText = ocrResult.retryAttempt && ocrResult.retryAttempt > 1 
+          ? ` (succeeded on attempt ${ocrResult.retryAttempt})` 
+          : '';
+        
         toast({
           title: "✅ Text Extracted Successfully!",
-          description: `Extracted ${ocrResult.text.length} characters from ${file.name}`
+          description: `Extracted ${ocrResult.text.length} characters from ${file.name}${attemptText}`
         });
       } else {
         throw new Error(ocrResult.error || 'Failed to extract text');
@@ -67,7 +110,8 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       
       setResult({
         success: false,
-        error: errorMessage
+        error: errorMessage,
+        retryAttempt: retryCount
       });
 
       toast({
@@ -77,10 +121,21 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       });
     } finally {
       setIsProcessing(false);
-      setProgress(0);
+      setCurrentAttempt(0);
       // Reset file input
       event.target.value = '';
     }
+  };
+
+  const handleRetryManually = async () => {
+    if (!result?.fileInfo) return;
+    
+    // Create a new file input click to retry with the same file
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = supportedTypes.map(t => `.${t.extension},${t.type}`).join(',');
+    input.onchange = handleFileSelect;
+    input.click();
   };
 
   const getFileIcon = (fileName: string) => {
@@ -94,6 +149,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       case 'gif':
       case 'bmp':
       case 'tiff':
+      case 'webp':
         return <Image className="h-5 w-5 text-blue-500" />;
       default:
         return <FileText className="h-5 w-5 text-gray-500" />;
@@ -104,11 +160,49 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setResult(null);
     setProgress(0);
     setIsProcessing(false);
+    setRetryCount(0);
+    setCurrentAttempt(0);
   };
 
   return (
     <Card className={className}>
       <CardContent className="space-y-4 pt-6">
+        {/* Service Status Check */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-foreground">OCR Service Status</label>
+            <div className="flex items-center gap-2">
+              {serviceStatus === 'available' && (
+                <>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-green-600">Service Available</span>
+                </>
+              )}
+              {serviceStatus === 'unavailable' && (
+                <>
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-sm text-red-600">Service Unavailable</span>
+                </>
+              )}
+              {serviceStatus === 'unknown' && (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm text-yellow-600">Status Unknown</span>
+                </>
+              )}
+            </div>
+          </div>
+          <Button 
+            onClick={checkServiceStatus} 
+            size="sm" 
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <TestTube className="h-4 w-4" />
+            Test Service
+          </Button>
+        </div>
+
         {/* Language Selection */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">Language for OCR</label>
@@ -148,7 +242,9 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
               <div className="text-center space-y-2">
                 <RefreshCw className="h-6 w-6 mx-auto animate-spin text-primary" />
-                <p className="text-sm text-foreground">Extracting text...</p>
+                <p className="text-sm text-foreground">
+                  {currentAttempt > 0 ? `Retry attempt ${currentAttempt}...` : 'Extracting text...'}
+                </p>
               </div>
             </div>
           )}
@@ -159,7 +255,12 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-foreground">
               <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-              <span>Processing document with OCR...</span>
+              <span>
+                {currentAttempt > 0 
+                  ? `Processing document with OCR... (Retry ${currentAttempt}/3)` 
+                  : 'Processing document with OCR...'
+                }
+              </span>
             </div>
             <Progress value={progress} className="w-full" />
           </div>
@@ -180,17 +281,35 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
               )}
               <span className="text-sm font-medium text-foreground">
                 {result.success ? 'Text Extracted Successfully' : 'Extraction Failed'}
+                {result.retryAttempt && result.retryAttempt > 1 && (
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (After {result.retryAttempt} attempts)
+                  </span>
+                )}
               </span>
-              {result.success && (
-                <Button
-                  onClick={resetUploader}
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Upload Another
-                </Button>
-              )}
+              <div className="ml-auto flex gap-2">
+                {!result.success && (
+                  <Button
+                    onClick={handleRetryManually}
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Retry
+                  </Button>
+                )}
+                {result.success && (
+                  <Button
+                    onClick={resetUploader}
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Upload Another
+                  </Button>
+                )}
+              </div>
             </div>
             
             {result.success && result.fileInfo && (
@@ -209,9 +328,22 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             )}
 
             {result.error && (
-              <p className="text-sm text-destructive mb-2">
-                {result.error}
-              </p>
+              <div className="space-y-2">
+                <p className="text-sm text-destructive">
+                  {result.error}
+                </p>
+                {result.retryAttempt && result.retryAttempt >= 3 && (
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium mb-1">Troubleshooting suggestions:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Check if the image is clear and high-quality</li>
+                      <li>Ensure the file format is supported</li>
+                      <li>Try a different file to test the service</li>
+                      <li>Wait a few minutes and try again</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
 
             {result.success && result.text && (
@@ -229,18 +361,16 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           </div>
         )}
 
-        {/* Usage Tips */}
+        {/* Image Quality Tips */}
         <div className="p-3 bg-primary/10 rounded-lg border border-primary/30">
           <div className="flex items-start gap-2">
-            <FileText className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+            <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
             <div className="text-xs text-primary/80">
-              <p className="font-medium mb-1">OCR Tips for Best Results:</p>
+              <p className="font-medium mb-2">Tips for Best OCR Results:</p>
               <ul className="space-y-1">
-                <li>• Use high-quality, clear images with good contrast</li>
-                <li>• Ensure text is horizontal and not rotated</li>
-                <li>• PDF files will be processed page by page</li>
-                <li>• Select the correct language for optimal accuracy</li>
-                <li>• Avoid blurry or low-resolution images</li>
+                {qualityTips.slice(0, 6).map((tip, index) => (
+                  <li key={index}>• {tip}</li>
+                ))}
               </ul>
             </div>
           </div>

@@ -25,7 +25,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'OCR API key not configured. Please contact administrator.'
+          error: 'OCR API key not configured. Please add the OCR_API_KEY to your Supabase project secrets.'
         }),
         {
           status: 500,
@@ -39,9 +39,11 @@ serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const language = formData.get('language') as string || 'eng';
+    const attempt = formData.get('attempt') as string || '1';
 
+    // Health check - return early if no file (for service status checks)
     if (!file) {
-      console.error('No file provided in request');
+      console.log('No file provided - health check request');
       return new Response(
         JSON.stringify({
           success: false,
@@ -54,9 +56,9 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing OCR for file: ${file.name}, type: ${file.type}, size: ${file.size}`);
+    console.log(`Processing OCR for file: ${file.name}, type: ${file.type}, size: ${file.size}, attempt: ${attempt}`);
 
-    // Validate file type
+    // Enhanced file validation
     const supportedTypes = [
       'image/jpeg',
       'image/jpg', 
@@ -64,6 +66,7 @@ serve(async (req) => {
       'image/gif',
       'image/bmp',
       'image/tiff',
+      'image/webp',
       'application/pdf'
     ];
 
@@ -72,7 +75,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`
+          error: `Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, WEBP, PDF`
         }),
         {
           status: 400,
@@ -97,140 +100,224 @@ serve(async (req) => {
       );
     }
 
-    // Convert file to base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-    const base64String = `data:${file.type};base64,${base64}`;
-
-    console.log(`Converted file to base64, length: ${base64String.length}`);
-
-    // Prepare OCR.space API request
-    const ocrFormData = new FormData();
-    ocrFormData.append('base64Image', base64String);
-    ocrFormData.append('language', language);
-    ocrFormData.append('isOverlayRequired', 'false');
-    ocrFormData.append('detectOrientation', 'true');
-    ocrFormData.append('scale', 'true');
-    ocrFormData.append('OCREngine', '2');
-    ocrFormData.append('filetype', file.type === 'application/pdf' ? 'PDF' : 'Auto');
-
-    console.log('Calling OCR.space API with parameters:', {
-      language,
-      fileType: file.type === 'application/pdf' ? 'PDF' : 'Auto',
-      ocrEngine: '2'
-    });
-
-    // Call OCR.space API
-    const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      headers: {
-        'apikey': ocrApiKey,
-      },
-      body: ocrFormData,
-    });
-
-    console.log(`OCR API response status: ${ocrResponse.status} ${ocrResponse.statusText}`);
-
-    if (!ocrResponse.ok) {
-      const errorText = await ocrResponse.text();
-      console.error(`OCR API HTTP error: ${ocrResponse.status} ${ocrResponse.statusText}`, errorText);
+    // Check minimum file size
+    if (file.size < 100) {
+      console.error(`File too small: ${file.size} bytes`);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `OCR API error: ${ocrResponse.status} ${ocrResponse.statusText}`
+          error: 'File too small. Please ensure the file is not corrupted.'
         }),
         {
-          status: 500,
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
 
-    const ocrResult = await ocrResponse.json();
-    console.log('OCR API response:', JSON.stringify(ocrResult, null, 2));
+    try {
+      // Convert file to base64
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const base64String = `data:${file.type};base64,${base64}`;
 
-    if (ocrResult.IsErroredOnProcessing) {
-      const errorMessage = ocrResult.ErrorMessage || ocrResult.ParsedResults?.[0]?.ErrorMessage || 'Processing failed';
-      console.error(`OCR processing error: ${errorMessage}`);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `OCR processing error: ${errorMessage}`
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+      console.log(`Converted file to base64, length: ${base64String.length}`);
 
-    // Extract text from OCR result
-    let extractedText = '';
-    if (ocrResult.ParsedResults && ocrResult.ParsedResults.length > 0) {
-      extractedText = ocrResult.ParsedResults
-        .map((result: any) => result.ParsedText || '')
-        .filter((text: string) => text.trim())
-        .join('\n\n');
-    }
-
-    if (!extractedText.trim()) {
-      // Check if there were any error messages in the results
-      const errorMessages = ocrResult.ParsedResults
-        ?.map((result: any) => result.ErrorMessage)
-        .filter((msg: string) => msg)
-        .join(', ');
+      // Prepare OCR.space API request with enhanced parameters
+      const ocrFormData = new FormData();
+      ocrFormData.append('base64Image', base64String);
+      ocrFormData.append('language', language);
+      ocrFormData.append('isOverlayRequired', 'false');
+      ocrFormData.append('detectOrientation', 'true');
+      ocrFormData.append('scale', 'true');
+      ocrFormData.append('OCREngine', '2'); // Use Engine 2 for better accuracy
+      ocrFormData.append('filetype', file.type === 'application/pdf' ? 'PDF' : 'Auto');
       
-      if (errorMessages) {
-        console.error(`OCR extraction failed: ${errorMessages}`);
+      console.log('Calling OCR.space API with parameters:', {
+        language,
+        fileType: file.type === 'application/pdf' ? 'PDF' : 'Auto',
+        ocrEngine: '2',
+        attempt: attempt
+      });
+
+      // Call OCR.space API with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
+      const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        headers: {
+          'apikey': ocrApiKey,
+        },
+        body: ocrFormData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      console.log(`OCR API response status: ${ocrResponse.status} ${ocrResponse.statusText}`);
+
+      if (!ocrResponse.ok) {
+        const errorText = await ocrResponse.text();
+        console.error(`OCR API HTTP error: ${ocrResponse.status} ${ocrResponse.statusText}`, errorText);
+        
+        // Provide specific error messages based on status codes
+        let userFriendlyError = `OCR API error: ${ocrResponse.status}`;
+        if (ocrResponse.status === 429) {
+          userFriendlyError = 'OCR service rate limit exceeded. Please wait a moment and try again.';
+        } else if (ocrResponse.status >= 500) {
+          userFriendlyError = 'OCR service is temporarily unavailable. Please try again later.';
+        } else if (ocrResponse.status === 401) {
+          userFriendlyError = 'OCR API authentication failed. Please check the API key configuration.';
+        }
+        
         return new Response(
           JSON.stringify({
             success: false,
-            error: `OCR extraction failed: ${errorMessages}`
+            error: userFriendlyError
           }),
           {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         );
-      } else {
-        console.warn('No text extracted from file');
+      }
+
+      const ocrResult = await ocrResponse.json();
+      console.log('OCR API response:', JSON.stringify(ocrResult, null, 2));
+
+      // Enhanced error handling for OCR result
+      if (ocrResult.IsErroredOnProcessing) {
+        const errorDetails = ocrResult.ErrorDetails || [];
+        const errorMessage = ocrResult.ErrorMessage || 
+          ocrResult.ParsedResults?.[0]?.ErrorMessage || 
+          'Processing failed';
+        
+        console.error(`OCR processing error: ${errorMessage}`, errorDetails);
+        
+        // Provide helpful error messages based on common issues
+        let userFriendlyError = errorMessage;
+        if (errorMessage.includes('Unable to OCR image')) {
+          userFriendlyError = 'Unable to extract text from this image. The image may be too blurry, have poor contrast, or contain no readable text.';
+        } else if (errorMessage.includes('File size too big')) {
+          userFriendlyError = 'File size exceeds the limit. Please use a smaller file.';
+        } else if (errorMessage.includes('Invalid file format')) {
+          userFriendlyError = 'Invalid file format. Please use JPG, PNG, GIF, BMP, TIFF, WEBP, or PDF files.';
+        }
+        
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'No text could be extracted from the file. The image may be too blurry, have poor contrast, or contain no readable text.'
+            error: `OCR processing error: ${userFriendlyError}`
           }),
           {
-            status: 422,
+            status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         );
       }
-    }
 
-    console.log(`OCR completed successfully. Extracted ${extractedText.length} characters`);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        text: extractedText,
-        confidence: ocrResult.ParsedResults?.[0]?.TextOrientation || 'Unknown',
-        fileInfo: {
-          name: file.name,
-          type: file.type,
-          size: file.size
-        }
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Extract text from OCR result
+      let extractedText = '';
+      if (ocrResult.ParsedResults && ocrResult.ParsedResults.length > 0) {
+        extractedText = ocrResult.ParsedResults
+          .map((result: any) => result.ParsedText || '')
+          .filter((text: string) => text.trim())
+          .join('\n\n');
       }
-    );
+
+      if (!extractedText.trim()) {
+        // Check if there were any error messages in the results
+        const errorMessages = ocrResult.ParsedResults
+          ?.map((result: any) => result.ErrorMessage)
+          .filter((msg: string) => msg)
+          .join(', ');
+        
+        if (errorMessages) {
+          console.error(`OCR extraction failed: ${errorMessages}`);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `OCR extraction failed: ${errorMessages}`
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        } else {
+          console.warn('No text extracted from file');
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'No text could be extracted from the file. The image may be too blurry, have poor contrast, or contain no readable text. Please try with a clearer, high-contrast image.'
+            }),
+            {
+              status: 422,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+      }
+
+      console.log(`OCR completed successfully on attempt ${attempt}. Extracted ${extractedText.length} characters`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: extractedText,
+          confidence: ocrResult.ParsedResults?.[0]?.TextOrientation || 'Unknown',
+          fileInfo: {
+            name: file.name,
+            type: file.type,
+            size: file.size
+          },
+          metadata: {
+            attempt: parseInt(attempt),
+            processingTime: ocrResult.ProcessingTimeInMilliseconds || 'Unknown'
+          }
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+
+    } catch (conversionError) {
+      console.error('File conversion or OCR API call failed:', conversionError);
+      
+      let errorMessage = 'Failed to process the file';
+      if (conversionError instanceof Error) {
+        if (conversionError.name === 'AbortError') {
+          errorMessage = 'OCR request timed out. Please try with a smaller file or try again later.';
+        } else {
+          errorMessage = conversionError.message;
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: errorMessage
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
   } catch (error) {
     console.error('OCR extraction error:', error);
+    
+    let errorMessage = 'Unknown OCR error occurred';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown OCR error occurred'
+        error: errorMessage
       }),
       {
         status: 500,
