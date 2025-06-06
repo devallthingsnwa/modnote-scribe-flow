@@ -431,7 +431,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   <div className="flex-shrink-0">
                     <Button
                       onClick={copyToClipboard}
-                      className="bg-blue-600 hover:bg-blue-700 text-white h-32 px-6"
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-20 px-4"
                     >
                       <Copy className="h-4 w-4 mr-2" />
                       Copy Text to Clipboard
@@ -439,19 +439,19 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
                   </div>
                 )}
                 
-                {/* Documents Upload - Square Shape */}
-                <div className="flex-1">
-                  <div className="border-2 border-dashed border-[#333] rounded-lg aspect-square flex flex-col items-center justify-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
-                    <Upload className="h-8 w-8 text-gray-500 mb-3" />
-                    <div className="space-y-2 text-center">
-                      <p className="text-sm text-white">Upload Document and Txt file</p>
-                      <p className="text-xs text-gray-400">Documents: DOCX, DOC, TXT • Images: JPG, PNG, PDF for OCR</p>
+                {/* Documents Upload - Smaller Square Shape */}
+                <div className="flex-1 max-w-xs">
+                  <div className="border-2 border-dashed border-[#333] rounded-lg aspect-square flex flex-col items-center justify-center hover:border-[#444] transition-colors bg-[#151515]/50 relative h-32">
+                    <Upload className="h-6 w-6 text-gray-500 mb-2" />
+                    <div className="space-y-1 text-center px-2">
+                      <p className="text-xs text-white">Upload Document and Txt file</p>
+                      <p className="text-xs text-gray-400">DOCX, DOC, TXT</p>
                     </div>
                     <input
                       type="file"
                       onChange={handleFileUpload}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      accept=".docx,.doc,.txt,.jpg,.jpeg,.png,.pdf"
+                      accept=".docx,.doc,.txt"
                     />
                   </div>
                 </div>
