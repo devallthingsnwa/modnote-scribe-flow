@@ -1,10 +1,11 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings } from "lucide-react";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -19,6 +20,8 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [result, setResult] = useState<OCRResult | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
   const [useEnhancedOCR, setUseEnhancedOCR] = useState(true);
+  const [extractedText, setExtractedText] = useState<string>("");
+  const [isPDFFile, setIsPDFFile] = useState(false);
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
@@ -30,6 +33,8 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setIsProcessing(true);
     setProgress(10);
     setResult(null);
+    setExtractedText("");
+    setIsPDFFile(file.type === 'application/pdf');
 
     try {
       setProgress(30);
@@ -39,6 +44,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
 
       if (ocrResult.success && ocrResult.text) {
         setResult(ocrResult);
+        setExtractedText(ocrResult.text);
         onTextExtracted(ocrResult.text, file.name);
         
         toast({
@@ -69,6 +75,24 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       setProgress(0);
       // Reset file input
       event.target.value = '';
+    }
+  };
+
+  const copyRawText = async () => {
+    if (extractedText) {
+      try {
+        await navigator.clipboard.writeText(extractedText);
+        toast({
+          title: "✅ Raw Text Copied!",
+          description: "The extracted text has been copied to your clipboard for formatting",
+        });
+      } catch (error) {
+        toast({
+          title: "❌ Copy Failed",
+          description: "Failed to copy text to clipboard",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -173,6 +197,17 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             </div>
             <Progress value={progress} className="w-full" />
           </div>
+        )}
+
+        {/* Copy Raw Text Button - appears after successful extraction */}
+        {result && result.success && extractedText && (
+          <Button
+            onClick={copyRawText}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Raw Text
+          </Button>
         )}
 
         {/* Results */}
