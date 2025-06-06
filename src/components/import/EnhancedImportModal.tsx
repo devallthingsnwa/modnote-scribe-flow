@@ -417,43 +417,50 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
 
       case "file":
         return (
-          <div className="space-y-4">
-            {/* Combined File Upload Section */}
-            <div className="border-2 border-dashed border-[#333] rounded-lg p-6 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
-              <Upload className="mx-auto h-8 w-8 text-gray-500 mb-3" />
-              <div className="space-y-2">
-                <p className="text-sm text-white font-medium">Upload Documents or Images</p>
-                <div className="text-xs text-gray-400 space-y-1">
-                  <p><strong>Documents:</strong> DOCX, DOC, TXT files</p>
-                  <p><strong>Images/OCR:</strong> JPG, PNG, GIF, BMP, TIFF, PDF (Max 10MB)</p>
-                </div>
+          <div className="space-y-6">
+            {/* Word Documents & Text Files Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-400" />
+                <h3 className="text-sm font-medium text-white">Documents (Word, Text)</h3>
               </div>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".docx,.doc,.txt,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.pdf"
-              />
+              <div className="border-2 border-dashed border-[#333] rounded-lg p-6 text-center hover:border-[#444] transition-colors bg-[#151515]/50 relative">
+                <Upload className="mx-auto h-8 w-8 text-gray-500 mb-3" />
+                <div className="space-y-2">
+                  <p className="text-sm text-white">Upload Word or Text documents</p>
+                  <p className="text-xs text-gray-400">Supports: DOCX, DOC, TXT files</p>
+                </div>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  accept=".docx,.doc,.txt"
+                />
+              </div>
+              
+              {/* Copy to Clipboard Button */}
+              {extractedText && (
+                <Button
+                  onClick={copyToClipboard}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Text to Clipboard (Edit in Word/Editor)
+                </Button>
+              )}
             </div>
 
-            {/* OCR Settings for Images */}
-            <div className="bg-[#1a1a1a] border border-[#333] rounded-lg p-4">
+            <div className="border-t border-[#333] pt-4">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="h-5 w-5 text-green-400" />
+                <h3 className="text-sm font-medium text-white">Photo & Image OCR</h3>
+              </div>
+              {/* OCR File Upload Component for Photos */}
               <OCRUploader 
                 onTextExtracted={handleOCRTextExtracted}
-                className="bg-transparent border-0 p-0"
+                className="bg-[#151515] border-[#333]"
               />
             </div>
-            
-            {/* Copy to Clipboard Button */}
-            {extractedText && (
-              <Button
-                onClick={copyToClipboard}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy Text to Clipboard (Edit in Word/Editor)
-              </Button>
-            )}
           </div>
         );
 
