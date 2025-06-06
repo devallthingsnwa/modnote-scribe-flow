@@ -108,16 +108,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setMetadata({
           title: fileName,
           author: "PDF Document",
-          description: `Text extracted from ${fileName} with formatting preserved`
+          description: `Text extracted from ${fileName} with original formatting preserved`
         });
         setTranscript(extractedContent);
-        setExtractedText(extractedContent);
-        setStatus("✅ PDF text extracted successfully with formatting!");
+        setExtractedText(extractedContent); // Store raw text with original formatting
+        setStatus("✅ PDF text extracted successfully with original formatting!");
         setProgress(100);
         
         toast({
           title: "✅ PDF Text Extracted",
-          description: `Extracted ${extractedContent.length} characters from ${fileName} with formatting preserved`,
+          description: `Extracted ${extractedContent.length} characters from ${fileName} with original formatting preserved`,
         });
       } else if (fileExtension === 'docx' || fileExtension === 'doc') {
         setStatus("Extracting text from Word document...");
@@ -127,16 +127,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setMetadata({
           title: fileName,
           author: "Word Document",
-          description: `Text extracted from ${fileName}`
+          description: `Text extracted from ${fileName} with original formatting`
         });
         setTranscript(extractedContent);
-        setExtractedText(extractedContent);
-        setStatus("✅ Word document text extracted successfully!");
+        setExtractedText(extractedContent); // Store raw text with original formatting
+        setStatus("✅ Word document text extracted successfully with original formatting!");
         setProgress(100);
         
         toast({
           title: "✅ Word Document Processed",
-          description: `Extracted ${extractedContent.length} characters from ${fileName}`,
+          description: `Extracted ${extractedContent.length} characters from ${fileName} with original formatting`,
         });
       } else if (fileExtension === 'txt') {
         setStatus("Reading text file...");
@@ -146,16 +146,16 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
         setMetadata({
           title: fileName,
           author: "Text File",
-          description: `Content from ${fileName}`
+          description: `Content from ${fileName} with original formatting`
         });
         setTranscript(extractedContent);
-        setExtractedText(extractedContent);
-        setStatus("✅ Text file loaded successfully!");
+        setExtractedText(extractedContent); // Store raw text with original formatting
+        setStatus("✅ Text file loaded successfully with original formatting!");
         setProgress(100);
         
         toast({
           title: "✅ Text File Loaded",
-          description: `Loaded ${extractedContent.length} characters from ${fileName}`,
+          description: `Loaded ${extractedContent.length} characters from ${fileName} with original formatting`,
         });
       } else {
         // For other file types, just create a placeholder
