@@ -165,7 +165,7 @@ export class EnhancedOCRService {
   private static detectLanguage(text: string): string {
     if (/[а-яё]/i.test(text)) return 'ru';
     if (/[à-ÿ]/i.test(text)) return 'fr';
-    if (/[ä-ß]/i.test(text)) return 'de';
+    if (/[äöüß]/i.test(text)) return 'de';
     if (/[ñáéíóú]/i.test(text)) return 'es';
     if (/[\u4e00-\u9fff]/.test(text)) return 'zh';
     if (/[\u3040-\u309f]/.test(text) || /[\u30a0-\u30ff]/.test(text)) return 'ja';
