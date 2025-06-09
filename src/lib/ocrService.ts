@@ -61,7 +61,6 @@ export class OCRService {
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
     console.log('Starting enhanced OCR with options:', options);
     console.log(`Starting enhanced OCR extraction for: ${file.name}`);
-    console.log('Options:', options);
 
     // Validate file type
     const supportedTypes = [
@@ -89,49 +88,42 @@ export class OCRService {
 
     try {
       if (PDFTextExtractor.isPDFFile(file)) {
-        // Handle PDF files with direct text extraction
+        // Handle PDF files with direct text extraction first
         console.log('Processing PDF file with text extraction');
         extractedText = await PDFTextExtractor.extractTextFromPDF(file);
         
         if (!extractedText.trim()) {
-          console.log('PDF text extraction returned empty, falling back to OCR');
-          // If PDF text extraction fails, use OCR service directly
-          const ocrResult = await this.extractTextBasic(file, options.language);
-          if (ocrResult.success && ocrResult.text) {
-            extractedText = ocrResult.text;
-          } else {
-            throw new Error('Both PDF text extraction and OCR failed');
+          console.log('PDF text extraction returned empty, trying OCR fallback');
+          // Try Tesseract OCR directly instead of the failing edge function
+          try {
+            const result = await this.extractWithClientSideTesseract(file, options.language);
+            if (result.success && result.text) {
+              extractedText = result.text;
+            } else {
+              throw new Error('Client-side OCR also failed');
+            }
+          } catch (ocrError) {
+            console.error('All PDF processing methods failed:', ocrError);
+            throw new Error('Unable to extract text from PDF - both text extraction and OCR failed');
           }
         }
       } else {
-        // Handle image files
-        let processedFile = file;
-
-        // Apply image preprocessing if it's an image
-        if (file.type.startsWith('image/')) {
-          const arrayBuffer = await file.arrayBuffer();
-          const preprocessedBuffer = await ImagePreprocessor.preprocessImage(arrayBuffer, options.preprocessing);
-          processedFile = new File([preprocessedBuffer], file.name, { type: 'image/png' });
-          console.log('Image preprocessing completed');
-        }
-
-        // Use multiple OCR engines
-        if (options.useMultipleEngines) {
-          const result = await MultiEngineOCR.processWithMultipleEngines(processedFile, options.language);
-          
-          if (!result.success || !result.text) {
-            throw new Error(result.error || 'All OCR engines failed');
+        // Handle image files - try client-side Tesseract first
+        console.log('Processing image file with client-side OCR');
+        try {
+          const result = await this.extractWithClientSideTesseract(file, options.language);
+          if (result.success && result.text) {
+            extractedText = result.text;
+          } else {
+            throw new Error('Client-side OCR failed');
           }
-          
-          extractedText = result.text;
-        } else {
-          // Use single engine (fallback to basic)
-          const result = await this.extractTextBasic(processedFile, options.language);
-          
+        } catch (ocrError) {
+          console.warn('Client-side OCR failed, trying edge function fallback:', ocrError);
+          // Try edge function as fallback
+          const result = await MultiEngineOCR.processWithMultipleEngines(file, options.language);
           if (!result.success || !result.text) {
-            throw new Error(result.error || 'OCR failed');
+            throw new Error(result.error || 'All OCR methods failed');
           }
-          
           extractedText = result.text;
         }
       }
@@ -162,32 +154,84 @@ export class OCRService {
     }
   }
 
-  private static async processPDFWithOCR(file: File, options: EnhancedOCROptions): Promise<string> {
-    // This would require converting PDF pages to images first
-    // For now, we'll return an error message
-    throw new Error('PDF OCR processing not yet implemented. Please use image files or PDFs with extractable text.');
+  private static async extractWithClientSideTesseract(file: File, language: string): Promise<OCRResult> {
+    try {
+      console.log('Starting client-side Tesseract OCR');
+      
+      // Import Tesseract.js dynamically
+      const Tesseract = await import('tesseract.js');
+      
+      const result = await Tesseract.recognize(file, language, {
+        logger: (info) => {
+          if (info.status === 'recognizing text') {
+            console.log(`Tesseract progress: ${Math.round(info.progress * 100)}%`);
+          }
+        }
+      });
+
+      const extractedText = result.data.text.trim();
+      
+      if (!extractedText) {
+        throw new Error('No text could be extracted from the file');
+      }
+
+      console.log(`Client-side Tesseract completed. Extracted ${extractedText.length} characters`);
+
+      return {
+        success: true,
+        text: extractedText,
+        confidence: `${Math.round(result.data.confidence)}%`,
+        fileInfo: {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      };
+
+    } catch (error) {
+      console.error('Client-side Tesseract failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Client-side OCR failed'
+      };
+    }
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
     console.log('Using basic OCR extraction for:', file.name);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('language', language);
+    // Try client-side Tesseract first as the basic method
+    try {
+      return await this.extractWithClientSideTesseract(file, language);
+    } catch (clientError) {
+      console.warn('Client-side basic OCR failed, trying edge function:', clientError);
+      
+      // Fallback to edge function
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('language', language);
 
-    const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
-      body: formData,
-    });
+        const { data, error } = await supabase.functions.invoke('tesseract-ocr', {
+          body: formData,
+        });
 
-    if (error) {
-      throw new Error(`OCR service error: ${error.message}`);
+        if (error) {
+          throw new Error(`OCR edge function error: ${error.message}`);
+        }
+
+        return data as OCRResult;
+      } catch (edgeError) {
+        console.error('Edge function also failed:', edgeError);
+        return {
+          success: false,
+          error: `All OCR methods failed. Client-side: ${clientError instanceof Error ? clientError.message : 'Unknown'}. Edge function: ${edgeError instanceof Error ? edgeError.message : 'Unknown'}`
+        };
+      }
     }
-
-    return data as OCRResult;
   }
 
   private static calculateConfidence(text: string): number {
-    // Simple confidence calculation based on text characteristics
     if (!text || text.length === 0) return 0;
     
     let score = 50; // Base score

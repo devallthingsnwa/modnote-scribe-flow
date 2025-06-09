@@ -18,3 +18,6 @@ verify_jwt = true
 
 [functions.mistral-ocr-processor]
 verify_jwt = true
+
+[functions.ocr-text-extraction]
+verify_jwt = true
