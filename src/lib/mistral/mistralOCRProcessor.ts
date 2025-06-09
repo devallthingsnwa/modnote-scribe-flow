@@ -178,7 +178,7 @@ RULES:
     if (/[ä-ß]/i.test(text)) return 'de';
     if (/[ñáéíóú]/i.test(text)) return 'es';
     if (/[\u4e00-\u9fff]/.test(text)) return 'zh';
-    if (/[ひらがなカタカナ]/.test(text)) return 'ja';
+    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'ja';
     return 'en';
   }
 
