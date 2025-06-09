@@ -1,7 +1,7 @@
+
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,6 +116,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       title: "🎉 OCR Ready!",
       description: "You can now upload files for text extraction.",
     });
+  };
+
+  const handleRetry = () => {
+    if (fileInfo) {
+      // Create a mock file for retry - in real scenario, we'd need to store the original file
+      const mockFile = new File([], fileInfo.name, { type: fileInfo.type });
+      handleFileSelect(mockFile);
+    }
   };
 
   return (
@@ -233,11 +241,10 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
 
           {/* Error Display */}
           {error && (
-            <ErrorHandler error={error} onRetry={() => {
-              if (fileInfo) {
-                handleFileSelect(new File([], fileInfo.name, { type: fileInfo.type }));
-              }
-            }} />
+            <ErrorHandler 
+              error={error} 
+              onRetry={handleRetry}
+            />
           )}
         </>
       )}
