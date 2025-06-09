@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
@@ -120,9 +119,17 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
 
   const handleRetry = () => {
     if (fileInfo) {
-      // Create a mock file for retry - in real scenario, we'd need to store the original file
-      const mockFile = new File([], fileInfo.name, { type: fileInfo.type });
-      handleFileSelect(mockFile);
+      // For retry, we'll just trigger the file input again since we can't recreate the original file
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.click();
+      } else {
+        toast({
+          title: "Retry Required",
+          description: "Please upload the file again to retry OCR extraction.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
