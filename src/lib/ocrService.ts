@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
@@ -82,7 +83,7 @@ export class OCRService {
     const startTime = Date.now();
 
     try {
-      // Try the improved Edge Function first
+      // Try the enhanced Edge Function first
       console.log('🚀 Using enhanced OCR Edge Function');
       const result = await this.callEnhancedOCRFunction(file, options.language);
       
@@ -90,6 +91,7 @@ export class OCRService {
         // Apply text post-processing
         const processedText = TextPostProcessor.processText(result.text, options.postprocessing);
         
+        console.log('✅ OCR Edge Function successful');
         return {
           ...result,
           text: processedText,
@@ -113,6 +115,7 @@ export class OCRService {
           if (extractedText && extractedText.length > 50) {
             const processedText = TextPostProcessor.processText(extractedText, options.postprocessing);
             
+            console.log('✅ Client-side PDF extraction successful');
             return {
               success: true,
               text: processedText,
@@ -132,9 +135,11 @@ export class OCRService {
       
       // Try client-side Tesseract
       try {
+        console.log('🔄 Trying client-side Tesseract OCR');
         const tesseractResult = await this.extractWithClientSideTesseract(file, options.language);
         if (tesseractResult.success && tesseractResult.text) {
           const processedText = TextPostProcessor.processText(tesseractResult.text, options.postprocessing);
+          console.log('✅ Client-side Tesseract successful');
           return {
             ...tesseractResult,
             text: processedText
