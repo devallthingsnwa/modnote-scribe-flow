@@ -23,9 +23,9 @@ export class MultiEngineOCR {
       }
     },
     {
-      name: 'Tesseract (Fallback)',
+      name: 'Tesseract',
       process: async (file: File, language: string) => {
-        return await this.processWithTesseract(file, language);
+        return await this.processWithTesseractEdge(file, language);
       }
     }
   ];
@@ -80,27 +80,19 @@ export class MultiEngineOCR {
     return data as OCRResult;
   }
 
-  private static async processWithTesseract(file: File, language: string): Promise<OCRResult> {
-    try {
-      // Import Tesseract dynamically to avoid bundle size issues
-      const { recognize } = await import('tesseract.js');
-      
-      const { data: { text, confidence } } = await recognize(file, language, {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            console.log(`Tesseract progress: ${Math.round(m.progress * 100)}%`);
-          }
-        }
-      });
-      
-      return {
-        success: true,
-        text,
-        confidence: confidence / 100, // Convert to decimal
-        provider: 'Tesseract'
-      };
-    } catch (error) {
-      throw new Error(`Tesseract error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  private static async processWithTesseractEdge(file: File, language: string): Promise<OCRResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('language', language);
+
+    const { data, error } = await supabase.functions.invoke('tesseract-ocr', {
+      body: formData,
+    });
+
+    if (error) {
+      throw new Error(`Tesseract Edge error: ${error.message}`);
     }
+
+    return data as OCRResult;
   }
 }
