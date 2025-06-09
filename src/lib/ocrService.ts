@@ -60,7 +60,7 @@ export class OCRService {
   }
 
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
-    console.log('Starting enhanced OCR extraction for:', file.name);
+    console.log('Starting enhanced text extraction for:', file.name);
     console.log('Options:', options);
 
     // Validate file type
@@ -90,14 +90,13 @@ export class OCRService {
     try {
       if (PDFTextExtractor.isPDFFile(file)) {
         // Handle PDF files with direct text extraction
-        console.log('Processing PDF file with text extraction');
+        console.log('Processing PDF file with enhanced text extraction');
         extractedText = await PDFTextExtractor.extractTextFromPDF(file);
         
         if (!extractedText.trim()) {
-          console.log('PDF text extraction returned empty, this might be a scanned PDF');
           return {
             success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. OCR service is currently unavailable. Please try a different PDF with selectable text, or check back later when OCR service is restored.'
+            error: 'This PDF appears to contain scanned images or no extractable text. Please try a PDF with selectable text, or use an image format if this is a scanned document.'
           };
         }
       } else {
@@ -136,7 +135,7 @@ export class OCRService {
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
-    console.log('Using basic OCR extraction for:', file.name);
+    console.log('Using basic text extraction for:', file.name);
 
     // Check if it's a PDF first
     if (PDFTextExtractor.isPDFFile(file)) {
@@ -146,16 +145,25 @@ export class OCRService {
           return {
             success: true,
             text,
-            confidence: '95%',
+            confidence: '90%',
             fileInfo: {
               name: file.name,
               type: file.type,
               size: file.size
             }
           };
+        } else {
+          return {
+            success: false,
+            error: 'This PDF appears to contain scanned images or no extractable text. Please try a PDF with selectable text.'
+          };
         }
       } catch (error) {
         console.error('PDF extraction failed in basic mode:', error);
+        return {
+          success: false,
+          error: 'Failed to extract text from PDF. The file might be corrupted or contain only images.'
+        };
       }
     }
 
