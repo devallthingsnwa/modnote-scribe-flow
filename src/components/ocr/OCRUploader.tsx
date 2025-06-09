@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy } from "lucide-react";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -37,10 +37,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setIsPDFFile(file.type === 'application/pdf');
 
     try {
-      setProgress(30);
+      // Initial progress updates
+      setProgress(20);
+      setTimeout(() => setProgress(30), 1000);
       
       const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage, useEnhancedOCR);
-      setProgress(90);
+      
+      // Update progress based on result
+      setProgress(95);
 
       if (ocrResult.success && ocrResult.text) {
         setResult(ocrResult);
@@ -49,7 +53,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         
         toast({
           title: "✅ Text Extracted Successfully!",
-          description: `Extracted ${ocrResult.text.length} characters from ${file.name}${useEnhancedOCR ? ' (Enhanced OCR)' : ''}`
+          description: `Extracted ${ocrResult.text.length} characters from ${file.name} using ${ocrResult.method || (useEnhancedOCR ? 'enhanced OCR' : 'basic OCR')}`
         });
       } else {
         throw new Error(ocrResult.error || 'Failed to extract text');
@@ -107,6 +111,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
       case 'gif':
       case 'bmp':
       case 'tiff':
+      case 'webp':
         return <Image className="h-5 w-5 text-blue-500" />;
       default:
         return <FileText className="h-5 w-5 text-gray-500" />;
@@ -162,14 +167,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="space-y-2">
             <p className="text-sm font-medium">Upload image or PDF for text extraction</p>
             <p className="text-xs text-muted-foreground">
-              Supports: JPG, PNG, GIF, BMP, TIFF, PDF (Max 10MB)
+              Supports: JPG, PNG, GIF, BMP, TIFF, WEBP, PDF (Max 10MB)
             </p>
           </div>
           
           <input
             type="file"
             onChange={handleFileSelect}
-            accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.pdf,image/*,application/pdf"
+            accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp,.pdf,image/*,application/pdf"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             disabled={isProcessing}
           />
@@ -192,7 +197,9 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             <div className="flex items-center gap-2 text-sm">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               <span>
-                {useEnhancedOCR ? 'Extracting text with enhanced OCR...' : 'Extracting text from image...'}
+                {isPDFFile ? 'Extracting text from PDF...' : 
+                 useEnhancedOCR ? 'Extracting text with enhanced OCR...' : 
+                 'Extracting text from image...'}
               </span>
             </div>
             <Progress value={progress} className="w-full" />
@@ -206,7 +213,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             className="w-full bg-purple-600 hover:bg-purple-700 text-white"
           >
             <Copy className="h-4 w-4 mr-2" />
-            Copy Raw Text
+            Copy Extracted Text
           </Button>
         )}
 
@@ -226,6 +233,11 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
               <span className="text-sm font-medium">
                 {result.success ? 'Text Extracted Successfully' : 'Extraction Failed'}
               </span>
+              {result.method && (
+                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                  {result.method}
+                </span>
+              )}
             </div>
             
             {result.success && result.fileInfo && (
@@ -250,9 +262,15 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             )}
 
             {result.error && (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {result.error}
-              </p>
+              <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 mt-2">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Error:</strong> {result.error}
+                  <div className="mt-1 text-muted-foreground">
+                    Try switching OCR mode, uploading a clearer image, or using a different file format.
+                  </div>
+                </div>
+              </div>
             )}
 
             {result.success && result.text && (

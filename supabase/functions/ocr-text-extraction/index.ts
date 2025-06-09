@@ -21,12 +21,13 @@ interface OCRResult {
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   const startTime = Date.now();
-  console.log('🔍 OCR: Starting text extraction process');
+  console.log('🔍 OCR Edge Function: Starting text extraction process');
 
   try {
     // Validate content type
@@ -35,6 +36,7 @@ Deno.serve(async (req) => {
       throw new Error('Content-Type must be multipart/form-data');
     }
 
+    // Parse form data
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const language = formData.get('language') as string || 'eng';
@@ -48,7 +50,7 @@ Deno.serve(async (req) => {
     // Validate file type
     const supportedTypes = [
       'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
-      'image/bmp', 'image/tiff', 'application/pdf'
+      'image/bmp', 'image/tiff', 'image/webp', 'application/pdf'
     ];
 
     if (!supportedTypes.includes(file.type)) {
@@ -65,30 +67,30 @@ Deno.serve(async (req) => {
     let method = '';
     let confidence = 0;
 
-    // Handle PDF files with text extraction first
+    // Handle PDF files - try text extraction first
     if (file.type === 'application/pdf') {
-      console.log('📄 PDF detected - attempting text extraction');
+      console.log('📄 PDF detected - attempting direct text extraction');
       try {
-        const pdfResult = await extractTextFromPDF(file);
+        const pdfResult = await extractPDFText(file);
         if (pdfResult.text && pdfResult.text.trim().length > 50) {
           extractedText = pdfResult.text;
           method = 'pdf-text-extraction';
-          confidence = 0.9;
+          confidence = 0.95;
           console.log(`✅ PDF text extraction successful: ${extractedText.length} characters`);
         } else {
-          console.log('⚠️ PDF text extraction returned minimal text, trying OCR');
-          throw new Error('PDF has no extractable text');
+          console.log('⚠️ PDF text extraction returned minimal text, falling back to OCR');
+          throw new Error('PDF has no extractable text, using OCR');
         }
       } catch (pdfError) {
         console.warn('PDF text extraction failed:', pdfError.message);
-        // Fall through to OCR
+        // Continue to OCR for scanned PDFs
       }
     }
 
-    // If no text extracted yet, try OCR
+    // If no text extracted yet, use OCR
     if (!extractedText) {
-      console.log('🔍 Attempting OCR text extraction');
-      const ocrResult = await performOCR(file, language);
+      console.log('🔍 Using OCR for text extraction');
+      const ocrResult = await performOCRExtraction(file, language);
       extractedText = ocrResult.text;
       method = ocrResult.method;
       confidence = ocrResult.confidence;
@@ -120,7 +122,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    console.error('🚨 OCR SERVICE ERROR:', error);
+    console.error('🚨 OCR Edge Function Error:', error);
     
     const errorResult: OCRResult = {
       success: false,
@@ -135,24 +137,19 @@ Deno.serve(async (req) => {
   }
 });
 
-async function extractTextFromPDF(file: File): Promise<{ text: string }> {
-  console.log('📄 Starting PDF text extraction');
+async function extractPDFText(file: File): Promise<{ text: string }> {
+  console.log('📄 Starting PDF text extraction (server-side)');
   
-  try {
-    // For server-side PDF processing, we'll use a different approach
-    // Since PDF.js doesn't work well in Deno, we'll use OCR for PDFs
-    throw new Error('Server-side PDF text extraction not available - using OCR');
-  } catch (error) {
-    console.warn('PDF text extraction failed:', error);
-    throw error;
-  }
+  // For Deno runtime, we'll signal that client-side should handle PDF extraction
+  // as server-side PDF libraries are complex in Deno environment
+  throw new Error('Server-side PDF text extraction not available - client will handle');
 }
 
-async function performOCR(file: File, language: string = 'eng'): Promise<{ text: string; method: string; confidence: number }> {
+async function performOCRExtraction(file: File, language: string = 'eng'): Promise<{ text: string; method: string; confidence: number }> {
   const OCR_API_KEY = Deno.env.get('OCR_API_KEY');
   
   if (!OCR_API_KEY) {
-    console.error('❌ OCR_API_KEY not configured');
+    console.error('❌ OCR_API_KEY not configured in environment variables');
     throw new Error('OCR service not configured - API key missing');
   }
 
@@ -164,8 +161,9 @@ async function performOCR(file: File, language: string = 'eng'): Promise<{ text:
     const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     const base64String = `data:${file.type};base64,${base64}`;
 
-    console.log(`📤 Sending ${(base64.length / 1024).toFixed(1)}KB to OCR.space`);
+    console.log(`📤 Sending ${(base64.length / 1024).toFixed(1)}KB to OCR.space API`);
 
+    // Prepare OCR.space API request
     const formData = new FormData();
     formData.append('base64Image', base64String);
     formData.append('language', language);
@@ -174,10 +172,14 @@ async function performOCR(file: File, language: string = 'eng'): Promise<{ text:
     formData.append('detectOrientation', 'true');
     formData.append('scale', 'true');
     formData.append('isTable', 'true');
+    formData.append('filetype', file.type.includes('pdf') ? 'PDF' : 'Auto');
 
     const response = await fetch('https://api.ocr.space/parse/image', {
       method: 'POST',
       body: formData,
+      headers: {
+        'User-Agent': 'Supabase-Edge-Function'
+      }
     });
 
     if (!response.ok) {
@@ -188,7 +190,7 @@ async function performOCR(file: File, language: string = 'eng'): Promise<{ text:
     console.log('📥 OCR.space response received');
 
     if (result.IsErroredOnProcessing) {
-      throw new Error(`OCR processing error: ${result.ErrorMessage || 'Unknown error'}`);
+      throw new Error(`OCR processing error: ${result.ErrorMessage || result.ErrorDetails || 'Unknown error'}`);
     }
 
     if (!result.ParsedResults || result.ParsedResults.length === 0) {
@@ -206,23 +208,28 @@ async function performOCR(file: File, language: string = 'eng'): Promise<{ text:
     return {
       text: extractedText,
       method: 'ocr-space-api',
-      confidence: 0.8 // OCR.space doesn't provide confidence, so we estimate
+      confidence: 0.85 // OCR.space doesn't provide confidence, so we estimate
     };
 
   } catch (error) {
     console.error('🚨 OCR.space API error:', error);
     
-    // Fallback to Tesseract if OCR.space fails
-    console.log('🔄 Falling back to Tesseract OCR');
-    return await performTesseractOCR(file, language);
+    // Try Tesseract as fallback if available
+    try {
+      console.log('🔄 Falling back to Tesseract OCR');
+      return await performTesseractFallback(file, language);
+    } catch (fallbackError) {
+      console.error('🚨 Tesseract fallback also failed:', fallbackError);
+      throw new Error(`All OCR methods failed. Primary: ${error.message}. Fallback: ${fallbackError.message}`);
+    }
   }
 }
 
-async function performTesseractOCR(file: File, language: string): Promise<{ text: string; method: string; confidence: number }> {
+async function performTesseractFallback(file: File, language: string): Promise<{ text: string; method: string; confidence: number }> {
   try {
     console.log('🔄 Using Tesseract as fallback OCR');
     
-    // Import Tesseract dynamically
+    // Import Tesseract dynamically for Deno
     const { default: Tesseract } = await import('npm:tesseract.js@5.1.1');
     
     const arrayBuffer = await file.arrayBuffer();
@@ -254,6 +261,6 @@ async function performTesseractOCR(file: File, language: string): Promise<{ text
 
   } catch (error) {
     console.error('🚨 Tesseract OCR error:', error);
-    throw new Error(`All OCR methods failed: ${error.message}`);
+    throw new Error(`Tesseract OCR failed: ${error.message}`);
   }
 }

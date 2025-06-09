@@ -2,7 +2,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
-import { MultiEngineOCR } from "./ocr/multiEngineOCR";
 import { PDFTextExtractor } from "./ocr/pdfTextExtractor";
 
 export interface OCRResult {
@@ -67,11 +66,11 @@ export class OCRService {
     // Validate file type
     const supportedTypes = [
       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-      'image/bmp', 'image/tiff', 'application/pdf'
+      'image/bmp', 'image/tiff', 'image/webp', 'application/pdf'
     ];
 
     if (!supportedTypes.includes(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`);
+      throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, WEBP, PDF`);
     }
 
     // Check file size
@@ -84,8 +83,8 @@ export class OCRService {
 
     try {
       // Try the enhanced Edge Function first
-      console.log('🚀 Using enhanced OCR Edge Function');
-      const result = await this.callEnhancedOCRFunction(file, options.language);
+      console.log('🚀 Using production OCR Edge Function');
+      const result = await this.callOCREdgeFunction(file, options.language);
       
       if (result.success && result.text) {
         // Apply text post-processing
@@ -99,16 +98,16 @@ export class OCRService {
         };
       }
       
-      throw new Error(result.error || 'Enhanced OCR function failed');
+      throw new Error(result.error || 'Edge Function OCR failed');
 
     } catch (edgeError) {
-      console.warn('Enhanced OCR Edge Function failed:', edgeError);
+      console.warn('OCR Edge Function failed:', edgeError);
       
       // Fallback to client-side processing
-      console.log('🔄 Falling back to client-side OCR');
+      console.log('🔄 Falling back to client-side processing');
       
       if (PDFTextExtractor.isPDFFile(file)) {
-        // Try PDF text extraction
+        // Try PDF text extraction first
         try {
           const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
           
@@ -125,7 +124,8 @@ export class OCRService {
                 type: file.type,
                 size: file.size
               },
-              method: 'client-pdf-extraction'
+              method: 'client-pdf-extraction',
+              processingTime: Date.now() - startTime
             };
           }
         } catch (pdfError) {
@@ -133,7 +133,7 @@ export class OCRService {
         }
       }
       
-      // Try client-side Tesseract
+      // Try client-side Tesseract as final fallback
       try {
         console.log('🔄 Trying client-side Tesseract OCR');
         const tesseractResult = await this.extractWithClientSideTesseract(file, options.language);
@@ -142,7 +142,8 @@ export class OCRService {
           console.log('✅ Client-side Tesseract successful');
           return {
             ...tesseractResult,
-            text: processedText
+            text: processedText,
+            processingTime: Date.now() - startTime
           };
         }
       } catch (tesseractError) {
@@ -153,13 +154,13 @@ export class OCRService {
     }
   }
 
-  private static async callEnhancedOCRFunction(file: File, language: string): Promise<OCRResult> {
+  private static async callOCREdgeFunction(file: File, language: string): Promise<OCRResult> {
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('language', language);
 
-      console.log(`📤 Calling OCR Edge Function for ${file.name}`);
+      console.log(`📤 Calling production OCR Edge Function for ${file.name}`);
 
       const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
         body: formData,
@@ -230,7 +231,7 @@ export class OCRService {
     console.log('🔍 Using basic OCR extraction for:', file.name);
 
     try {
-      return await this.callEnhancedOCRFunction(file, language);
+      return await this.callOCREdgeFunction(file, language);
     } catch (edgeError) {
       console.warn('Edge function failed, trying client-side:', edgeError);
       return await this.extractWithClientSideTesseract(file, language);
