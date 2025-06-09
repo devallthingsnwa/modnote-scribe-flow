@@ -1,260 +1,275 @@
-import { useState, useCallback } from "react";
-import { useDropzone } from "react-dropzone";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
-import { OCRService } from "@/lib/ocrService";
-import { ErrorHandler } from "./ErrorHandler";
-import { Loader2, File, Settings } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
-import { OneClickSetup } from "./OneClickSetup";
-import { SetupDashboard } from "./SetupDashboard";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { OCRService, OCRResult } from "@/lib/ocrService";
 
 interface OCRUploaderProps {
-  onTextExtracted?: (text: string) => void;
+  onTextExtracted: (text: string, fileName: string) => void;
   className?: string;
 }
 
 export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
-  const [extractedText, setExtractedText] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<OCRResult | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<{ code?: number; message: string; timestamp: Date } | null>(null);
-  const [fileInfo, setFileInfo] = useState<{ name: string; size: number; type: string } | null>(null);
   const [useEnhancedOCR, setUseEnhancedOCR] = useState(true);
+  const [extractedText, setExtractedText] = useState<string>("");
+  const [isPDFFile, setIsPDFFile] = useState(false);
   const { toast } = useToast();
 
-  const [showSetup, setShowSetup] = useState(false);
-  const [systemReady, setSystemReady] = useState(false);
+  const languages = OCRService.getSupportedLanguages();
 
-  const validateFile = (file: File): string | null => {
-    const supportedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-      'image/bmp', 'image/tiff', 'image/webp', 'application/pdf'
-    ];
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    if (!supportedTypes.includes(file.type)) {
-      return `Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, WEBP, PDF`;
-    }
+    setIsProcessing(true);
+    setProgress(10);
+    setResult(null);
+    setExtractedText("");
+    setIsPDFFile(file.type === 'application/pdf');
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      return `File too large. Maximum size is ${maxSize / 1024 / 1024}MB`;
-    }
-
-    return null;
-  };
-
-  const handleFileSelect = async (file: File) => {
-    setError(null);
-    setExtractedText(null);
-    setFileInfo({ name: file.name, size: file.size, type: file.type });
-
-    const validationError = validateFile(file);
-    if (validationError) {
-      setError({ message: validationError, timestamp: new Date() });
-      return;
-    }
-
-    setProcessing(true);
     try {
+      setProgress(30);
+      
       const ocrResult = await OCRService.extractTextFromFile(file, selectedLanguage, useEnhancedOCR);
+      setProgress(90);
 
       if (ocrResult.success && ocrResult.text) {
+        setResult(ocrResult);
         setExtractedText(ocrResult.text);
-        onTextExtracted?.(ocrResult.text);
+        onTextExtracted(ocrResult.text, file.name);
+        
         toast({
-          title: "✅ OCR Successful",
-          description: `Extracted text from ${file.name}`,
+          title: "✅ Text Extracted Successfully!",
+          description: `Extracted ${ocrResult.text.length} characters from ${file.name}${useEnhancedOCR ? ' (Enhanced OCR)' : ''}`
         });
       } else {
-        setError({ message: ocrResult.error || 'OCR extraction failed', timestamp: new Date() });
-        toast({
-          title: "❌ OCR Failed",
-          description: ocrResult.error || 'Failed to extract text from the image.',
-          variant: "destructive"
-        });
+        throw new Error(ocrResult.error || 'Failed to extract text');
       }
-    } catch (err: any) {
-      console.error('OCR failed:', err);
-      setError({ message: err.message || 'An unexpected error occurred', timestamp: new Date() });
+
+      setProgress(100);
+
+    } catch (error) {
+      console.error('OCR upload error:', error);
+      
+      setResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
       toast({
-        title: "❌ OCR Error",
-        description: err.message || 'An unexpected error occurred during OCR.',
+        title: "❌ OCR Extraction Failed",
+        description: error instanceof Error ? error.message : 'Failed to extract text from file',
         variant: "destructive"
       });
     } finally {
-      setProcessing(false);
+      setIsProcessing(false);
+      setProgress(0);
+      // Reset file input
+      event.target.value = '';
     }
   };
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (acceptedFiles && acceptedFiles.length > 0) {
-      await handleFileSelect(acceptedFiles[0]);
-    }
-  }, [handleFileSelect]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
-      'application/pdf': ['.pdf']
-    },
-    maxFiles: 1
-  });
-
-  const handleSetupComplete = () => {
-    setSystemReady(true);
-    setShowSetup(false);
-    toast({
-      title: "🎉 OCR Ready!",
-      description: "You can now upload files for text extraction.",
-    });
-  };
-
-  const handleRetry = () => {
-    if (fileInfo) {
-      // For retry, we'll just trigger the file input again since we can't recreate the original file
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-      if (fileInput) {
-        fileInput.click();
-      } else {
+  const copyRawText = async () => {
+    if (extractedText) {
+      try {
+        await navigator.clipboard.writeText(extractedText);
         toast({
-          title: "Retry Required",
-          description: "Please upload the file again to retry OCR extraction.",
+          title: "✅ Raw Text Copied!",
+          description: "The extracted text has been copied to your clipboard for formatting",
+        });
+      } catch (error) {
+        toast({
+          title: "❌ Copy Failed",
+          description: "Failed to copy text to clipboard",
           variant: "destructive"
         });
       }
+    }
+  };
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <FileType className="h-5 w-5 text-red-500" />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'tiff':
+        return <Image className="h-5 w-5 text-blue-500" />;
+      default:
+        return <FileText className="h-5 w-5 text-gray-500" />;
     }
   };
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* One-Click Setup Section */}
-      {!systemReady && !showSetup && (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-6">
-          <OneClickSetup 
-            onSetupComplete={handleSetupComplete}
-            className="max-w-2xl mx-auto"
+    <Card className={className}>
+      <CardContent className="space-y-4 pt-6">
+        {/* Enhanced OCR Toggle */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <label className="text-sm font-medium">OCR Mode</label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="enhanced-ocr"
+              checked={useEnhancedOCR}
+              onCheckedChange={setUseEnhancedOCR}
+            />
+            <label htmlFor="enhanced-ocr" className="text-sm">
+              Enhanced OCR {useEnhancedOCR ? '(Multiple engines, preprocessing)' : '(Basic OCR)'}
+            </label>
+          </div>
+          {useEnhancedOCR && (
+            <p className="text-xs text-muted-foreground">
+              Enhanced mode includes image preprocessing, multiple OCR engines, and text cleanup for better accuracy.
+            </p>
+          )}
+        </div>
+
+        {/* Language Selection */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Language</label>
+          <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select language" />
+            </SelectTrigger>
+            <SelectContent>
+              {languages.map((lang) => (
+                <SelectItem key={lang.code} value={lang.code}>
+                  {lang.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* File Upload Area */}
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors relative">
+          <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Upload image or PDF for text extraction</p>
+            <p className="text-xs text-muted-foreground">
+              Supports: JPG, PNG, GIF, BMP, TIFF, PDF (Max 10MB)
+            </p>
+          </div>
+          
+          <input
+            type="file"
+            onChange={handleFileSelect}
+            accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.pdf,image/*,application/pdf"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            disabled={isProcessing}
           />
           
-          <div className="mt-4 text-center">
-            <Button
-              variant="outline"
-              onClick={() => setShowSetup(true)}
-              className="text-sm"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Advanced Setup Options
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Advanced Setup Dashboard */}
-      {showSetup && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Advanced OCR Setup</h3>
-            <Button
-              variant="outline"
-              onClick={() => setShowSetup(false)}
-              size="sm"
-            >
-              Hide Setup
-            </Button>
-          </div>
-          <SetupDashboard />
-        </div>
-      )}
-
-      {/* Main OCR Interface (existing code) */}
-      {(systemReady || showSetup) && (
-        <>
-          {/* Language Selection */}
-          <div className="flex items-center gap-4">
-            <Label htmlFor="language" className="text-sm font-medium">
-              Language:
-            </Label>
-            <Select onValueChange={setSelectedLanguage} defaultValue={selectedLanguage}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
-              <SelectContent>
-                {OCRService.getSupportedLanguages().map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center space-x-2">
-              <Switch id="enhanced" checked={useEnhancedOCR} onCheckedChange={setUseEnhancedOCR} />
-              <Label htmlFor="enhanced" className="text-sm font-medium">
-                Enhanced OCR
-              </Label>
-            </div>
-          </div>
-
-          {/* Upload Area */}
-          <div
-            {...getRootProps()}
-            className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-              isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400",
-              "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            )}
-          >
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center justify-center space-y-3">
-              <File className="h-6 w-6 text-gray-500" />
-              <p className="text-sm text-gray-500">
-                {isDragActive
-                  ? "Drop the file here..."
-                  : "Click here or drag and drop a file to upload"}
-              </p>
-              {fileInfo && (
-                <p className="text-xs text-gray-400">
-                  {fileInfo.name} ({Math.ceil(fileInfo.size / 1024)} KB)
+          {isProcessing && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
+              <div className="text-center space-y-2">
+                <div className="h-4 w-4 mx-auto animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <p className="text-xs text-muted-foreground">
+                  {useEnhancedOCR ? 'Enhanced processing...' : 'Processing...'}
                 </p>
-              )}
-              {processing && (
-                <div className="flex items-center">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </div>
-              )}
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Processing Progress */}
+        {isProcessing && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span>
+                {useEnhancedOCR ? 'Extracting text with enhanced OCR...' : 'Extracting text from image...'}
+              </span>
+            </div>
+            <Progress value={progress} className="w-full" />
           </div>
+        )}
 
-          {/* Results Display */}
-          {extractedText && (
-            <Card>
-              <CardContent>
-                <Textarea
-                  value={extractedText}
-                  readOnly
-                  className="min-h-[200px] font-mono text-sm"
-                />
-              </CardContent>
-            </Card>
-          )}
+        {/* Copy Raw Text Button - appears after successful extraction */}
+        {result && result.success && extractedText && (
+          <Button
+            onClick={copyRawText}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Raw Text
+          </Button>
+        )}
 
-          {/* Error Display */}
-          {error && (
-            <ErrorHandler 
-              error={error} 
-              onRetry={handleRetry}
-            />
-          )}
-        </>
-      )}
-    </div>
+        {/* Results */}
+        {result && (
+          <div className={`p-3 rounded-lg border ${
+            result.success 
+              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' 
+              : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              {result.success ? (
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              )}
+              <span className="text-sm font-medium">
+                {result.success ? 'Text Extracted Successfully' : 'Extraction Failed'}
+              </span>
+            </div>
+            
+            {result.success && result.fileInfo && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                {getFileIcon(result.fileInfo.name)}
+                <span>{result.fileInfo.name}</span>
+                <span>•</span>
+                <span>{(result.fileInfo.size / 1024).toFixed(1)} KB</span>
+                {result.text && (
+                  <>
+                    <span>•</span>
+                    <span>{result.text.length} characters</span>
+                  </>
+                )}
+                {result.confidence && (
+                  <>
+                    <span>•</span>
+                    <span>{result.confidence} confidence</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {result.error && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {result.error}
+              </p>
+            )}
+
+            {result.success && result.text && (
+              <div className="mt-2 max-h-32 overflow-y-auto p-2 bg-background/50 rounded text-xs font-mono border">
+                {result.text.split('\n').slice(0, 5).map((line, index) => (
+                  <div key={index} className="mb-1">{line}</div>
+                ))}
+                {result.text.split('\n').length > 5 && (
+                  <div className="text-muted-foreground italic">
+                    ... and {result.text.split('\n').length - 5} more lines
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

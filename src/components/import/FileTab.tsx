@@ -31,11 +31,6 @@ export function FileTab({ extractedText, onFileUpload, onOCRTextExtracted }: Fil
     }
   };
 
-  // Handle OCR text extraction with proper signature
-  const handleOCRTextExtracted = (text: string) => {
-    onOCRTextExtracted(text, "OCR Upload");
-  };
-
   return (
     <div className="space-y-6">
       {/* Word Documents & Text Files Section */}
@@ -77,7 +72,7 @@ export function FileTab({ extractedText, onFileUpload, onOCRTextExtracted }: Fil
         </div>
         {/* OCR File Upload Component for Photos */}
         <OCRUploader 
-          onTextExtracted={handleOCRTextExtracted}
+          onTextExtracted={onOCRTextExtracted}
           className="bg-[#151515] border-[#333]"
         />
       </div>

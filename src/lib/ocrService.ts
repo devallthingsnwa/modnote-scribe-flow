@@ -1,7 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
+import { MultiEngineOCR } from "./ocr/multiEngineOCR";
 import { PDFTextExtractor } from "./ocr/pdfTextExtractor";
 
 export interface OCRResult {
@@ -14,8 +14,6 @@ export interface OCRResult {
     size: number;
   };
   error?: string;
-  method?: string;
-  processingTime?: number;
 }
 
 export interface EnhancedOCROptions {
@@ -61,16 +59,22 @@ export class OCRService {
   }
 
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
-    console.log('🔍 Starting enhanced OCR extraction for:', file.name);
+    console.log('Starting enhanced OCR extraction for:', file.name);
+    console.log('Options:', options);
 
     // Validate file type
     const supportedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-      'image/bmp', 'image/tiff', 'image/webp', 'application/pdf'
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/bmp',
+      'image/tiff',
+      'application/pdf'
     ];
 
     if (!supportedTypes.includes(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, WEBP, PDF`);
+      throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`);
     }
 
     // Check file size
@@ -79,163 +83,95 @@ export class OCRService {
       throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
     }
 
+    let extractedText = '';
     const startTime = Date.now();
 
     try {
-      // Try the enhanced Edge Function first
-      console.log('🚀 Using production OCR Edge Function');
-      const result = await this.callOCREdgeFunction(file, options.language);
-      
-      if (result.success && result.text) {
-        // Apply text post-processing
-        const processedText = TextPostProcessor.processText(result.text, options.postprocessing);
-        
-        console.log('✅ OCR Edge Function successful');
-        return {
-          ...result,
-          text: processedText,
-          confidence: result.confidence ? `${Math.round(parseFloat(result.confidence) * 100)}%` : '85%'
-        };
-      }
-      
-      throw new Error(result.error || 'Edge Function OCR failed');
-
-    } catch (edgeError) {
-      console.warn('OCR Edge Function failed:', edgeError);
-      
-      // Fallback to client-side processing
-      console.log('🔄 Falling back to client-side processing');
-      
       if (PDFTextExtractor.isPDFFile(file)) {
-        // Try PDF text extraction first
-        try {
-          const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
-          
-          if (extractedText && extractedText.length > 50) {
-            const processedText = TextPostProcessor.processText(extractedText, options.postprocessing);
-            
-            console.log('✅ Client-side PDF extraction successful');
-            return {
-              success: true,
-              text: processedText,
-              confidence: '90%',
-              fileInfo: {
-                name: file.name,
-                type: file.type,
-                size: file.size
-              },
-              method: 'client-pdf-extraction',
-              processingTime: Date.now() - startTime
-            };
-          }
-        } catch (pdfError) {
-          console.warn('PDF text extraction failed:', pdfError);
-        }
-      }
-      
-      // Try client-side Tesseract as final fallback
-      try {
-        console.log('🔄 Trying client-side Tesseract OCR');
-        const tesseractResult = await this.extractWithClientSideTesseract(file, options.language);
-        if (tesseractResult.success && tesseractResult.text) {
-          const processedText = TextPostProcessor.processText(tesseractResult.text, options.postprocessing);
-          console.log('✅ Client-side Tesseract successful');
+        // Handle PDF files with direct text extraction
+        console.log('Processing PDF file with text extraction');
+        extractedText = await PDFTextExtractor.extractTextFromPDF(file);
+        
+        if (!extractedText.trim()) {
+          console.log('PDF text extraction returned empty - this might be a scanned PDF or image-based PDF');
           return {
-            ...tesseractResult,
-            text: processedText,
-            processingTime: Date.now() - startTime
+            success: false,
+            error: 'This PDF appears to contain scanned images or no extractable text. The document may be image-based. Please try a PDF with selectable text, or use an OCR service to convert scanned documents.'
           };
         }
-      } catch (tesseractError) {
-        console.error('Client-side Tesseract failed:', tesseractError);
-      }
-      
-      throw new Error(`All OCR methods failed. Edge Function: ${edgeError.message}`);
-    }
-  }
-
-  private static async callOCREdgeFunction(file: File, language: string): Promise<OCRResult> {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('language', language);
-
-      console.log(`📤 Calling production OCR Edge Function for ${file.name}`);
-
-      const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
-        body: formData,
-      });
-
-      if (error) {
-        console.error('OCR Edge Function error:', error);
-        throw new Error(`OCR Edge Function error: ${error.message}`);
+      } else {
+        // Handle image files - OCR service requires configuration
+        console.log('Image file detected - OCR service requires API configuration');
+        return {
+          success: false,
+          error: 'OCR service for images requires API configuration. Please contact administrator to enable OCR functionality for image files.'
+        };
       }
 
-      if (!data) {
-        throw new Error('No data returned from OCR Edge Function');
-      }
+      // Apply text post-processing
+      extractedText = TextPostProcessor.processText(extractedText, options.postprocessing);
 
-      console.log('✅ OCR Edge Function completed successfully');
-      return data as OCRResult;
-
-    } catch (error) {
-      console.error('Failed to call OCR Edge Function:', error);
-      throw error;
-    }
-  }
-
-  private static async extractWithClientSideTesseract(file: File, language: string): Promise<OCRResult> {
-    try {
-      console.log('🔍 Starting client-side Tesseract OCR');
+      const duration = Date.now() - startTime;
+      const confidence = this.calculateConfidence(extractedText);
       
-      const Tesseract = await import('tesseract.js');
-      
-      const result = await Tesseract.recognize(file, language, {
-        logger: (info) => {
-          if (info.status === 'recognizing text') {
-            console.log(`Tesseract progress: ${Math.round(info.progress * 100)}%`);
-          }
-        }
-      });
-
-      const extractedText = result.data.text.trim();
-      
-      if (!extractedText) {
-        throw new Error('No text could be extracted from the file');
-      }
-
-      console.log(`✅ Client-side Tesseract completed. Extracted ${extractedText.length} characters`);
+      console.log(`Text extraction completed successfully in ${duration}ms`);
+      console.log(`Extracted ${extractedText.length} characters with ${confidence}% confidence`);
 
       return {
         success: true,
         text: extractedText,
-        confidence: `${Math.round(result.data.confidence)}%`,
+        confidence: `${confidence}%`,
         fileInfo: {
           name: file.name,
           type: file.type,
           size: file.size
-        },
-        method: 'client-tesseract'
+        }
       };
 
     } catch (error) {
-      console.error('Client-side Tesseract failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Client-side OCR failed'
-      };
+      console.error('Enhanced text extraction failed:', error);
+      throw error;
     }
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
-    console.log('🔍 Using basic OCR extraction for:', file.name);
+    console.log('Using basic OCR extraction for:', file.name);
 
-    try {
-      return await this.callOCREdgeFunction(file, language);
-    } catch (edgeError) {
-      console.warn('Edge function failed, trying client-side:', edgeError);
-      return await this.extractWithClientSideTesseract(file, language);
+    // Check if it's a PDF first
+    if (PDFTextExtractor.isPDFFile(file)) {
+      try {
+        const text = await PDFTextExtractor.extractTextFromPDF(file);
+        if (text.trim()) {
+          return {
+            success: true,
+            text,
+            confidence: '85%',
+            fileInfo: {
+              name: file.name,
+              type: file.type,
+              size: file.size
+            }
+          };
+        } else {
+          return {
+            success: false,
+            error: 'This PDF contains no extractable text. It may be a scanned document or image-based PDF.'
+          };
+        }
+      } catch (error) {
+        console.error('PDF extraction failed in basic mode:', error);
+        return {
+          success: false,
+          error: 'PDF processing failed. The file may be corrupted or in an unsupported format.'
+        };
+      }
     }
+
+    // For images, return appropriate message
+    return {
+      success: false,
+      error: 'Image OCR requires API configuration. Currently only PDFs with selectable text are supported.'
+    };
   }
 
   private static calculateConfidence(text: string): number {
