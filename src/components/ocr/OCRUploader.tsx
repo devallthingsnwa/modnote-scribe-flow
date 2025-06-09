@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, CheckCircle, Upload, Image, Settings, Copy } from "lucide-react";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -21,6 +21,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
   const [useEnhancedOCR, setUseEnhancedOCR] = useState(true);
   const [extractedText, setExtractedText] = useState<string>("");
+  const [isPDFFile, setIsPDFFile] = useState(false);
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
@@ -29,21 +30,11 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Only allow image files
-    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp'];
-    if (!imageTypes.includes(file.type)) {
-      toast({
-        title: "❌ Invalid File Type",
-        description: "Only image files are supported for OCR. Use the Documents section above for PDFs.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsProcessing(true);
     setProgress(10);
     setResult(null);
     setExtractedText("");
+    setIsPDFFile(file.type === 'application/pdf');
 
     try {
       setProgress(30);
@@ -76,7 +67,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
 
       toast({
         title: "❌ OCR Extraction Failed",
-        description: error instanceof Error ? error.message : 'Failed to extract text from image',
+        description: error instanceof Error ? error.message : 'Failed to extract text from file',
         variant: "destructive"
       });
     } finally {
@@ -102,6 +93,23 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           variant: "destructive"
         });
       }
+    }
+  };
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <FileType className="h-5 w-5 text-red-500" />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'tiff':
+        return <Image className="h-5 w-5 text-blue-500" />;
+      default:
+        return <FileText className="h-5 w-5 text-gray-500" />;
     }
   };
 
@@ -148,23 +156,20 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           </Select>
         </div>
 
-        {/* File Upload Area - Images Only */}
+        {/* File Upload Area */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors relative">
           <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <div className="space-y-2">
-            <p className="text-sm font-medium">Upload images for OCR text extraction</p>
+            <p className="text-sm font-medium">Upload image or PDF for text extraction</p>
             <p className="text-xs text-muted-foreground">
-              Supports: JPG, PNG, GIF, BMP, TIFF, WEBP (Max 10MB)
-            </p>
-            <p className="text-xs text-blue-400">
-              💡 For PDFs, use the Documents section above
+              Supports: JPG, PNG, GIF, BMP, TIFF, PDF (Max 10MB)
             </p>
           </div>
           
           <input
             type="file"
             onChange={handleFileSelect}
-            accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp,image/*"
+            accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.pdf,image/*,application/pdf"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             disabled={isProcessing}
           />
@@ -194,7 +199,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           </div>
         )}
 
-        {/* Copy Raw Text Button */}
+        {/* Copy Raw Text Button - appears after successful extraction */}
         {result && result.success && extractedText && (
           <Button
             onClick={copyRawText}
@@ -225,7 +230,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             
             {result.success && result.fileInfo && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                <Image className="h-4 w-4 text-blue-500" />
+                {getFileIcon(result.fileInfo.name)}
                 <span>{result.fileInfo.name}</span>
                 <span>•</span>
                 <span>{(result.fileInfo.size / 1024).toFixed(1)} KB</span>
