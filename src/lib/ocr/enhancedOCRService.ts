@@ -167,7 +167,7 @@ export class EnhancedOCRService {
     if (/[à-ÿ]/i.test(text)) return 'fr';
     if (/[ä-ß]/i.test(text)) return 'de';
     if (/[ñáéíóú]/i.test(text)) return 'es';
-    if (/[一-龯]/.test(text)) return 'zh';
+    if (/[\u4e00-\u9fff]/.test(text)) return 'zh';
     if (/[ひらがなカタカナ]/.test(text)) return 'ja';
     return 'en';
   }
