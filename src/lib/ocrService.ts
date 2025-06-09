@@ -1,8 +1,8 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
 import { MultiEngineOCR } from "./ocr/multiEngineOCR";
-import { PDFTextExtractor } from "./ocr/pdfTextExtractor";
 
 export interface OCRResult {
   success: boolean;
@@ -30,6 +30,21 @@ export class OCRService {
     useEnhanced: boolean = true
   ): Promise<OCRResult> {
     try {
+      // Only handle image files - PDFs are handled separately in FileTab
+      const supportedTypes = [
+        'image/jpeg',
+        'image/jpg', 
+        'image/png',
+        'image/gif',
+        'image/bmp',
+        'image/tiff',
+        'image/webp'
+      ];
+
+      if (!supportedTypes.includes(file.type)) {
+        throw new Error(`Unsupported file type: ${file.type}. This OCR service only handles images. Use the Documents section for PDFs.`);
+      }
+
       if (useEnhanced) {
         return await this.extractTextWithEnhancedOCR(file, {
           language,
@@ -62,74 +77,27 @@ export class OCRService {
     console.log('Starting enhanced OCR extraction for:', file.name);
     console.log('Options:', options);
 
-    // Validate file type
-    const supportedTypes = [
-      'image/jpeg',
-      'image/jpg', 
-      'image/png',
-      'image/gif',
-      'image/bmp',
-      'image/tiff',
-      'application/pdf'
-    ];
-
-    if (!supportedTypes.includes(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}. Supported formats: JPG, PNG, GIF, BMP, TIFF, PDF`);
-    }
-
     // Check file size
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       throw new Error(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB`);
     }
 
-    let extractedText = '';
     const startTime = Date.now();
 
     try {
-      if (PDFTextExtractor.isPDFFile(file)) {
-        // Handle PDF files with direct text extraction
-        console.log('Processing PDF file with text extraction');
-        extractedText = await PDFTextExtractor.extractTextFromPDF(file);
-        
-        if (!extractedText.trim()) {
-          console.log('PDF text extraction returned empty - this might be a scanned PDF or image-based PDF');
-          return {
-            success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. The document may be image-based. Please try a PDF with selectable text, or use an OCR service to convert scanned documents.'
-          };
-        }
-      } else {
-        // Handle image files - OCR service requires configuration
-        console.log('Image file detected - OCR service requires API configuration');
-        return {
-          success: false,
-          error: 'OCR service for images requires API configuration. Please contact administrator to enable OCR functionality for image files.'
-        };
-      }
-
-      // Apply text post-processing
-      extractedText = TextPostProcessor.processText(extractedText, options.postprocessing);
-
-      const duration = Date.now() - startTime;
-      const confidence = this.calculateConfidence(extractedText);
+      // Handle image files with OCR service
+      console.log('Image file detected - using OCR service');
       
-      console.log(`Text extraction completed successfully in ${duration}ms`);
-      console.log(`Extracted ${extractedText.length} characters with ${confidence}% confidence`);
-
+      // For now, return a message that OCR requires configuration
+      // This can be updated when OCR API is properly configured
       return {
-        success: true,
-        text: extractedText,
-        confidence: `${confidence}%`,
-        fileInfo: {
-          name: file.name,
-          type: file.type,
-          size: file.size
-        }
+        success: false,
+        error: 'OCR service for images requires API configuration. Please contact administrator to enable OCR functionality for image files.'
       };
 
     } catch (error) {
-      console.error('Enhanced text extraction failed:', error);
+      console.error('Enhanced OCR extraction failed:', error);
       throw error;
     }
   }
@@ -137,40 +105,10 @@ export class OCRService {
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
     console.log('Using basic OCR extraction for:', file.name);
 
-    // Check if it's a PDF first
-    if (PDFTextExtractor.isPDFFile(file)) {
-      try {
-        const text = await PDFTextExtractor.extractTextFromPDF(file);
-        if (text.trim()) {
-          return {
-            success: true,
-            text,
-            confidence: '85%',
-            fileInfo: {
-              name: file.name,
-              type: file.type,
-              size: file.size
-            }
-          };
-        } else {
-          return {
-            success: false,
-            error: 'This PDF contains no extractable text. It may be a scanned document or image-based PDF.'
-          };
-        }
-      } catch (error) {
-        console.error('PDF extraction failed in basic mode:', error);
-        return {
-          success: false,
-          error: 'PDF processing failed. The file may be corrupted or in an unsupported format.'
-        };
-      }
-    }
-
     // For images, return appropriate message
     return {
       success: false,
-      error: 'Image OCR requires API configuration. Currently only PDFs with selectable text are supported.'
+      error: 'Image OCR requires API configuration. Currently only direct document text extraction is supported.'
     };
   }
 
