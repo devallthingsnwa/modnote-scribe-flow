@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
@@ -60,7 +59,7 @@ export class OCRService {
   }
 
   static async extractTextWithEnhancedOCR(file: File, options: EnhancedOCROptions): Promise<OCRResult> {
-    console.log('Starting enhanced text extraction for:', file.name);
+    console.log('Starting enhanced OCR extraction for:', file.name);
     console.log('Options:', options);
 
     // Validate file type
@@ -90,21 +89,22 @@ export class OCRService {
     try {
       if (PDFTextExtractor.isPDFFile(file)) {
         // Handle PDF files with direct text extraction
-        console.log('Processing PDF file with enhanced text extraction');
+        console.log('Processing PDF file with text extraction');
         extractedText = await PDFTextExtractor.extractTextFromPDF(file);
         
         if (!extractedText.trim()) {
+          console.log('PDF text extraction returned empty - this might be a scanned PDF or image-based PDF');
           return {
             success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. Please try a PDF with selectable text, or use an image format if this is a scanned document.'
+            error: 'This PDF appears to contain scanned images or no extractable text. The document may be image-based. Please try a PDF with selectable text, or use an OCR service to convert scanned documents.'
           };
         }
       } else {
-        // Handle image files - OCR service temporarily unavailable
-        console.log('Image file detected, but OCR service is currently unavailable');
+        // Handle image files - OCR service requires configuration
+        console.log('Image file detected - OCR service requires API configuration');
         return {
           success: false,
-          error: 'OCR service for images is currently unavailable due to configuration issues. Please try again later or contact support if this persists.'
+          error: 'OCR service for images requires API configuration. Please contact administrator to enable OCR functionality for image files.'
         };
       }
 
@@ -135,7 +135,7 @@ export class OCRService {
   }
 
   private static async extractTextBasic(file: File, language: string): Promise<OCRResult> {
-    console.log('Using basic text extraction for:', file.name);
+    console.log('Using basic OCR extraction for:', file.name);
 
     // Check if it's a PDF first
     if (PDFTextExtractor.isPDFFile(file)) {
@@ -145,7 +145,7 @@ export class OCRService {
           return {
             success: true,
             text,
-            confidence: '90%',
+            confidence: '85%',
             fileInfo: {
               name: file.name,
               type: file.type,
@@ -155,45 +155,40 @@ export class OCRService {
         } else {
           return {
             success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. Please try a PDF with selectable text.'
+            error: 'This PDF contains no extractable text. It may be a scanned document or image-based PDF.'
           };
         }
       } catch (error) {
         console.error('PDF extraction failed in basic mode:', error);
         return {
           success: false,
-          error: 'Failed to extract text from PDF. The file might be corrupted or contain only images.'
+          error: 'PDF processing failed. The file may be corrupted or in an unsupported format.'
         };
       }
     }
 
-    // For now, return a helpful message about OCR service being unavailable
+    // For images, return appropriate message
     return {
       success: false,
-      error: 'OCR service is currently unavailable due to API configuration issues. For PDFs, please use files with extractable text rather than scanned images.'
+      error: 'Image OCR requires API configuration. Currently only PDFs with selectable text are supported.'
     };
   }
 
   private static calculateConfidence(text: string): number {
-    // Simple confidence calculation based on text characteristics
     if (!text || text.length === 0) return 0;
     
     let score = 50; // Base score
     
-    // Length bonus
     if (text.length > 100) score += 20;
     else if (text.length > 50) score += 10;
     
-    // Word count bonus
     const words = text.split(/\s+/).filter(word => word.length > 0);
     if (words.length > 20) score += 15;
     else if (words.length > 10) score += 10;
     
-    // Character variety bonus
     const uniqueChars = new Set(text.toLowerCase()).size;
     if (uniqueChars > 20) score += 10;
     
-    // Penalize for too many special characters
     const specialChars = text.match(/[^a-zA-Z0-9\s.,!?;:()\-'"]/g);
     if (specialChars && specialChars.length > text.length * 0.1) {
       score -= 20;

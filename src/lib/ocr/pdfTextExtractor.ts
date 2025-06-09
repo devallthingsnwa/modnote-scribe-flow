@@ -7,58 +7,43 @@ export class PDFTextExtractor {
       // Import PDF.js dynamically
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Set up worker with better fallback strategy
-      try {
-        // First try to use a more reliable CDN
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        console.log('PDF.js worker set to CDNJS version');
-      } catch (workerError) {
-        console.warn('Failed to set PDF.js worker from CDNJS, trying JSDelivr');
-        try {
-          // Fallback to JSDelivr
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-          console.log('PDF.js worker set to JSDelivr version');
-        } catch (fallbackError) {
-          console.warn('All CDN workers failed, using legacy mode');
-          // Use legacy mode without worker
-          pdfjsLib.GlobalWorkerOptions.workerSrc = null;
-        }
-      }
+      // Configure worker with better fallback strategy
+      await this.configureWorker(pdfjsLib);
       
       const arrayBuffer = await file.arrayBuffer();
       
-      // Add better error handling and timeout for PDF loading
+      // Load PDF with enhanced configuration
       const loadingTask = pdfjsLib.getDocument({ 
         data: arrayBuffer,
         useWorkerFetch: false,
         isEvalSupported: false,
         useSystemFonts: true,
+        disableFontFace: false,
         verbosity: 0 // Reduce console noise
       });
       
-      // Set a reasonable timeout for PDF loading
-      const timeoutPromise = new Promise((_, reject) => {
+      // Set a timeout for PDF loading
+      const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('PDF loading timeout after 15 seconds')), 15000);
       });
       
-      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]) as any;
-      console.log(`PDF loaded successfully. Pages: ${pdf.numPages}`);
+      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
       
       let fullText = '';
       
-      // Extract text from each page with better error handling
+      // Extract text from each page with improved formatting
       for (let i = 1; i <= pdf.numPages; i++) {
         try {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           
-          // Process text items with better positioning logic
+          // Process text items with better positioning
           const textItems = textContent.items.filter((item: any): item is any => 
-            item && typeof item === 'object' && 'str' in item && item.str && item.str.trim()
+            item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str !== undefined
           );
           
           if (textItems.length === 0) {
-            console.warn(`Page ${i} contains no extractable text`);
+            console.log(`Page ${i} has no text content`);
             continue;
           }
           
@@ -94,9 +79,8 @@ export class PDFTextExtractor {
           }
           
           if (pageText.trim()) {
-            fullText += pageText.trim() + '\n\n';
+            fullText += `${pageText.trim()}\n\n`;
           }
-          
         } catch (pageError) {
           console.warn(`Failed to extract text from page ${i}:`, pageError);
           // Continue with other pages instead of failing completely
@@ -107,7 +91,7 @@ export class PDFTextExtractor {
       fullText = this.cleanupExtractedText(fullText.trim());
       
       if (!fullText || fullText.length < 10) {
-        console.warn('Very little text extracted, PDF might be image-based');
+        console.log('PDF appears to contain no extractable text or is image-based');
         return '';
       }
       
@@ -117,21 +101,52 @@ export class PDFTextExtractor {
     } catch (error) {
       console.error('PDF text extraction failed:', error);
       
-      // Provide more helpful error messages
+      // Provide specific error feedback
       if (error instanceof Error) {
         if (error.message?.includes('timeout')) {
-          console.log('PDF extraction timed out - PDF might be too large or complex');
-        } else if (error.message?.includes('worker')) {
-          console.log('PDF.js worker failed to load - network or compatibility issue');
-        } else if (error.message?.includes('Invalid PDF')) {
-          console.log('PDF file appears to be corrupted or invalid');
+          console.log('PDF extraction timed out');
+        } else if (error.message?.includes('worker') || error.message?.includes('fetch')) {
+          console.log('PDF.js worker configuration failed');
         } else {
-          console.log('PDF text extraction failed with unknown error');
+          console.log('PDF processing error:', error.message);
         }
       }
       
-      // Return empty string to indicate text extraction failed
+      // Return empty string to trigger fallback or show appropriate message
       return '';
+    }
+  }
+  
+  private static async configureWorker(pdfjsLib: any): Promise<void> {
+    try {
+      // Try multiple worker sources with version fallbacks
+      const workerSources = [
+        `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.0.379'}/build/pdf.worker.min.js`,
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js',
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js'
+      ];
+      
+      for (const workerSrc of workerSources) {
+        try {
+          // Test if the worker URL is accessible
+          const response = await fetch(workerSrc, { method: 'HEAD' });
+          if (response.ok) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+            console.log(`PDF.js worker configured with: ${workerSrc}`);
+            return;
+          }
+        } catch (error) {
+          console.warn(`Failed to load worker from ${workerSrc}:`, error);
+        }
+      }
+      
+      // If all external workers fail, disable worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+      console.warn('All PDF.js workers failed, running without worker (slower)');
+      
+    } catch (error) {
+      console.error('Worker configuration failed:', error);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
     }
   }
   
@@ -140,16 +155,18 @@ export class PDFTextExtractor {
       // Normalize line endings
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
-      // Remove excessive whitespace but preserve paragraphs
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      // Clean up common PDF artifacts
-      .replace(/\f/g, '\n') // Form feeds to line breaks
-      .replace(/[\u00A0\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]/g, ' ') // Various unicode spaces
-      // Fix broken words
-      .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2')
+      // Remove excessive line breaks but preserve paragraph structure
+      .replace(/\n{4,}/g, '\n\n\n')
       // Remove trailing spaces
       .replace(/[ \t]+$/gm, '')
+      // Normalize spacing around punctuation
+      .replace(/\s*([.!?])\s*/g, '$1 ')
+      // Fix broken words at line ends (basic dehyphenation)
+      .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2')
+      // Preserve bullet points and lists
+      .replace(/^\s*([•·-])\s*/gm, '$1 ')
+      // Remove extra spaces but preserve intentional formatting
+      .replace(/[ \t]{2,}/g, ' ')
       .trim();
   }
   
