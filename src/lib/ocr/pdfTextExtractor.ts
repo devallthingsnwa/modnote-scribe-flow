@@ -1,3 +1,4 @@
+
 export class PDFTextExtractor {
   static async extractTextFromPDF(file: File): Promise<string> {
     console.log('Extracting text from PDF:', file.name);
@@ -6,24 +7,34 @@ export class PDFTextExtractor {
       // Import PDF.js dynamically
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Try to set worker source with fallback options
-      try {
-        // First try the standard CDN
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-      } catch (error) {
-        console.warn('Failed to set primary worker source, trying fallback');
-        try {
-          // Fallback to unpkg CDN
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-        } catch (fallbackError) {
-          console.warn('Failed to set fallback worker source, using local worker');
-          // Use local worker as last resort
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+      // Use a more reliable worker setup
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        // Try different worker sources in order of preference
+        const workerSources = [
+          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`,
+          `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`,
+          // Fallback to a known stable version
+          'https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.js'
+        ];
+        
+        for (const workerSrc of workerSources) {
+          try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+            console.log(`Trying PDF.js worker: ${workerSrc}`);
+            break;
+          } catch (error) {
+            console.warn(`Failed to set worker source: ${workerSrc}`, error);
+            continue;
+          }
         }
       }
       
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        useSystemFonts: true,
+        verbosity: 0 // Reduce console noise
+      }).promise;
       
       let fullText = '';
       
@@ -33,7 +44,6 @@ export class PDFTextExtractor {
         const textContent = await page.getTextContent();
         
         // Filter and sort text items by position (top to bottom, left to right)
-        // Only keep TextItem objects that have the properties we need
         const textItems = textContent.items.filter((item: any): item is any => 
           item && typeof item === 'object' && 'str' in item && 'transform' in item && item.str !== undefined
         );
@@ -86,12 +96,12 @@ export class PDFTextExtractor {
       // Clean up the text while preserving intentional formatting
       fullText = this.cleanupFormattedText(fullText.trim());
       
-      console.log(`PDF text extraction completed. Extracted ${fullText.length} characters from ${pdf.numPages} pages with formatting preserved`);
+      console.log(`PDF text extraction completed. Extracted ${fullText.length} characters from ${pdf.numPages} pages`);
       
       return fullText;
     } catch (error) {
       console.error('PDF text extraction failed:', error);
-      // Instead of throwing an error, return empty string to trigger OCR fallback
+      // Return empty string to trigger OCR fallback
       console.log('PDF text extraction failed, will fall back to OCR processing');
       return '';
     }

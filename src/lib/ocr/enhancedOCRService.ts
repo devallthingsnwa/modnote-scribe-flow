@@ -7,43 +7,56 @@ export interface EnhancedOCRResult {
   text: string;
   confidence: number;
   processingTime: number;
-  method: 'pdf-text' | 'mistral-ocr' | 'fallback-ocr';
+  method: 'pdf-text' | 'mistral-ocr' | 'fallback-ocr' | 'basic-extraction';
   metadata?: {
     pageCount?: number;
     language?: string;
     imageQuality?: string;
+    errorDetails?: string;
   };
 }
 
 export class EnhancedOCRService {
   static async extractTextWithMistral(file: File): Promise<EnhancedOCRResult> {
     const startTime = performance.now();
-    console.log(`🔍 ENHANCED OCR: Processing file "${file.name}" with Mistral AI`);
+    console.log(`🔍 ENHANCED OCR: Processing file "${file.name}" with multiple extraction methods`);
 
     try {
-      // Handle PDF files
+      // Handle PDF files with enhanced error handling
       if (PDFTextExtractor.isPDFFile(file)) {
         console.log('📄 PDF DETECTED: Using enhanced PDF extraction');
         
-        const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
-        
-        if (extractedText && extractedText.length > 50) {
-          // Enhance PDF text with Mistral
-          const enhancedText = await MistralOCRProcessor.enhanceExtractedText(extractedText);
-          const processingTime = performance.now() - startTime;
+        try {
+          const extractedText = await PDFTextExtractor.extractTextFromPDF(file);
           
-          return {
-            text: enhancedText,
-            confidence: 0.9,
-            processingTime,
-            method: 'pdf-text',
-            metadata: {
-              language: this.detectLanguage(enhancedText)
+          if (extractedText && extractedText.length > 50) {
+            // Try to enhance PDF text with Mistral if available
+            let enhancedText = extractedText;
+            try {
+              enhancedText = await MistralOCRProcessor.enhanceExtractedText(extractedText);
+            } catch (enhanceError) {
+              console.warn('Mistral enhancement failed, using original text:', enhanceError);
             }
-          };
-        } else {
-          // If PDF text extraction fails, convert to image and use Mistral OCR
-          console.log('📄 PDF appears to be scanned, using Mistral OCR');
+            
+            const processingTime = performance.now() - startTime;
+            
+            return {
+              text: enhancedText,
+              confidence: 0.9,
+              processingTime,
+              method: 'pdf-text',
+              metadata: {
+                language: this.detectLanguage(enhancedText)
+              }
+            };
+          }
+        } catch (pdfError) {
+          console.warn('PDF text extraction failed:', pdfError);
+        }
+        
+        // If PDF text extraction fails, try Mistral OCR
+        console.log('📄 PDF text extraction failed, trying Mistral OCR');
+        try {
           const imageData = await this.convertPDFToImage(file);
           const ocrResult = await MistralOCRProcessor.processImageWithMistral(
             imageData,
@@ -58,44 +71,45 @@ export class EnhancedOCRService {
             method: 'mistral-ocr',
             metadata: ocrResult.metadata
           };
+        } catch (mistralError) {
+          console.warn('Mistral OCR failed for PDF:', mistralError);
         }
       }
 
-      // Handle image files with Mistral OCR
+      // Handle image files
       if (this.isImageFile(file)) {
         console.log('🖼️ IMAGE DETECTED: Using Mistral AI OCR');
         
-        const imageData = await this.fileToBase64(file);
-        const ocrResult = await MistralOCRProcessor.processImageWithMistral(
-          imageData,
-          file.name,
-          { enhanceText: true, extractStructure: true }
-        );
-        
-        return {
-          text: ocrResult.extractedText,
-          confidence: ocrResult.confidence,
-          processingTime: ocrResult.processingTime,
-          method: 'mistral-ocr',
-          metadata: ocrResult.metadata
-        };
+        try {
+          const imageData = await this.fileToBase64(file);
+          const ocrResult = await MistralOCRProcessor.processImageWithMistral(
+            imageData,
+            file.name,
+            { enhanceText: true, extractStructure: true }
+          );
+          
+          return {
+            text: ocrResult.extractedText,
+            confidence: ocrResult.confidence,
+            processingTime: ocrResult.processingTime,
+            method: 'mistral-ocr',
+            metadata: ocrResult.metadata
+          };
+        } catch (mistralError) {
+          console.warn('Mistral OCR failed for image:', mistralError);
+        }
       }
 
-      throw new Error(`Unsupported file type: ${file.type}`);
-
-    } catch (error) {
-      console.error('🚨 ENHANCED OCR ERROR:', error);
-      
-      // Fallback to base OCR service
+      // Fallback to basic OCR service
+      console.log('🔄 FALLBACK: Using basic OCR service');
       try {
-        console.log('🔄 FALLBACK: Using base OCR service');
         const fallbackResult = await BaseOCRService.extractTextFromFile(file, 'eng', false);
         const processingTime = performance.now() - startTime;
         
         if (fallbackResult.success && fallbackResult.text) {
           return {
             text: fallbackResult.text,
-            confidence: 0.6, // Lower confidence for fallback
+            confidence: 0.6,
             processingTime,
             method: 'fallback-ocr',
             metadata: {
@@ -107,13 +121,34 @@ export class EnhancedOCRService {
         console.error('🚨 FALLBACK OCR FAILED:', fallbackError);
       }
 
-      // Final error handling
+      // Final fallback - basic text extraction attempt
+      console.log('🔧 FINAL FALLBACK: Basic text extraction');
+      const processingTime = performance.now() - startTime;
+      
       return {
-        text: `Unable to extract text from "${file.name}". The file may be corrupted or in an unsupported format.`,
+        text: `Text extraction from "${file.name}" was unsuccessful. This may be due to:\n\n• The file is corrupted or in an unsupported format\n• The text is too faint or unclear\n• The OCR service is temporarily unavailable\n\nPlease try:\n• Using a higher quality image\n• Converting the file to a different format\n• Trying again later`,
         confidence: 0,
-        processingTime: performance.now() - startTime,
-        method: 'fallback-ocr',
-        metadata: { language: 'en' }
+        processingTime,
+        method: 'basic-extraction',
+        metadata: { 
+          language: 'en',
+          errorDetails: 'All extraction methods failed'
+        }
+      };
+
+    } catch (error) {
+      console.error('🚨 ENHANCED OCR ERROR:', error);
+      const processingTime = performance.now() - startTime;
+      
+      return {
+        text: `Unable to process "${file.name}". Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        confidence: 0,
+        processingTime,
+        method: 'basic-extraction',
+        metadata: { 
+          language: 'en',
+          errorDetails: error instanceof Error ? error.message : 'Unknown error'
+        }
       };
     }
   }
@@ -121,7 +156,11 @@ export class EnhancedOCRService {
   private static async convertPDFToImage(file: File): Promise<string> {
     try {
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      // Use the same worker setup as PDFTextExtractor
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+      }
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
