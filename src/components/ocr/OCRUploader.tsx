@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, CheckCircle, Upload, FileText, Image, FileType, Settings, Copy } from "lucide-react";
+import { AlertCircle, CheckCircle, Upload, FileText, Image, Settings, Copy, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OCRService, OCRResult } from "@/lib/ocrService";
 
@@ -21,7 +21,6 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
   const [selectedLanguage, setSelectedLanguage] = useState('eng');
   const [useEnhancedOCR, setUseEnhancedOCR] = useState(true);
   const [extractedText, setExtractedText] = useState<string>("");
-  const [isPDFFile, setIsPDFFile] = useState(false);
   const { toast } = useToast();
 
   const languages = OCRService.getSupportedLanguages();
@@ -34,7 +33,6 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     setProgress(10);
     setResult(null);
     setExtractedText("");
-    setIsPDFFile(file.type === 'application/pdf');
 
     try {
       setProgress(30);
@@ -49,7 +47,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         
         toast({
           title: "✅ Text Extracted Successfully!",
-          description: `Extracted ${ocrResult.text.length} characters from ${file.name}${useEnhancedOCR ? ' (Enhanced OCR)' : ''}`
+          description: `Extracted ${ocrResult.text.length} characters from ${file.name}`
         });
       } else {
         throw new Error(ocrResult.error || 'Failed to extract text');
@@ -78,13 +76,20 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     }
   };
 
+  const retryExtraction = () => {
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      handleFileSelect({ target: { files: fileInput.files, value: '' } } as any);
+    }
+  };
+
   const copyRawText = async () => {
     if (extractedText) {
       try {
         await navigator.clipboard.writeText(extractedText);
         toast({
           title: "✅ Raw Text Copied!",
-          description: "The extracted text has been copied to your clipboard for formatting",
+          description: "The extracted text has been copied to your clipboard",
         });
       } catch (error) {
         toast({
@@ -96,23 +101,6 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
     }
   };
 
-  const getFileIcon = (fileName: string) => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    switch (extension) {
-      case 'pdf':
-        return <FileType className="h-5 w-5 text-red-500" />;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'bmp':
-      case 'tiff':
-        return <Image className="h-5 w-5 text-blue-500" />;
-      default:
-        return <FileText className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
   return (
     <Card className={className}>
       <CardContent className="space-y-4 pt-6">
@@ -120,7 +108,7 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            <label className="text-sm font-medium">OCR Mode</label>
+            <label className="text-sm font-medium">OCR Settings</label>
           </div>
           <div className="flex items-center space-x-2">
             <Switch
@@ -129,14 +117,9 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
               onCheckedChange={setUseEnhancedOCR}
             />
             <label htmlFor="enhanced-ocr" className="text-sm">
-              Enhanced OCR {useEnhancedOCR ? '(Multiple engines, preprocessing)' : '(Basic OCR)'}
+              Enhanced OCR {useEnhancedOCR ? '(Better accuracy, preprocessing)' : '(Basic extraction)'}
             </label>
           </div>
-          {useEnhancedOCR && (
-            <p className="text-xs text-muted-foreground">
-              Enhanced mode includes image preprocessing, multiple OCR engines, and text cleanup for better accuracy.
-            </p>
-          )}
         </div>
 
         {/* Language Selection */}
@@ -191,23 +174,23 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span>
-                {useEnhancedOCR ? 'Extracting text with enhanced OCR...' : 'Extracting text from image...'}
-              </span>
+              <span>Extracting text from {selectedLanguage === 'eng' ? 'English' : languages.find(l => l.code === selectedLanguage)?.name} content...</span>
             </div>
             <Progress value={progress} className="w-full" />
           </div>
         )}
 
-        {/* Copy Raw Text Button - appears after successful extraction */}
+        {/* Action Buttons */}
         {result && result.success && extractedText && (
-          <Button
-            onClick={copyRawText}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Raw Text
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={copyRawText}
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy Text
+            </Button>
+          </div>
         )}
 
         {/* Results */}
@@ -226,11 +209,22 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
               <span className="text-sm font-medium">
                 {result.success ? 'Text Extracted Successfully' : 'Extraction Failed'}
               </span>
+              {!result.success && (
+                <Button
+                  onClick={retryExtraction}
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Retry
+                </Button>
+              )}
             </div>
             
             {result.success && result.fileInfo && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                {getFileIcon(result.fileInfo.name)}
+                <Image className="h-4 w-4" />
                 <span>{result.fileInfo.name}</span>
                 <span>•</span>
                 <span>{(result.fileInfo.size / 1024).toFixed(1)} KB</span>
@@ -250,9 +244,14 @@ export function OCRUploader({ onTextExtracted, className }: OCRUploaderProps) {
             )}
 
             {result.error && (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {result.error}
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {result.error}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Try using a clearer image or different file format. Make sure the text is clearly visible and not blurry.
+                </p>
+              </div>
             )}
 
             {result.success && result.text && (

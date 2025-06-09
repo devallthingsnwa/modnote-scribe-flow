@@ -15,3 +15,9 @@ verify_jwt = true
 
 [functions.ocr-text-extraction]
 verify_jwt = true
+
+[functions.web-scraper]
+verify_jwt = true
+
+[functions.image-text-extraction]
+verify_jwt = true
