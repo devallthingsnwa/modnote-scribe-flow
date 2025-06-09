@@ -21,3 +21,9 @@ verify_jwt = true
 
 [functions.ocr-text-extraction]
 verify_jwt = true
+
+[functions.debug-ocr]
+verify_jwt = true
+
+[functions.test-ocr]
+verify_jwt = true
