@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +12,7 @@ import { AudioTab } from "./AudioTab";
 import { TextTab } from "./TextTab";
 import { ImportProcessingStatus } from "./ImportProcessingStatus";
 import { ImportActions } from "./ImportActions";
+import { WebScrapingService } from "@/lib/webScrapingService";
 
 interface EnhancedImportModalProps {
   isOpen: boolean;
@@ -37,6 +37,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
   const [hasWarning, setHasWarning] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [extractedText, setExtractedText] = useState<string>("");
+  const [scrapedWebData, setScrapedWebData] = useState<any>(null);
   const { toast } = useToast();
 
   const resetState = () => {
@@ -49,6 +50,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
     setHasWarning(false);
     setIsRecording(false);
     setExtractedText("");
+    setScrapedWebData(null);
   };
 
   const handleClose = () => {
@@ -221,31 +223,31 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
           throw new Error(result.error || 'Failed to process video');
         }
       } else {
-        setStatus("Processing content...");
+        // Handle other URL types using web scraping
+        setStatus("Scraping website content...");
         setProgress(50);
         
-        const result = await TranscriptionService.transcribeWithFallback(url);
-        
-        if (result.success && result.text) {
-          setTranscript(result.text);
-          const isWarning = result.metadata?.isWarning || result.provider === 'warning-fallback';
-          setHasWarning(isWarning);
+        // Use scraped data if available, otherwise scrape now
+        let contentData = scrapedWebData;
+        if (!contentData) {
+          const { WebScrapingService } = await import("@/lib/webScrapingService");
+          const result = await WebScrapingService.scrapeWebsite(url);
           
-          setMetadata({
-            title: "Content from URL",
-            author: "Web Content",
-            description: "Content extracted from provided URL"
-          });
-          
-          if (isWarning) {
-            setStatus("⚠️ Content saved with warning - extraction unavailable");
-          } else {
-            setStatus("✅ Content extracted successfully!");
+          if (!result.success || !result.data) {
+            throw new Error(result.error || 'Failed to scrape website content');
           }
-          setProgress(100);
-        } else {
-          throw new Error(result.error || 'Failed to process content');
+          contentData = result.data;
         }
+        
+        setTranscript(contentData.content);
+        setMetadata({
+          title: contentData.title,
+          author: contentData.metadata?.author || new URL(url).hostname,
+          description: contentData.metadata?.description || "Content extracted from website"
+        });
+        
+        setStatus("✅ Website content extracted successfully!");
+        setProgress(100);
       }
 
     } catch (error) {
@@ -341,6 +343,7 @@ export function EnhancedImportModal({ isOpen, onClose, onImport }: EnhancedImpor
             setUrl={setUrl}
             onProcess={processUrl}
             isProcessing={isProcessing}
+            onScrapingResult={setScrapedWebData}
           />
         );
       case "file":
