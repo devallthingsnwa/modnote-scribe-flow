@@ -2,7 +2,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ImagePreprocessor, PreprocessingOptions } from "./ocr/imagePreprocessor";
 import { TextPostProcessor, PostProcessingOptions } from "./ocr/textPostProcessor";
-import { MultiEngineOCR } from "./ocr/multiEngineOCR";
 import { PDFTextExtractor } from "./ocr/pdfTextExtractor";
 
 export interface OCRResult {
@@ -97,16 +96,31 @@ export class OCRService {
           console.log('PDF text extraction returned empty, this might be a scanned PDF');
           return {
             success: false,
-            error: 'This PDF appears to contain scanned images or no extractable text. OCR service is currently unavailable. Please try a different PDF with selectable text, or check back later when OCR service is restored.'
+            error: 'This PDF appears to contain scanned images or no extractable text. Please try a different PDF with selectable text.'
           };
         }
       } else {
-        // Handle image files - OCR service temporarily unavailable
-        console.log('Image file detected, but OCR service is currently unavailable');
-        return {
-          success: false,
-          error: 'OCR service for images is currently unavailable due to configuration issues. Please try again later or contact support if this persists.'
-        };
+        // Handle image files using the new Supabase function
+        console.log('Processing image file with new OCR service');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('language', options.language);
+
+        const { data, error } = await supabase.functions.invoke('image-text-extraction', {
+          body: formData,
+        });
+
+        if (error) {
+          console.error('OCR function error:', error);
+          throw new Error(`OCR processing failed: ${error.message}`);
+        }
+
+        if (!data.success) {
+          throw new Error(data.error || 'OCR extraction failed');
+        }
+
+        extractedText = data.text;
       }
 
       // Apply text post-processing
@@ -159,11 +173,37 @@ export class OCRService {
       }
     }
 
-    // For now, return a helpful message about OCR service being unavailable
-    return {
-      success: false,
-      error: 'OCR service is currently unavailable due to API configuration issues. For PDFs, please use files with extractable text rather than scanned images.'
-    };
+    // For images, use the new Supabase function
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('language', language);
+
+      const { data, error } = await supabase.functions.invoke('image-text-extraction', {
+        body: formData,
+      });
+
+      if (error) {
+        throw new Error(`OCR processing failed: ${error.message}`);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'OCR extraction failed');
+      }
+
+      return {
+        success: true,
+        text: data.text,
+        confidence: data.confidence,
+        fileInfo: data.fileInfo
+      };
+    } catch (error) {
+      console.error('Basic OCR extraction failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'OCR extraction failed'
+      };
+    }
   }
 
   private static calculateConfidence(text: string): number {
