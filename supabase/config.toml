@@ -13,5 +13,8 @@ verify_jwt = true
 [functions.youtube-metadata]
 verify_jwt = true
 
-[functions.ocr-text-extraction]
+[functions.tesseract-ocr]
+verify_jwt = true
+
+[functions.mistral-ocr-processor]
 verify_jwt = true

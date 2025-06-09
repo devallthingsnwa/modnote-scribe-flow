@@ -17,12 +17,6 @@ export interface OCRResult {
 export class MultiEngineOCR {
   private static engines: OCREngine[] = [
     {
-      name: 'OCR.space',
-      process: async (file: File, language: string) => {
-        return await this.processWithOCRSpace(file, language);
-      }
-    },
-    {
       name: 'Tesseract',
       process: async (file: File, language: string) => {
         return await this.processWithTesseractEdge(file, language);
@@ -62,22 +56,6 @@ export class MultiEngineOCR {
       success: false,
       error: 'All OCR engines failed to extract text'
     };
-  }
-
-  private static async processWithOCRSpace(file: File, language: string): Promise<OCRResult> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('language', language);
-
-    const { data, error } = await supabase.functions.invoke('ocr-text-extraction', {
-      body: formData,
-    });
-
-    if (error) {
-      throw new Error(`OCR.space error: ${error.message}`);
-    }
-
-    return data as OCRResult;
   }
 
   private static async processWithTesseractEdge(file: File, language: string): Promise<OCRResult> {
